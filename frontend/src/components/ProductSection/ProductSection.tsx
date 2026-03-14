@@ -11,6 +11,7 @@ interface ProductData {
   image: string;
   badge?: string;
   colors?: string[];
+  sizes?: string[];
 }
 
 interface ProductSectionProps {

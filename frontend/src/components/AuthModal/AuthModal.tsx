@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Facebook, Eye, EyeOff } from 'lucide-react';
+import { X, Facebook, Eye, EyeOff, Loader2 } from 'lucide-react';
 import './AuthModal.css';
 
 interface AuthModalProps {
@@ -9,16 +9,33 @@ interface AuthModalProps {
   initialTab?: 'login' | 'register';
 }
 
+interface LoginErrors {
+  email?: string;
+  password?: string;
+}
+
+interface RegisterErrors {
+  fullName?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
 const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialTab);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Form states
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Validation error states
+  const [loginErrors, setLoginErrors] = useState<LoginErrors>({});
+  const [registerErrors, setRegisterErrors] = useState<RegisterErrors>({});
 
   const handleTabChange = (tab: 'login' | 'register') => {
     setActiveTab(tab);
@@ -29,6 +46,9 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
     setConfirmPassword('');
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setLoginErrors({});
+    setRegisterErrors({});
+    setIsLoading(false);
   };
 
   // Prevent background scrolling when modal is open
@@ -49,9 +69,56 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
     };
   }, [isOpen, initialTab]);
 
-  if (!isOpen && typeof document !== 'undefined') {
-    // Hidden state
-  }
+  // ─── Validation helpers ───────────────────────────────────────────────────
+  const isValidEmail = (val: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) || /^(0[3|5|7|8|9])+([0-9]{8})$/.test(val);
+
+  const validateLogin = (): LoginErrors => {
+    const errors: LoginErrors = {};
+    if (!email.trim()) errors.email = 'Vui lòng nhập email / số điện thoại';
+    else if (!isValidEmail(email.trim())) errors.email = 'Email hoặc số điện thoại không hợp lệ';
+    if (!password) errors.password = 'Vui lòng nhập mật khẩu';
+    else if (password.length < 6) errors.password = 'Mật khẩu tối thiểu 6 ký tự';
+    return errors;
+  };
+
+  const validateRegister = (): RegisterErrors => {
+    const errors: RegisterErrors = {};
+    if (!fullName.trim()) errors.fullName = 'Vui lòng nhập họ và tên';
+    if (!email.trim()) errors.email = 'Vui lòng nhập email / số điện thoại';
+    else if (!isValidEmail(email.trim())) errors.email = 'Email hoặc số điện thoại không hợp lệ';
+    if (!password) errors.password = 'Vui lòng nhập mật khẩu';
+    else if (password.length < 6) errors.password = 'Mật khẩu tối thiểu 6 ký tự';
+    if (!confirmPassword) errors.confirmPassword = 'Vui lòng nhập lại mật khẩu';
+    else if (confirmPassword !== password) errors.confirmPassword = 'Mật khẩu không khớp';
+    return errors;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors = activeTab === 'login' ? validateLogin() : validateRegister();
+    if (activeTab === 'login') {
+      setLoginErrors(errors);
+    } else {
+      setRegisterErrors(errors);
+    }
+    if (Object.keys(errors).length > 0) return;
+
+    setIsLoading(true);
+    // Simulate auth API call
+    setTimeout(() => {
+      setIsLoading(false);
+      onClose();
+    }, 1200);
+  };
+
+  // Clear error when user types
+  const clearLoginError = (field: keyof LoginErrors) => {
+    if (loginErrors[field]) setLoginErrors(prev => ({ ...prev, [field]: undefined }));
+  };
+  const clearRegisterError = (field: keyof RegisterErrors) => {
+    if (registerErrors[field]) setRegisterErrors(prev => ({ ...prev, [field]: undefined }));
+  };
 
   const content = (
     <div className="auth-modal-overlay" onClick={onClose} style={{ display: isOpen ? 'flex' : 'none' }}>
@@ -83,50 +150,68 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
                 : 'Trở thành thành viên Coolmate để nhận nhiều ưu đãi độc quyền.'}
             </p>
 
-            <form className="auth-form" onSubmit={(e) => e.preventDefault()}>
+            <form className="auth-form" onSubmit={handleSubmit} noValidate>
               {activeTab === 'register' && (
                 <div className="form-group">
                   <input 
                     type="text" 
-                    placeholder="Họ và tên" 
-                    className="form-input" 
+                    placeholder="Họ và tên *" 
+                    className={`form-input ${registerErrors.fullName ? 'input-error' : ''}`}
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required 
+                    onChange={(e) => { setFullName(e.target.value); clearRegisterError('fullName'); }}
                   />
+                  {registerErrors.fullName && <span className="field-error">{registerErrors.fullName}</span>}
                 </div>
               )}
               
               <div className="form-group">
                 <input 
                   type="email" 
-                  placeholder="Email / Số điện thoại" 
-                  className="form-input" 
+                  placeholder="Email / Số điện thoại *" 
+                  className={`form-input ${(activeTab === 'login' ? loginErrors.email : registerErrors.email) ? 'input-error' : ''}`}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required 
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    activeTab === 'login' ? clearLoginError('email') : clearRegisterError('email');
+                  }}
                 />
+                {activeTab === 'login' && loginErrors.email && <span className="field-error">{loginErrors.email}</span>}
+                {activeTab === 'register' && registerErrors.email && <span className="field-error">{registerErrors.email}</span>}
               </div>
               
               <div className="form-group">
                 <div className="password-input-wrapper">
                   <input 
                     type={showPassword ? "text" : "password"} 
-                    placeholder="Mật khẩu" 
-                    className="form-input" 
+                    placeholder="Mật khẩu *" 
+                    className={`form-input ${(activeTab === 'login' ? loginErrors.password : registerErrors.password) ? 'input-error' : ''}`}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required 
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      activeTab === 'login' ? clearLoginError('password') : clearRegisterError('password');
+                    }}
                   />
                   <button 
                     type="button"
                     className="password-toggle-btn"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {activeTab === 'login' && loginErrors.password && <span className="field-error">{loginErrors.password}</span>}
+                {activeTab === 'register' && registerErrors.password && <span className="field-error">{registerErrors.password}</span>}
+                {/* Password strength indicator for register */}
+                {activeTab === 'register' && password.length > 0 && (
+                  <div className="password-strength">
+                    <div className={`strength-bar ${password.length < 6 ? 'weak' : password.length < 10 ? 'medium' : 'strong'}`}></div>
+                    <span className="strength-label">
+                      {password.length < 6 ? 'Yếu' : password.length < 10 ? 'Trung bình' : 'Mạnh'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {activeTab === 'register' && (
@@ -134,21 +219,28 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
                   <div className="password-input-wrapper">
                     <input 
                       type={showConfirmPassword ? "text" : "password"} 
-                      placeholder="Nhập lại mật khẩu" 
-                      className="form-input" 
+                      placeholder="Nhập lại mật khẩu *" 
+                      className={`form-input ${registerErrors.confirmPassword ? 'input-error' : ''}`}
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required 
+                      onChange={(e) => { setConfirmPassword(e.target.value); clearRegisterError('confirmPassword'); }}
                     />
                     <button 
                       type="button"
                       className="password-toggle-btn"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       aria-label={showConfirmPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      tabIndex={-1}
                     >
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  {registerErrors.confirmPassword && <span className="field-error">{registerErrors.confirmPassword}</span>}
+                  {/* Match indicator */}
+                  {confirmPassword.length > 0 && (
+                    <span className={`match-indicator ${confirmPassword === password ? 'match' : 'no-match'}`}>
+                      {confirmPassword === password ? '✓ Mật khẩu khớp' : '✗ Mật khẩu chưa khớp'}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -158,8 +250,10 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
                 </div>
               )}
 
-              <button type="submit" className="btn-auth-submit">
-                {activeTab === 'login' ? 'Đăng nhập' : 'Đăng ký'}
+              <button type="submit" className="btn-auth-submit" disabled={isLoading}>
+                {isLoading ? (
+                  <><Loader2 size={18} className="auth-spinner" /> Đang xử lý...</>
+                ) : (activeTab === 'login' ? 'Đăng nhập' : 'Đăng ký')}
               </button>
             </form>
           </div>

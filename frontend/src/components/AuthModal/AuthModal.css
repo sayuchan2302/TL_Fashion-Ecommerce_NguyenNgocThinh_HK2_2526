@@ -224,6 +224,64 @@
   border-color: var(--co-black);
 }
 
+.form-input.input-error {
+  border-color: #EF4444;
+  background-color: #FFF5F5;
+}
+
+.form-input.input-error:focus {
+  border-color: #EF4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.field-error {
+  display: block;
+  font-size: 12px;
+  color: #EF4444;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+/* Password strength indicator */
+.password-strength {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.strength-bar.weak { background-color: #EF4444; }
+.strength-bar.medium { background-color: #F59E0B; }
+.strength-bar.strong { background-color: #10B981; }
+
+.strength-label {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 60px;
+}
+
+.strength-bar.weak ~ .strength-label { color: #EF4444; }
+.strength-bar.medium ~ .strength-label { color: #F59E0B; }
+.strength-bar.strong ~ .strength-label { color: #10B981; }
+
+/* Confirm password match indicator */
+.match-indicator {
+  display: block;
+  font-size: 12px;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+.match-indicator.match { color: #10B981; }
+.match-indicator.no-match { color: #EF4444; }
+
 .password-input-wrapper {
   position: relative;
   display: flex;
@@ -276,8 +334,25 @@
   margin-top: 8px;
 }
 
-.btn-auth-submit:hover {
+.btn-auth-submit:hover:not(:disabled) {
   background-color: #333;
+}
+
+.btn-auth-submit:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.auth-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Responsiveness */

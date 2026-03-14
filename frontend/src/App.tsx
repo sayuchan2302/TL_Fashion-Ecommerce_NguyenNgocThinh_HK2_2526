@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
 import './App.css';
 import Home from './pages/Home/Home';
 import TopBar from './components/TopBar/TopBar';
@@ -6,23 +6,36 @@ import Header from './components/Header/Header';
 import Footer from './components/Footer/Footer';
 import ProductListing from './pages/ProductListing/ProductListing';
 import ProductDetail from './pages/ProductDetail/ProductDetail';
+import Cart from './pages/Cart/Cart';
+import Checkout from './pages/Checkout/Checkout';
 import ScrollToTop from './components/ScrollToTop/ScrollToTop';
+
+const MainLayout = () => {
+  return (
+    <>
+      <TopBar />
+      <Header />
+      <Outlet />
+      <Footer />
+    </>
+  );
+};
 
 function App() {
   return (
     <Router>
       <ScrollToTop />
       <div className="app-container">
-        <TopBar />
-        <Header />
-        
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/category/:id" element={<ProductListing />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
+          {/* All routes share standard layout (Header, Footer) */}
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/category/:id" element={<ProductListing />} />
+            <Route path="/product/:id" element={<ProductDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+          </Route>
         </Routes>
-        
-        <Footer />
       </div>
     </Router>
   );

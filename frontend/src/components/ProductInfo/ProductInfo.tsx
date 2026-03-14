@@ -12,15 +12,26 @@ interface ProductInfoProps {
     colors: { name: string; hex: string }[];
     sizes: string[];
   };
+  onVariantChange?: (color: string, size: string) => void;
 }
 
-const ProductInfo = ({ product }: ProductInfoProps) => {
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]?.name);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0]);
+const ProductInfo = ({ product, onVariantChange }: ProductInfoProps) => {
+  const [selectedColor, setSelectedColor] = useState(product.colors[0]?.name ?? '');
+  const [selectedSize, setSelectedSize] = useState(product.sizes[0] ?? '');
   
   const discount = product.originalPrice 
     ? Math.round((1 - product.price / product.originalPrice) * 100) 
     : 0;
+
+  const handleColorChange = (color: string) => {
+    setSelectedColor(color);
+    onVariantChange?.(color, selectedSize);
+  };
+
+  const handleSizeChange = (size: string) => {
+    setSelectedSize(size);
+    onVariantChange?.(selectedColor, size);
+  };
 
   return (
     <div className="product-info-container">
@@ -59,7 +70,7 @@ const ProductInfo = ({ product }: ProductInfoProps) => {
             <button
               key={color.name}
               className={`color-btn ${selectedColor === color.name ? 'selected' : ''}`}
-              onClick={() => setSelectedColor(color.name)}
+              onClick={() => handleColorChange(color.name)}
               title={color.name}
               aria-label={`Select color ${color.name}`}
             >
@@ -80,7 +91,7 @@ const ProductInfo = ({ product }: ProductInfoProps) => {
             <button
               key={size}
               className={`size-btn ${selectedSize === size ? 'selected' : ''}`}
-              onClick={() => setSelectedSize(size)}
+              onClick={() => handleSizeChange(size)}
             >
               {size}
             </button>

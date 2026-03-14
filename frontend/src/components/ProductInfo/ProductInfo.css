@@ -53,8 +53,8 @@
 
 .current-price {
   font-size: 28px;
-  font-weight: 800;
-  color: var(--co-red);
+  font-weight: 700;
+  color: var(--co-blue);
 }
 
 .original-price {

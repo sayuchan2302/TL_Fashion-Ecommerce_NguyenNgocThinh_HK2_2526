@@ -8,7 +8,7 @@ import TrustBadges from '../../components/TrustBadges/TrustBadges';
 import Newsletter from '../../components/Newsletter/Newsletter';
 
 // Mock Data
-const mensFashion = [
+export const mensFashion = [
   {
     id: 101,
     name: "Áo Polo Nam Cotton Khử Mùi",

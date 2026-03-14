@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart } from 'lucide-react';
 import AuthModal from '../AuthModal/AuthModal';
-import MiniCart from '../MiniCart/MiniCart';
+import { useCart } from '../../contexts/CartContext';
 import './Header.css';
 
 const Header = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const navigate = useNavigate();
+  const { totalItems } = useCart();
 
   const openAuthModal = (tab: 'login' | 'register') => {
     setAuthTab(tab);
@@ -177,9 +178,9 @@ const Header = () => {
             <span className="auth-divider">/</span>
             <a href="#" className="auth-link" onClick={(e) => { e.preventDefault(); openAuthModal('register'); }}>Đăng ký</a>
           </div>
-          <button className="icon-btn cart-btn" aria-label="Giỏ hàng" onClick={() => setIsCartOpen(true)}>
+          <button className="icon-btn cart-btn" aria-label="Giỏ hàng" onClick={() => navigate('/cart')}>
             <ShoppingCart size={22} />
-            <span className="cart-badge">2</span>
+            {totalItems > 0 && <span className="cart-badge">{totalItems > 99 ? '99+' : totalItems}</span>}
           </button>
         </div>
       </div>
@@ -188,11 +189,6 @@ const Header = () => {
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
         initialTab={authTab} 
-      />
-
-      <MiniCart 
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
       />
     </header>
   );

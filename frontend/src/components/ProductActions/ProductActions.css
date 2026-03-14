@@ -86,8 +86,15 @@
   border: 1px solid var(--co-black);
 }
 
-.btn-add-to-cart:hover {
+.btn-add-to-cart:hover:not(.added) {
   background-color: var(--co-gray-100);
+}
+
+/* Success "added" state */
+.btn-add-to-cart.added {
+  background-color: #10B981;
+  color: var(--co-white);
+  border-color: #10B981;
 }
 
 .btn-buy-now {
