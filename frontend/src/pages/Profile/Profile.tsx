@@ -13,8 +13,10 @@ import {
   ChevronDown,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Trash2
 } from 'lucide-react';
+import AddressModal, { type AddressData } from './AddressModal';
 import './Profile.css';
 
 // Type definition for tabs
@@ -30,6 +32,9 @@ const Profile = () => {
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<AddressData[]>([]);
 
   // Placeholder user data
   const user = {
@@ -128,13 +133,128 @@ const Profile = () => {
             <div className="profile-content-header">
               <h2 className="profile-content-title">Lịch sử đơn hàng</h2>
             </div>
-            <div className="tab-placeholder">
-              <ShoppingBag className="tab-placeholder-icon" />
-              <h3 className="tab-placeholder-title">Chưa có đơn hàng nào</h3>
-              <p className="tab-placeholder-desc text-gray-500">
-                Bạn chưa có đơn đặt hàng nào. Hãy mua sắm để Coolmate phục vụ bạn nhé!
-              </p>
-              <Link to="/" className="profile-btn-primary">Tiếp tục mua sắm</Link>
+
+            {/* Order Status Filter Tabs */}
+            <div className="order-filter-tabs">
+              {['Tất cả', 'Chờ xác nhận', 'Đang giao', 'Đã giao', 'Đã hủy'].map((status) => (
+                <button key={status} className={`order-filter-btn ${status === 'Tất cả' ? 'active' : ''}`}>
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            {/* Order Cards */}
+            <div className="order-list">
+              {/* Order 1 - Delivered */}
+              <div className="order-card">
+                <div className="order-card-header">
+                  <div className="order-card-meta">
+                    <span className="order-id">Mã đơn: #CM20260301</span>
+                    <span className="order-date">01/03/2026</span>
+                  </div>
+                  <span className="order-status-badge status-delivered">Đã giao</span>
+                </div>
+                <div className="order-card-items">
+                  <div className="order-item">
+                    <div className="order-item-img">
+                      <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=80&h=80&fit=crop" alt="Áo Thun" />
+                    </div>
+                    <div className="order-item-info">
+                      <p className="order-item-name">Áo Thun Nam Cổ Tròn Cotton</p>
+                      <p className="order-item-variant">Màu: Trắng | Size: L</p>
+                      <p className="order-item-qty">x2</p>
+                    </div>
+                    <span className="order-item-price">299.000đ</span>
+                  </div>
+                  <div className="order-item">
+                    <div className="order-item-img">
+                      <img src="https://images.unsplash.com/photo-1542272604-787c3835535d?w=80&h=80&fit=crop" alt="Quần" />
+                    </div>
+                    <div className="order-item-info">
+                      <p className="order-item-name">Quần Jeans Nam Slim Fit</p>
+                      <p className="order-item-variant">Màu: Xanh đậm | Size: 32</p>
+                      <p className="order-item-qty">x1</p>
+                    </div>
+                    <span className="order-item-price">459.000đ</span>
+                  </div>
+                </div>
+                <div className="order-card-footer">
+                  <div className="order-total">
+                    <span>Tổng cộng:</span>
+                    <span className="order-total-price">1.057.000đ</span>
+                  </div>
+                  <div className="order-actions">
+                    <button className="order-action-btn order-btn-outline">Mua lại</button>
+                    <button className="order-action-btn order-btn-primary">Đánh giá</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order 2 - Shipping */}
+              <div className="order-card">
+                <div className="order-card-header">
+                  <div className="order-card-meta">
+                    <span className="order-id">Mã đơn: #CM20260312</span>
+                    <span className="order-date">12/03/2026</span>
+                  </div>
+                  <span className="order-status-badge status-shipping">Đang giao</span>
+                </div>
+                <div className="order-card-items">
+                  <div className="order-item">
+                    <div className="order-item-img">
+                      <img src="https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=80&h=80&fit=crop" alt="Áo Polo" />
+                    </div>
+                    <div className="order-item-info">
+                      <p className="order-item-name">Áo Polo Nam Excool</p>
+                      <p className="order-item-variant">Màu: Xanh navy | Size: XL</p>
+                      <p className="order-item-qty">x1</p>
+                    </div>
+                    <span className="order-item-price">389.000đ</span>
+                  </div>
+                </div>
+                <div className="order-card-footer">
+                  <div className="order-total">
+                    <span>Tổng cộng:</span>
+                    <span className="order-total-price">389.000đ</span>
+                  </div>
+                  <div className="order-actions">
+                    <button className="order-action-btn order-btn-primary">Theo dõi đơn</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order 3 - Cancelled */}
+              <div className="order-card">
+                <div className="order-card-header">
+                  <div className="order-card-meta">
+                    <span className="order-id">Mã đơn: #CM20260220</span>
+                    <span className="order-date">20/02/2026</span>
+                  </div>
+                  <span className="order-status-badge status-cancelled">Đã hủy</span>
+                </div>
+                <div className="order-card-items">
+                  <div className="order-item">
+                    <div className="order-item-img">
+                      <img src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=80&h=80&fit=crop" alt="Hoodie" />
+                    </div>
+                    <div className="order-item-info">
+                      <p className="order-item-name">Áo Hoodie Oversize Unisex</p>
+                      <p className="order-item-variant">Màu: Đen | Size: M</p>
+                      <p className="order-item-qty">x1</p>
+                    </div>
+                    <span className="order-item-price">549.000đ</span>
+                  </div>
+                </div>
+                <div className="order-card-footer">
+                  <div className="order-total">
+                    <span>Tổng cộng:</span>
+                    <span className="order-total-price">549.000đ</span>
+                  </div>
+                  <div className="order-actions">
+                    <button className="order-action-btn order-btn-outline">Mua lại</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -144,22 +264,63 @@ const Profile = () => {
             <div className="profile-content-header">
               <h2 className="profile-content-title">Ví voucher của tôi</h2>
             </div>
-            <div className="tab-placeholder">
-              <Ticket className="tab-placeholder-icon" />
-              <h3 className="tab-placeholder-title">Không có voucher khả dụng</h3>
-              <p className="tab-placeholder-desc text-gray-500">
-                Bạn chưa có mã giảm giá nào. Hãy lấy mã trong các chương trình khuyến mãi.
-              </p>
-              <button className="profile-btn-outline">Săn mã ngay</button>
+            <div className="voucher-list">
+              {/* Voucher 1 */}
+              <div className="voucher-card">
+                <div className="voucher-stripe"></div>
+                <div className="voucher-body">
+                  <div className="voucher-top">
+                    <span className="voucher-code">WELCOMEJ7BMF6</span>
+                    <span className="voucher-remain">(Còn 1)</span>
+                  </div>
+                  <p className="voucher-desc">Giảm 15% tối đa 50K cho đơn bất kỳ (Không áp dụng cho danh mục SALE)</p>
+                  <div className="voucher-bottom">
+                    <span className="voucher-expiry">HSD: 12/04/2026</span>
+                    <button className="voucher-condition-btn">Điều kiện</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Voucher 2 */}
+              <div className="voucher-card">
+                <div className="voucher-stripe"></div>
+                <div className="voucher-body">
+                  <div className="voucher-top">
+                    <span className="voucher-code">FREESHIP50K</span>
+                    <span className="voucher-remain">(Còn 2)</span>
+                  </div>
+                  <p className="voucher-desc">Miễn phí vận chuyển cho đơn hàng từ 300K</p>
+                  <div className="voucher-bottom">
+                    <span className="voucher-expiry">HSD: 30/06/2026</span>
+                    <button className="voucher-condition-btn">Điều kiện</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Voucher 3 */}
+              <div className="voucher-card">
+                <div className="voucher-stripe"></div>
+                <div className="voucher-body">
+                  <div className="voucher-top">
+                    <span className="voucher-code">SUMMER2026</span>
+                    <span className="voucher-remain">(Còn 1)</span>
+                  </div>
+                  <p className="voucher-desc">Giảm 20% tối đa 100K cho đơn từ 500K – BST Hè 2026</p>
+                  <div className="voucher-bottom">
+                    <span className="voucher-expiry">HSD: 31/08/2026</span>
+                    <button className="voucher-condition-btn">Điều kiện</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
       case 'addresses':
         return (
           <div className="tab-pane">
-            <div className="profile-content-header flex justify-between items-center border-b border-gray-200 pb-4 mb-6">
-              <h2 className="profile-content-title text-2xl font-bold">Địa chỉ của tôi</h2>
-              <button className="address-add-btn">
+            <div className="address-header">
+              <h2 className="profile-content-title">Địa chỉ của tôi</h2>
+              <button className="address-add-btn" onClick={() => setIsAddressModalOpen(true)}>
                 <span>+</span> THÊM ĐỊA CHỈ MỚI
               </button>
             </div>
@@ -167,9 +328,34 @@ const Profile = () => {
             <div className="address-book-content">
               <h3 className="address-book-subtitle">Sổ địa chỉ</h3>
               
-              <div className="address-empty-state">
-                <p>Bạn chưa có địa chỉ nào!</p>
-              </div>
+              {savedAddresses.length === 0 ? (
+                <div className="address-empty-state">
+                  <p>Bạn chưa có địa chỉ nào!</p>
+                </div>
+              ) : (
+                <div className="address-list">
+                  {savedAddresses.map((addr, index) => (
+                    <div key={index} className="address-card">
+                      <div className="address-card-info">
+                        <div className="address-card-top">
+                          <span className="address-card-name">{addr.name}</span>
+                          <span className="address-card-divider">|</span>
+                          <span className="address-card-phone">{addr.phone}</span>
+                          {addr.isDefault && <span className="address-default-badge">Mặc định</span>}
+                        </div>
+                        <p className="address-card-detail">{addr.detail}</p>
+                        <p className="address-card-region">{addr.ward}, {addr.district}, {addr.province}</p>
+                      </div>
+                      <button 
+                        className="address-card-delete" 
+                        onClick={() => setSavedAddresses(prev => prev.filter((_, i) => i !== index))}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -420,6 +606,13 @@ const Profile = () => {
           </div>
         </div>
       )}
+
+      {/* Address Modal */}
+      <AddressModal
+        isOpen={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        onSave={(newAddr) => setSavedAddresses(prev => [...prev, newAddr])}
+      />
     </div>
   );
 };

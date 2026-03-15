@@ -608,7 +608,318 @@
   opacity: 0.8;
 }
 
+/* --- Order History Tab --- */
+.order-filter-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--co-gray-200);
+}
+
+.order-filter-btn {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--co-gray-500);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.order-filter-btn:hover {
+  color: var(--co-black);
+}
+
+.order-filter-btn.active {
+  color: var(--co-blue);
+  border-bottom-color: var(--co-blue);
+  font-weight: 600;
+}
+
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.order-card {
+  border: 1px solid var(--co-gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.order-card:hover {
+  border-color: var(--co-blue);
+}
+
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background-color: var(--co-gray-100);
+  border-bottom: 1px solid var(--co-gray-200);
+}
+
+.order-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.order-id {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--co-black);
+}
+
+.order-date {
+  font-size: 13px;
+  color: var(--co-gray-500);
+}
+
+.order-status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.status-delivered {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.status-shipping {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.status-pending {
+  background-color: #fef9c3;
+  color: #ca8a04;
+}
+
+.status-cancelled {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.order-card-items {
+  padding: 16px 20px;
+}
+
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.order-item + .order-item {
+  border-top: 1px solid var(--co-gray-100);
+}
+
+.order-item-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background-color: var(--co-gray-100);
+}
+
+.order-item-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.order-item-info {
+  flex-grow: 1;
+}
+
+.order-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--co-black);
+  margin: 0 0 4px 0;
+}
+
+.order-item-variant {
+  font-size: 13px;
+  color: var(--co-gray-500);
+  margin: 0 0 2px 0;
+}
+
+.order-item-qty {
+  font-size: 13px;
+  color: var(--co-gray-400);
+  margin: 0;
+}
+
+.order-item-price {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--co-black);
+  white-space: nowrap;
+}
+
+.order-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-top: 1px solid var(--co-gray-200);
+  background-color: var(--co-gray-50, #fafafa);
+}
+
+.order-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--co-gray-500);
+}
+
+.order-total-price {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--co-blue);
+}
+
+.order-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.order-action-btn {
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--co-gray-300);
+}
+
+.order-btn-outline {
+  background: white;
+  color: var(--co-black);
+  border-color: var(--co-gray-300);
+}
+
+.order-btn-outline:hover {
+  background-color: var(--co-gray-100);
+}
+
+.order-btn-primary {
+  background-color: var(--co-black);
+  color: white;
+  border-color: var(--co-black);
+}
+
+.order-btn-primary:hover {
+  opacity: 0.85;
+}
+
+/* --- Voucher Wallet Tab --- */
+.voucher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.voucher-card {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--co-gray-100);
+  transition: box-shadow 0.2s;
+}
+
+.voucher-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.voucher-stripe {
+  width: 6px;
+  flex-shrink: 0;
+  background-color: var(--co-blue);
+}
+
+.voucher-body {
+  flex-grow: 1;
+  padding: 16px 20px;
+}
+
+.voucher-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.voucher-code {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--co-black);
+  letter-spacing: 0.5px;
+}
+
+.voucher-remain {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--co-gray-500);
+}
+
+.voucher-desc {
+  font-size: 13px;
+  color: var(--co-gray-600);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.voucher-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voucher-expiry {
+  font-size: 13px;
+  color: var(--co-gray-500);
+}
+
+.voucher-condition-btn {
+  background: none;
+  border: none;
+  color: var(--co-blue);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+}
+
+.voucher-condition-btn:hover {
+  text-decoration: underline;
+}
+
 /* --- Address Book Tab --- */
+.address-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--co-gray-200);
+}
+
 .address-add-btn {
   background-color: var(--co-black);
   color: white;
@@ -622,6 +933,7 @@
   gap: 8px;
   cursor: pointer;
   transition: opacity 0.2s;
+  white-space: nowrap;
 }
 
 .address-add-btn span {
@@ -659,6 +971,154 @@
   color: var(--co-gray-500);
   font-size: 14px;
   margin: 0;
+}
+
+/* Address Modal Sizing */
+.address-modal {
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Select Dropdown Styling */
+.modal-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-left: 16px !important;
+  padding-right: 36px !important;
+  cursor: pointer;
+  background-color: white;
+}
+
+.modal-select:disabled {
+  background-color: var(--co-gray-100);
+  color: var(--co-gray-400);
+  cursor: not-allowed;
+}
+
+/* Address Cards */
+.address-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.address-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid var(--co-gray-200);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.address-card:hover {
+  border-color: var(--co-blue);
+}
+
+.address-card-info {
+  flex-grow: 1;
+}
+
+.address-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.address-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--co-black);
+}
+
+.address-card-divider {
+  color: var(--co-gray-300);
+}
+
+.address-card-phone {
+  font-size: 14px;
+  color: var(--co-gray-600);
+}
+
+.address-default-badge {
+  background-color: var(--co-blue);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
+.address-card-detail,
+.address-card-region {
+  font-size: 13px;
+  color: var(--co-gray-500);
+  margin: 2px 0;
+}
+
+.address-card-delete {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--co-gray-400);
+  transition: color 0.2s;
+}
+
+.address-card-delete:hover {
+  color: #ef4444;
+}
+
+/* Default Address Checkbox */
+.address-default-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--co-black);
+  cursor: pointer;
+  position: relative;
+  padding-left: 28px;
+}
+
+.address-default-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.address-check-custom {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--co-gray-300);
+  border-radius: 4px;
+  background: white;
+  transition: all 0.2s;
+}
+
+.address-default-check input:checked ~ .address-check-custom {
+  background: var(--co-blue);
+  border-color: var(--co-blue);
+}
+
+.address-default-check input:checked ~ .address-check-custom::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 /* --- Explicit Modal Spacing Helpers (Tailwind Fallbacks) --- */
 .mt-6 { margin-top: 24px !important; }
