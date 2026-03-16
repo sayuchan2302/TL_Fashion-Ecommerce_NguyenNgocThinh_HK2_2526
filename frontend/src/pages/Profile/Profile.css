@@ -1287,3 +1287,33 @@
 .mb-10 { margin-bottom: 40px !important; }
 .gap-4 { gap: 16px !important; }
 .gap-6 { gap: 24px !important; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .profile-layout {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .profile-sidebar {
+    width: 100%;
+    position: static;
+  }
+
+  .profile-page {
+    padding: 24px 12px 60px;
+  }
+
+  /* Make nav scrollable horizontally on mobile */
+  .profile-nav {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    gap: 12px;
+  }
+
+  .profile-nav-item {
+    white-space: nowrap;
+    margin-bottom: 0;
+  }
+}

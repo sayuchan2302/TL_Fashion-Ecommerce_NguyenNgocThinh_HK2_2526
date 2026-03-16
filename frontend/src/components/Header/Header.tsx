@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, Heart } from 'lucide-react';
+import { Search, ShoppingCart, Heart, Menu, X, ChevronDown } from 'lucide-react';
 import AuthModal from '../AuthModal/AuthModal';
 import { useCartAnimation } from '../../context/CartAnimationContext';
 import { useCart } from '../../contexts/CartContext';
@@ -15,6 +15,17 @@ const Header = () => {
   const { totalItems: wishlistCount } = useWishlist();
   const { cartIconRef } = useCartAnimation();
   const [searchValue, setSearchValue] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedMobileMenu, setExpandedMobileMenu] = useState<string | null>(null);
+
+  const toggleMobileSubMenu = (menuId: string) => {
+    setExpandedMobileMenu(prev => prev === menuId ? null : menuId);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+    setExpandedMobileMenu(null);
+  };
 
   // Pulse animation state
   const [isBouncing, setIsBouncing] = useState(false);
@@ -230,6 +241,86 @@ const Header = () => {
             <ShoppingCart size={22} />
             {totalItems > 0 && <span className="cart-badge">{totalItems > 99 ? '99+' : totalItems}</span>}
           </button>
+        </div>
+        {/* Mobile Menu Button */}
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Menu">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && <div className="mobile-overlay" onClick={closeMobileMenu} />}
+
+      {/* Mobile Drawer */}
+      <div className={`mobile-drawer ${isMobileMenuOpen ? 'open' : ''}`}>
+        {/* Mobile Search */}
+        <form className="mobile-search" onSubmit={(e) => { e.preventDefault(); if (searchValue.trim()) { navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`); closeMobileMenu(); } }}>
+          <Search size={18} />
+          <input type="text" placeholder="Tìm kiếm sản phẩm..." value={searchValue} onChange={e => setSearchValue(e.target.value)} />
+        </form>
+
+        {/* Mobile Nav */}
+        <nav className="mobile-nav">
+          <Link to="/category/new" className="mobile-nav-link mobile-new" onClick={closeMobileMenu}>NEW</Link>
+          
+          <div className="mobile-nav-group">
+            <button className="mobile-nav-link" onClick={() => toggleMobileSubMenu('men')}>
+              NAM <ChevronDown size={16} className={expandedMobileMenu === 'men' ? 'rotated' : ''} />
+            </button>
+            {expandedMobileMenu === 'men' && (
+              <div className="mobile-sub-menu">
+                <Link to="/category/men" onClick={closeMobileMenu}>Tất cả sản phẩm Nam</Link>
+                <Link to="/category/men-ao-thun" onClick={closeMobileMenu}>Áo thun</Link>
+                <Link to="/category/men-ao-polo" onClick={closeMobileMenu}>Áo polo</Link>
+                <Link to="/category/men-quan-jeans" onClick={closeMobileMenu}>Quần jeans</Link>
+                <Link to="/category/men-quan-short" onClick={closeMobileMenu}>Quần short</Link>
+                <Link to="/category/men-ao-hoodie" onClick={closeMobileMenu}>Áo hoodie</Link>
+              </div>
+            )}
+          </div>
+
+          <div className="mobile-nav-group">
+            <button className="mobile-nav-link" onClick={() => toggleMobileSubMenu('women')}>
+              NỮ <ChevronDown size={16} className={expandedMobileMenu === 'women' ? 'rotated' : ''} />
+            </button>
+            {expandedMobileMenu === 'women' && (
+              <div className="mobile-sub-menu">
+                <Link to="/category/women" onClick={closeMobileMenu}>Tất cả sản phẩm Nữ</Link>
+                <Link to="/category/women-ao-thun" onClick={closeMobileMenu}>Áo thun</Link>
+                <Link to="/category/women-vay-lien" onClick={closeMobileMenu}>Váy liền</Link>
+                <Link to="/category/women-quan-jeans" onClick={closeMobileMenu}>Quần jeans</Link>
+                <Link to="/category/women-ao-khoac" onClick={closeMobileMenu}>Áo khoác</Link>
+              </div>
+            )}
+          </div>
+
+          <div className="mobile-nav-group">
+            <button className="mobile-nav-link" onClick={() => toggleMobileSubMenu('acc')}>
+              PHỤ KIỆN <ChevronDown size={16} className={expandedMobileMenu === 'acc' ? 'rotated' : ''} />
+            </button>
+            {expandedMobileMenu === 'acc' && (
+              <div className="mobile-sub-menu">
+                <Link to="/category/accessories" onClick={closeMobileMenu}>Tất cả phụ kiện</Link>
+                <Link to="/category/tui-xach" onClick={closeMobileMenu}>Túi xách</Link>
+                <Link to="/category/non-mu" onClick={closeMobileMenu}>Nón / mũ</Link>
+                <Link to="/category/that-lung" onClick={closeMobileMenu}>Thắt lưng</Link>
+              </div>
+            )}
+          </div>
+
+          <Link to="/category/sale" className="mobile-nav-link mobile-sale" onClick={closeMobileMenu}>🔥 SALE -50%</Link>
+        </nav>
+
+        {/* Mobile Auth */}
+        <div className="mobile-auth">
+          <button className="mobile-auth-btn" onClick={() => { openAuthModal('login'); closeMobileMenu(); }}>Đăng nhập</button>
+          <button className="mobile-auth-btn mobile-auth-register" onClick={() => { openAuthModal('register'); closeMobileMenu(); }}>Đăng ký</button>
+        </div>
+
+        {/* Mobile Quick Links */}
+        <div className="mobile-quick-links">
+          <Link to="/wishlist" onClick={closeMobileMenu}><Heart size={18} /> Yêu thích {wishlistCount > 0 && `(${wishlistCount})`}</Link>
+          <Link to="/profile" onClick={closeMobileMenu}><Search size={18} /> Tài khoản</Link>
         </div>
       </div>
 
