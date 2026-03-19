@@ -24,10 +24,6 @@ import { WishlistProvider } from './contexts/WishlistContext';
 import { CartProvider } from './contexts/CartContext';
 import { FilterProvider } from './contexts/FilterContext';
 import { AuthProvider } from './contexts/AuthContext';
-import Login from './pages/Auth/Login';
-import Register from './pages/Auth/Register';
-import ForgotPassword from './pages/Auth/ForgotPassword';
-import ResetPassword from './pages/Auth/ResetPassword';
 import OrdersPage from './pages/Account/OrdersPage';
 import AddressesPage from './pages/Account/AddressesPage';
 import SecurityPage from './pages/Account/SecurityPage';
@@ -91,10 +87,6 @@ function App() {
                         <Route path="/about" element={<About />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/profile/orders/:id" element={<OrderDetail />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/register" element={<Register />} />
-                        <Route path="/forgot" element={<ForgotPassword />} />
-                        <Route path="/reset" element={<ResetPassword />} />
                         <Route path="/account/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
                         <Route path="/account/orders/:id" element={<ProtectedRoute><OrderDetailPage /></ProtectedRoute>} />
                         <Route path="/account/addresses" element={<ProtectedRoute><AddressesPage /></ProtectedRoute>} />
