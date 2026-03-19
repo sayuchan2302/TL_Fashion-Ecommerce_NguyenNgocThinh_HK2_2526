@@ -11,15 +11,15 @@ const mockProducts = [
     name: "Áo Polo Nam Cotton Khử Mùi",
     price: 359000,
     originalPrice: 450000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/February2025/11025595_24_copy_11.jpg",
-    badge: "MỚI",
+    image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=672&h=990&q=80",
+    badge: "NEW",
     colors: ["#000000", "#ffffff", "#1e3a8a"]
   },
   {
     id: 102,
     name: "Quần Jeans Nam Dáng Straight Tôn Dáng",
     price: 599000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/February2025/11025595_31_copy_91.jpg",
+    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#1e3a8a", "#6b7280"]
   },
   {
@@ -27,14 +27,14 @@ const mockProducts = [
     name: "Áo Sơ Mi Nam Vải Modal Thoáng Mát",
     price: 459000,
     originalPrice: 550000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/February2025/11025595_21.jpg",
+    image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=672&h=990&q=80",
     badge: "BEST SELLER"
   },
   {
     id: 104,
     name: "Quần Lót Nam Trunk Kháng Khuẩn",
     price: 129000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/February2025/11025595_17_copy.jpg",
+    image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#000000", "#f3f4f6"]
   },
   {
@@ -42,7 +42,7 @@ const mockProducts = [
     name: "Quần Shorts Nam Thể Thao Co Giãn",
     price: 249000,
     originalPrice: 299000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.AT012.2_72.jpg",
+    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#000000", "#111827", "#4b5563"]
   },
   {
@@ -50,7 +50,7 @@ const mockProducts = [
     name: "Áo Khoác Gió Nam Chống Nước Nhẹ",
     price: 499000,
     originalPrice: 599000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.QT003.1_65.jpg",
+    image: "https://images.unsplash.com/photo-1521412644187-c49fa049e84d?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#000000", "#1e3a8a"]
   },
   {
@@ -58,14 +58,14 @@ const mockProducts = [
     name: "Tất Cổ Thấp Khử Mùi Hôi (Pack 3)",
     price: 99000,
     originalPrice: 150000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.AT005.8_59.jpg",
+    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=672&h=990&q=80",
     badge: "SALE"
   },
   {
     id: 108,
     name: "Bộ Đồ Mặc Nhà Nam Cotton Thoáng",
     price: 399000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.AT012.3_79.jpg",
+    image: "https://images.unsplash.com/photo-1524503033411-c4c2b460ccb6?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#000000", "#4b5563"]
   },
   {
@@ -73,14 +73,14 @@ const mockProducts = [
     name: "Váy Liền Nữ Cổ Khuy Thanh Lịch",
     price: 499000,
     originalPrice: 650000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.DK001.2_77.jpg",
+    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=672&h=990&q=80",
     badge: "HOT"
   },
   {
     id: 202,
     name: "Áo Kiểu Nữ Croptop Năng Động",
     price: 259000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.DK002.4_59.jpg",
+    image: "https://images.unsplash.com/photo-1524504543470-0f085452bb3f?auto=format&fit=crop&w=672&h=990&q=80",
     colors: ["#ffffff", "#000000", "#fbcfe8"]
   },
   {
@@ -94,8 +94,8 @@ const mockProducts = [
     id: 208,
     name: "Áo Dây Cami Lụa Mát Mẻ",
     price: 159000,
-    image: "https://media.coolmate.me/cdn-cgi/image/width=672,height=990,quality=85/uploads/November2024/24CMCW.AT005.5_88.jpg",
-    badge: "MỚI",
+    image: "https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=672&h=990&q=80",
+    badge: "NEW",
     colors: ["#ffffff", "#fbcfe8"]
   }
 ];

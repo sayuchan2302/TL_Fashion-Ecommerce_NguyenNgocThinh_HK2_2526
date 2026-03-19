@@ -1,14 +1,15 @@
 import './TopBar.css';
 import { Star, ChevronDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const TopBar = () => {
   return (
     <div className="topbar">
       <div className="topbar-content container">
         <div className="topbar-left">
-          <a href="#">VỀ COOLMATE</a>
-          <a href="#">CXP BY COOLMATE</a>
-          <a href="#">CARE&SHARE</a>
+          <Link to="/about">Về COOLMATE</Link>
+          <Link to="/faq">FAQ</Link>
+          <Link to="/contact">Liên hệ</Link>
         </div>
         
         <div className="topbar-right">

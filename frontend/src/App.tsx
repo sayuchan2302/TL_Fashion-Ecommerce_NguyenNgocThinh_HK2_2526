@@ -35,6 +35,8 @@ import OrderDetailPage from './pages/Account/OrderDetailPage';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 import OrderTracking from './pages/OrderTracking/OrderTracking';
 import Returns from './pages/Returns/Returns';
+import FAQ from './pages/FAQ/FAQ';
+import PaymentResult from './pages/PaymentResult/PaymentResult';
 
 const MainLayout = () => {
   const location = useLocation();
@@ -75,6 +77,8 @@ function App() {
                         <Route path="/wishlist" element={<Wishlist />} />
                         <Route path="/order-tracking" element={<OrderTracking />} />
                         <Route path="/returns" element={<Returns />} />
+                        <Route path="/payment-result" element={<PaymentResult />} />
+                        <Route path="/faq" element={<FAQ />} />
                         <Route path="/policy/:type" element={<Policy />} />
                         <Route path="/about" element={<About />} />
                         <Route path="/contact" element={<Contact />} />
