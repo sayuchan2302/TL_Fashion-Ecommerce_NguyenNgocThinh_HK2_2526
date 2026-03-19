@@ -4,10 +4,10 @@ import { Filter, Search, CheckCircle, Clock3, XCircle } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 
 const orders = [
-  { code: 'DH-10234', customer: 'Nguyễn Văn A', total: '1.250.000 đ', status: 'Đã thanh toán', channel: 'Web', date: '2026-03-10' },
-  { code: 'DH-10233', customer: 'Trần Thu B', total: '780.000 đ', status: 'Chờ xử lý', channel: 'App', date: '2026-03-10' },
-  { code: 'DH-10232', customer: 'Lê Hữu C', total: '2.150.000 đ', status: 'Đang giao', channel: 'Web', date: '2026-03-09' },
-  { code: 'DH-10231', customer: 'Phạm Hương', total: '560.000 đ', status: 'Hoàn tất', channel: 'CSKH', date: '2026-03-09' },
+  { code: 'DH-10234', customer: 'Nguyễn Văn A', total: '1.250.000 đ', status: 'Đã thanh toán', date: '2026-03-10' },
+  { code: 'DH-10233', customer: 'Trần Thu B', total: '780.000 đ', status: 'Chờ xử lý', date: '2026-03-10' },
+  { code: 'DH-10232', customer: 'Lê Hữu C', total: '2.150.000 đ', status: 'Đang giao', date: '2026-03-09' },
+  { code: 'DH-10231', customer: 'Phạm Hương', total: '560.000 đ', status: 'Hoàn tất', date: '2026-03-09' },
 ];
 
 const statusTone = (status: string) => {
@@ -42,7 +42,6 @@ const AdminOrders = () => {
               <div role="columnheader">Khách</div>
               <div role="columnheader">Tổng</div>
               <div role="columnheader">Trạng thái</div>
-              <div role="columnheader">Kênh</div>
               <div role="columnheader">Ngày</div>
               <div role="columnheader">Chi tiết</div>
             </div>
@@ -56,7 +55,6 @@ const AdminOrders = () => {
                     {order.status}
                   </span>
                 </div>
-                <div role="cell" className="admin-muted">{order.channel}</div>
                 <div role="cell" className="admin-muted">{order.date}</div>
                 <div role="cell">
                   <Link to={`/account/orders/${order.code}`} className="admin-link">Xem</Link>

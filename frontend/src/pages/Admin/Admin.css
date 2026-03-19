@@ -79,8 +79,8 @@
 .admin-panel-head a { font-size: 13px; color: var(--co-blue); text-decoration: none; font-weight: 700; }
 
 .admin-table { border: 1px solid var(--co-gray-200); border-radius: 10px; overflow: hidden; }
-.admin-table-row { display: grid; grid-template-columns: 1.1fr 1.2fr 1fr 1fr 0.8fr; padding: 10px 12px; align-items: center; gap: 8px; font-size: 14px; }
-.admin-table-row.wide { grid-template-columns: 1.1fr 1.2fr 1fr 1fr 0.8fr 1fr 0.8fr; }
+.admin-table-row { display: grid; grid-template-columns: 1.1fr 1.2fr 1fr 1fr 1fr; padding: 10px 12px; align-items: center; gap: 8px; font-size: 14px; }
+.admin-table-row.wide { grid-template-columns: 1.1fr 1.2fr 1fr 1fr 1fr 0.8fr; }
 .admin-table-head { background: var(--co-gray-100); text-transform: uppercase; font-size: 12px; font-weight: 700; }
 .admin-table-row:nth-child(even) { background: var(--co-gray-50); }
 .admin-bold { font-weight: 800; }
