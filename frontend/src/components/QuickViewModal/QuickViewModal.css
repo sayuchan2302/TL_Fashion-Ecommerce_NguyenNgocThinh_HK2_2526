@@ -284,14 +284,14 @@
 }
 
 .qv-wishlist-btn:hover {
-  border-color: var(--co-error);
-  color: var(--co-error);
+  border-color: var(--co-blue);
+  color: var(--co-blue);
 }
 
 .qv-wishlist-btn.wished {
-  color: var(--co-error);
-  border-color: var(--co-error);
-  background-color: #fef2f2;
+  color: var(--co-blue);
+  border-color: var(--co-blue);
+  background-color: rgba(47, 90, 207, 0.08);
 }
 
 /* View Detail Link */

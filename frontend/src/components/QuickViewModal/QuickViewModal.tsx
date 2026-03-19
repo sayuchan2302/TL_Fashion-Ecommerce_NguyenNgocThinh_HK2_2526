@@ -3,6 +3,7 @@ import { X, Minus, Plus, ShoppingCart, Check, Heart, ExternalLink } from 'lucide
 import { Link } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useWishlist } from '../../contexts/WishlistContext';
+import { useCartAnimation } from '../../context/CartAnimationContext';
 import './QuickViewModal.css';
 
 interface QuickViewProduct {
@@ -26,6 +27,7 @@ const DEFAULT_SIZES = ['S', 'M', 'L', 'XL', '2XL'];
 const QuickViewModal = ({ product, isOpen, onClose }: QuickViewModalProps) => {
   const { addToCart } = useCart();
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
+  const { triggerAnimation } = useCartAnimation();
   const [selectedSize, setSelectedSize] = useState(DEFAULT_SIZES[1]); // Default M
   const [selectedColorIdx, setSelectedColorIdx] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -54,10 +56,17 @@ const QuickViewModal = ({ product, isOpen, onClose }: QuickViewModalProps) => {
     setTimeout(() => setAdded(false), 2000);
   };
 
-  const handleToggleWishlist = () => {
+  const handleToggleWishlist = (e: React.MouseEvent) => {
     if (isWished) {
       removeFromWishlist(String(product.id));
     } else {
+      const imageEl = document.querySelector('.qv-image') as HTMLImageElement | null;
+      triggerAnimation({
+        imgSrc: product.image,
+        imageRect: imageEl?.getBoundingClientRect() || null,
+        fallbackPoint: { x: e.clientX, y: e.clientY },
+        target: 'wishlist',
+      });
       addToWishlist({
         id: String(product.id),
         name: product.name,

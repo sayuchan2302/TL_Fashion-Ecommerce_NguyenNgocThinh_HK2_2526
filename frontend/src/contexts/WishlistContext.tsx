@@ -27,7 +27,7 @@ export const WishlistProvider = ({ children }: { children: ReactNode }) => {
     const existing = items.find(i => i.id === item.id);
     if (!existing) {
       setItems(prev => [...prev, item]);
-      addToast('Đã thêm vào danh sách yêu thích', 'success');
+      addToast('Đã thêm vào danh sách yêu thích', 'add');
     }
   };
 
@@ -35,7 +35,7 @@ export const WishlistProvider = ({ children }: { children: ReactNode }) => {
     const existing = items.find(i => i.id === id);
     if (existing) {
       setItems(prev => prev.filter(item => item.id !== id));
-      addToast('Đã xoá khỏi danh sách yêu thích', 'info');
+      addToast('Đã xoá khỏi danh sách yêu thích', 'remove');
     }
   };
 

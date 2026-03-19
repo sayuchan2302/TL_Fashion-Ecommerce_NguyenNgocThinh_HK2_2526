@@ -184,6 +184,9 @@
   border: 1px solid #d1d5db;
   border-radius: 4px;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
   background-color: transparent;
   flex-shrink: 0;
@@ -197,13 +200,13 @@
 .custom-checkbox-label input:checked + .checkbox-icon::after {
   content: '';
   position: absolute;
-  left: 5px;
-  top: 1px;
-  width: 5px;
-  height: 10px;
+  left: 50%;
+  top: 48%;
+  width: 6px;
+  height: 11px;
   border: solid white;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 .item-cb {

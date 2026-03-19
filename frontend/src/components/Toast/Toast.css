@@ -39,6 +39,8 @@
 .toast-icon.success { color: var(--co-success); }
 .toast-icon.error { color: var(--co-error); }
 .toast-icon.info { color: var(--co-blue); }
+.toast-icon.add { color: var(--co-blue); }
+.toast-icon.remove { color: var(--co-black); }
 
 /* Close Button */
 .toast-close {
@@ -70,6 +72,8 @@
 .toast-progress-success { background: var(--co-success); }
 .toast-progress-error { background: var(--co-error); }
 .toast-progress-info { background: var(--co-blue); }
+.toast-progress-add { background: var(--co-blue); }
+.toast-progress-remove { background: var(--co-black); }
 
 /* Animations */
 @keyframes slideInRight {

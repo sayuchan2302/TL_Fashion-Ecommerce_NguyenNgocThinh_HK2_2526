@@ -14,7 +14,7 @@ const Header = () => {
   const navigate = useNavigate();
   const { totalItems } = useCart();
   const { totalItems: wishlistCount } = useWishlist();
-  const { cartIconRef } = useCartAnimation();
+  const { cartIconRef, wishlistIconRef } = useCartAnimation();
   const [searchValue, setSearchValue] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileMenu, setExpandedMobileMenu] = useState<string | null>(null);
@@ -278,13 +278,13 @@ const Header = () => {
               </div>
             )}
           </div>
-          <button className="icon-btn wishlist-btn" aria-label="Yêu thích" onClick={() => navigate('/wishlist')}>
+          <button ref={wishlistIconRef} className="icon-btn wishlist-btn" aria-label="Yêu thích" onClick={() => navigate('/wishlist')}>
             <Heart size={22} />
             {wishlistCount > 0 && <span className="cart-badge">{wishlistCount}</span>}
           </button>
           <button 
             ref={cartIconRef}
-            className={`icon-btn cart-btn ${isBouncing ? 'cart-bounce' : ''}`} 
+            className={`icon-btn cart-btn ${isBouncing ? 'icon-bounce' : ''}`} 
             aria-label="Giỏ hàng" 
             onClick={() => navigate('/cart')}
           >

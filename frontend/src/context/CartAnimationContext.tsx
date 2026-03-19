@@ -6,32 +6,37 @@ type TriggerPayload = {
   imgSrc: string;
   imageRect?: DOMRect | null;
   fallbackPoint?: { x: number; y: number };
+  target?: 'cart' | 'wishlist';
 };
 
 interface CartAnimationContextType {
   triggerAnimation: (payload: TriggerPayload) => void;
   cartIconRef: React.RefObject<HTMLButtonElement | null>;
+  wishlistIconRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 const CartAnimationContext = createContext<CartAnimationContextType | undefined>(undefined);
 
 export const CartAnimationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const cartIconRef = useRef<HTMLButtonElement>(null);
+  const wishlistIconRef = useRef<HTMLButtonElement>(null);
   const [animations, setAnimations] = useState<{
     id: string;
     imgSrc: string;
     size: number;
+    target: 'cart' | 'wishlist';
     keyframes: { x: number[]; y: number[]; scale: number[]; opacity: number[] };
   }[]>([]);
 
-  const triggerAnimation = useCallback(({ imgSrc, imageRect, fallbackPoint }: TriggerPayload) => {
-    if (!cartIconRef.current) return;
+  const triggerAnimation = useCallback(({ imgSrc, imageRect, fallbackPoint, target = 'cart' }: TriggerPayload) => {
+    const targetIcon = target === 'wishlist' ? wishlistIconRef.current : cartIconRef.current;
+    if (!targetIcon) return;
 
     const startX = imageRect ? imageRect.left + imageRect.width / 2 : fallbackPoint?.x;
     const startY = imageRect ? imageRect.top + imageRect.height / 2 : fallbackPoint?.y;
     if (startX == null || startY == null) return;
 
-    const endRect = cartIconRef.current.getBoundingClientRect();
+    const endRect = targetIcon.getBoundingClientRect();
     const endX = endRect.left + endRect.width / 2;
     const endY = endRect.top + endRect.height / 2;
 
@@ -55,6 +60,7 @@ export const CartAnimationProvider: React.FC<{ children: React.ReactNode }> = ({
       id: newAnimationId,
       imgSrc,
       size,
+      target,
       keyframes: {
         x: [targetStartX, targetMidX, targetEndX],
         y: [targetStartY, targetMidY, targetEndY],
@@ -64,17 +70,17 @@ export const CartAnimationProvider: React.FC<{ children: React.ReactNode }> = ({
     }]);
   }, []);
 
-  const bounceCart = useCallback(() => {
-    const el = cartIconRef.current;
+  const bounceIcon = useCallback((target: 'cart' | 'wishlist') => {
+    const el = target === 'wishlist' ? wishlistIconRef.current : cartIconRef.current;
     if (!el) return;
-    el.classList.remove('cart-bounce');
+    el.classList.remove('icon-bounce');
     void el.offsetWidth;
-    el.classList.add('cart-bounce');
-    setTimeout(() => el.classList.remove('cart-bounce'), 320);
+    el.classList.add('icon-bounce');
+    setTimeout(() => el.classList.remove('icon-bounce'), 320);
   }, []);
 
   return (
-    <CartAnimationContext.Provider value={{ triggerAnimation, cartIconRef }}>
+    <CartAnimationContext.Provider value={{ triggerAnimation, cartIconRef, wishlistIconRef }}>
       {children}
       {animations.map(anim => (
         <FlyingImage
@@ -84,7 +90,7 @@ export const CartAnimationProvider: React.FC<{ children: React.ReactNode }> = ({
           keyframes={anim.keyframes}
           onDone={() => {
             setAnimations(prev => prev.filter(a => a.id !== anim.id));
-            bounceCart();
+            bounceIcon(anim.target);
           }}
         />
       ))}

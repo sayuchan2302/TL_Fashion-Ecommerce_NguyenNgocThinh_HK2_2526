@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import ToastContainer from '../components/Toast/ToastContainer';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'add' | 'remove';
 
 export interface ToastMessage {
   id: string;

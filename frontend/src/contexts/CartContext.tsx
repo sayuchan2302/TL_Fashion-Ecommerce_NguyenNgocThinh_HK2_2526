@@ -62,7 +62,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       addToast(`Đã cập nhật số lượng của ${newItem.name} trong giỏ hàng`, 'info');
     } else {
       setItems(prev => [...prev, { ...newItem, cartId, quantity: qty }]);
-      addToast(`Đã thêm ${newItem.name} vào giỏ hàng`, 'success');
+      addToast(`Đã thêm ${newItem.name} vào giỏ hàng`, 'add');
     }
   };
 
@@ -70,7 +70,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const existing = items.find(i => i.cartId === cartId);
     if (existing) {
       setItems(prev => prev.filter(i => i.cartId !== cartId));
-      addToast('Đã xoá sản phẩm khỏi giỏ', 'info');
+      addToast('Đã xoá sản phẩm khỏi giỏ', 'remove');
     }
   };
 

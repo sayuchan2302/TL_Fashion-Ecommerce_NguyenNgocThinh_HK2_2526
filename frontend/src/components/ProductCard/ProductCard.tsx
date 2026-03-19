@@ -71,6 +71,12 @@ const ProductCard = ({ id, name, price, originalPrice, image, badge, colors, siz
     if (isWished) {
       removeFromWishlist(String(id));
     } else {
+      triggerAnimation({
+        imgSrc: image,
+        imageRect: imageRef.current?.getBoundingClientRect() || null,
+        fallbackPoint: { x: e.clientX, y: e.clientY },
+        target: 'wishlist',
+      });
       addToWishlist({
         id: String(id),
         name,

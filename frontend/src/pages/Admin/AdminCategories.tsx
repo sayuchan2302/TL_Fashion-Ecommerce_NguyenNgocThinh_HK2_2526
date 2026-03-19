@@ -106,6 +106,16 @@ const AdminCategories = () => {
         </>
       )}
     >
+      {selected.size > 0 && (
+        <div className="admin-bulk-bar">
+          <span>{selected.size} danh mục được chọn</span>
+          <div className="admin-actions">
+            <button className="admin-ghost-btn danger" onClick={bulkDelete}>Xóa đã chọn</button>
+            <button className="admin-ghost-btn" onClick={bulkToggleStatus}>Đổi trạng thái</button>
+          </div>
+        </div>
+      )}
+
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-table" role="table" aria-label="Danh sách danh mục">
@@ -149,16 +159,6 @@ const AdminCategories = () => {
           </div>
         </div>
       </section>
-
-      {selected.size > 0 && (
-        <div className="admin-bulk-bar floating">
-          <span>{selected.size} danh mục được chọn</span>
-          <div className="admin-actions">
-            <button className="admin-ghost-btn danger" onClick={bulkDelete}>Xóa đã chọn</button>
-            <button className="admin-ghost-btn" onClick={bulkToggleStatus}>Đổi trạng thái</button>
-          </div>
-        </div>
-      )}
 
       {showCategoryDrawer && (
         <>

@@ -156,15 +156,15 @@
 }
 
 .btn-wishlist-action:hover {
-  border-color: var(--co-error);
-  color: var(--co-error);
-  background-color: #fef2f2;
+  border-color: var(--co-blue);
+  color: var(--co-blue);
+  background-color: rgba(47, 90, 207, 0.08);
 }
 
 .btn-wishlist-action.wished {
-  color: var(--co-error);
-  border-color: var(--co-error);
-  background-color: #fef2f2;
+  color: var(--co-blue);
+  border-color: var(--co-blue);
+  background-color: rgba(47, 90, 207, 0.08);
 }
 
 @media (max-width: 768px) {

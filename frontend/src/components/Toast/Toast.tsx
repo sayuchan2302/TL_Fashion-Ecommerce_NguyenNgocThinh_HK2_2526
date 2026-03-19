@@ -1,4 +1,4 @@
-import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, X, Plus, Trash2 } from 'lucide-react';
 import type { ToastMessage } from '../../contexts/ToastContext';
 import './Toast.css';
 
@@ -14,6 +14,10 @@ const Toast = ({ toast, onRemove }: ToastProps) => {
         return <CheckCircle size={20} className="toast-icon success" />;
       case 'error':
         return <AlertCircle size={20} className="toast-icon error" />;
+      case 'add':
+        return <Plus size={20} className="toast-icon add" />;
+      case 'remove':
+        return <Trash2 size={20} className="toast-icon remove" />;
       case 'info':
       default:
         return <Info size={20} className="toast-icon info" />;

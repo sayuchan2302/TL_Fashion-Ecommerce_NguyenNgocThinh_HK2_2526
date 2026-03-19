@@ -83,13 +83,15 @@ const AdminOrders = () => {
         ))}
       </div>
 
-      <div className="admin-bulk-bar">
-        <span>{selected.size} đơn được chọn</span>
-        <div className="admin-actions">
-          <button className="admin-ghost-btn" disabled={selected.size === 0}>Xác nhận</button>
-          <button className="admin-ghost-btn" disabled={selected.size === 0}>In hóa đơn</button>
+      {selected.size > 0 && (
+        <div className="admin-bulk-bar">
+          <span>{selected.size} đơn được chọn</span>
+          <div className="admin-actions">
+            <button className="admin-ghost-btn">Xác nhận</button>
+            <button className="admin-ghost-btn">In hóa đơn</button>
+          </div>
         </div>
-      </div>
+      )}
 
       <section className="admin-panels single">
         <div className="admin-panel">

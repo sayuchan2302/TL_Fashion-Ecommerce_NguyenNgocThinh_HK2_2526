@@ -76,6 +76,13 @@ const ProductActions = ({ product, selectedColor, selectedSize }: ProductActions
     if (isWished) {
       removeFromWishlist(String(product.id));
     } else {
+      const mainImg = document.querySelector('.gallery-main-image .main-image') as HTMLImageElement | null;
+      triggerAnimation({
+        imgSrc: product.image,
+        imageRect: mainImg?.getBoundingClientRect() || null,
+        fallbackPoint: { x: e.clientX, y: e.clientY },
+        target: 'wishlist',
+      });
       addToWishlist({
         id: String(product.id),
         name: product.name,

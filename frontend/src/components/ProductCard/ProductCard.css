@@ -254,13 +254,13 @@
 }
 
 .product-wishlist-btn.wished {
-  color: #ef4444; /* Red heart */
+  color: var(--co-blue);
   opacity: 1; /* Always show if wished */
   transform: translateY(0);
 }
 
 .product-wishlist-btn.wished:hover {
-  color: #dc2626;
+  color: var(--co-blue-dark);
 }
 
 @media (max-width: 768px) {
