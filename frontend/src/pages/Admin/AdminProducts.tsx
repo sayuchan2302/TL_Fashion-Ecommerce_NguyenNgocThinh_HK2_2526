@@ -1,5 +1,5 @@
 import './Admin.css';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Filter, Search, Plus, Pencil, Layers, Trash2, ArrowUpDown, X, Link2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { useEffect, useMemo, useState } from 'react';
@@ -8,7 +8,8 @@ import AdminVariantModal from './AdminVariantModal';
 import type { VariantRow } from './AdminVariantModal';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
-import { ADMIN_VIEW_KEYS, clearPersistedAdminView, getPersistedAdminView, setPersistedAdminView, shareAdminViewUrl } from './adminListView';
+import { ADMIN_VIEW_KEYS } from './adminListView';
+import { useAdminViewState } from './useAdminViewState';
 
 const initialProducts = [
   { sku: 'POLO-001', name: 'Áo Polo Cotton Khử Mùi', category: 'Áo Polo', price: 359000, stock: 42, status: 'Đang bán', variants: '3 sizes · 4 colors', thumb: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=140&h=170&q=80', statusType: 'active' },
@@ -40,14 +41,15 @@ const tabs = [
 const validProductTabs = new Set(tabs.map((tab) => tab.key));
 
 const AdminProducts = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialSearchQuery = searchParams.get('q') || '';
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const queryTab = searchParams.get('status') || searchParams.get('view') || '';
-    if (validProductTabs.has(queryTab)) return queryTab;
-    const persisted = getPersistedAdminView(ADMIN_VIEW_KEYS.products) || 'all';
-    return validProductTabs.has(persisted) ? persisted : 'all';
+  const view = useAdminViewState({
+    storageKey: ADMIN_VIEW_KEYS.products,
+    path: '/admin/products',
+    validStatusKeys: tabs.map((tab) => tab.key),
+    defaultStatus: 'all',
+    statusAliases: ['view'],
+    validSortKeys: ['price', 'stock'],
   });
+  const [activeTab, setActiveTab] = useState<string>(view.status);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState(initialProducts);
   const [editingPrice, setEditingPrice] = useState<{ sku: string; value: string } | null>(null);
@@ -71,7 +73,6 @@ const AdminProducts = () => {
   const [metaTitle, setMetaTitle] = useState('Áo Polo Cotton Khử Mùi - Coolmate');
   const {
     search,
-    setSearch,
     isLoading,
     filteredItems: filtered,
     pagedItems: pagedProducts,
@@ -83,11 +84,16 @@ const AdminProducts = () => {
     prev,
     setPage,
     toggleSort,
-    clearFilters,
   } = useAdminListState<typeof rows[number]>({
     items: rows,
     pageSize: 8,
-    initialSearch: initialSearchQuery,
+    searchValue: view.search,
+    onSearchChange: view.setSearch,
+    pageValue: view.page,
+    onPageChange: view.setPage,
+    sortKeyValue: view.sortKey,
+    sortDirectionValue: view.sortDirection,
+    onSortChange: view.setSort,
     getSearchText: (p) => `${p.name} ${p.sku} ${p.category}`,
     filterPredicate: (p) => {
       if (activeTab === 'all') return true;
@@ -105,42 +111,20 @@ const AdminProducts = () => {
   const variantStockTotal = useMemo(() => variantRows.reduce((sum, r) => sum + (parseInt(r.stock.replace(/\D/g, ''), 10) || 0), 0), [variantRows]);
 
   useEffect(() => {
-    setPersistedAdminView(ADMIN_VIEW_KEYS.products, activeTab);
-  }, [activeTab]);
-
-  useEffect(() => {
-    const queryTab = searchParams.get('status') || searchParams.get('view');
-    if (!queryTab) return;
-    if (validProductTabs.has(queryTab) && queryTab !== activeTab) {
-      setActiveTab(queryTab);
+    const nextTab = validProductTabs.has(view.status) ? view.status : 'all';
+    if (nextTab !== activeTab) {
+      setActiveTab(nextTab);
       setSelected(new Set());
     }
-  }, [searchParams, activeTab]);
-
-  useEffect(() => {
-    const querySearch = searchParams.get('q') || '';
-    if (querySearch !== search) {
-      setSearch(querySearch);
-    }
-  }, [searchParams, search, setSearch]);
+  }, [view.status, activeTab]);
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    const nextParams = new URLSearchParams(searchParams);
-    if (value.trim()) nextParams.set('q', value.trim());
-    else nextParams.delete('q');
-    if (activeTab === 'all') {
-      nextParams.delete('status');
-      nextParams.delete('view');
-    } else {
-      nextParams.set('status', activeTab);
-    }
-    setSearchParams(nextParams);
+    view.setSearch(value);
   };
 
   const shareCurrentView = async () => {
     try {
-      await shareAdminViewUrl(`/admin/products${window.location.search}`);
+      await view.shareCurrentView();
       setToast('Đã copy link view hiện tại');
       setTimeout(() => setToast(''), 1800);
     } catch {
@@ -150,29 +134,20 @@ const AdminProducts = () => {
   };
 
   const resetCurrentView = () => {
-    clearFilters();
     setSelected(new Set());
     setActiveTab('all');
-    setSearchParams({});
-    clearPersistedAdminView(ADMIN_VIEW_KEYS.products);
+    view.resetCurrentView();
     setToast('Đã đặt lại view sản phẩm');
     setTimeout(() => setToast(''), 1800);
   };
 
   const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim());
+  const hasViewContext = activeTab !== 'all' || Boolean(search.trim()) || view.page > 1 || Boolean(view.sortKey);
 
   const changeTab = (nextTab: string) => {
     setActiveTab(nextTab);
     setSelected(new Set());
-    const nextParams = new URLSearchParams(searchParams);
-    if (nextTab === 'all') {
-      nextParams.delete('status');
-      nextParams.delete('view');
-    } else {
-      nextParams.set('status', nextTab);
-    }
-    setSearchParams(nextParams);
+    view.setStatus(nextTab);
   };
 
   const tabCounts = {

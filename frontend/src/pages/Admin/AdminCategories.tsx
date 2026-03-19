@@ -2,11 +2,11 @@ import './Admin.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Layers, GripVertical, Search, X, Trash2, Link2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useSearchParams } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
-import { ADMIN_VIEW_KEYS, clearPersistedAdminView, getPersistedAdminView, setPersistedAdminView, shareAdminViewUrl } from './adminListView';
+import { ADMIN_VIEW_KEYS } from './adminListView';
+import { useAdminViewState } from './useAdminViewState';
 
 interface Category {
   id: string;
@@ -37,21 +37,19 @@ const initialCategories: Category[] = [
 const validCategoryFilters = new Set(['all', 'visible', 'hidden', 'menu']);
 
 const AdminCategories = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialSearchQuery = searchParams.get('q') || '';
+  const view = useAdminViewState({
+    storageKey: ADMIN_VIEW_KEYS.categories,
+    path: '/admin/categories',
+    validStatusKeys: ['all', 'visible', 'hidden', 'menu'],
+    defaultStatus: 'all',
+  });
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [showCategoryDrawer, setShowCategoryDrawer] = useState(false);
   const emptyCategory: Category = { id: '', name: '', slug: '', parentId: '', count: 0, status: 'visible', order: 0, showOnMenu: false, image: '' };
   const [categoryForm, setCategoryForm] = useState<Category>(emptyCategory);
   const [formErrors, setFormErrors] = useState<CategoryFormErrors>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [activeFilter, setActiveFilter] = useState<'all' | 'visible' | 'hidden' | 'menu'>(() => {
-    const queryFilter = searchParams.get('status') || '';
-    if (validCategoryFilters.has(queryFilter)) return queryFilter as 'all' | 'visible' | 'hidden' | 'menu';
-    const persisted = getPersistedAdminView(ADMIN_VIEW_KEYS.categories);
-    if (validCategoryFilters.has(persisted)) return persisted as 'all' | 'visible' | 'hidden' | 'menu';
-    return 'all';
-  });
+  const [activeFilter, setActiveFilter] = useState<'all' | 'visible' | 'hidden' | 'menu'>(view.status as 'all' | 'visible' | 'hidden' | 'menu');
   const [undoPayload, setUndoPayload] = useState<{ items: Category[]; message: string } | null>(null);
   const [toast, setToast] = useState('');
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -77,7 +75,6 @@ const AdminCategories = () => {
 
   const {
     search,
-    setSearch,
     isLoading,
     filteredItems: visibleCategories,
     page,
@@ -88,11 +85,13 @@ const AdminCategories = () => {
     next,
     prev,
     setPage,
-    clearFilters,
   } = useAdminListState<Category>({
     items: categories,
     pageSize: 8,
-    initialSearch: initialSearchQuery,
+    searchValue: view.search,
+    onSearchChange: view.setSearch,
+    pageValue: view.page,
+    onPageChange: view.setPage,
     getSearchText: (c) => `${c.name} ${c.slug} ${parentNameById.get(c.parentId) || ''}`,
     filterPredicate: (c) => {
       if (activeFilter === 'visible') return c.status === 'visible';
@@ -108,24 +107,12 @@ const AdminCategories = () => {
   });
 
   useEffect(() => {
-    const queryFilter = searchParams.get('status') || '';
-    const nextFilter = validCategoryFilters.has(queryFilter) ? (queryFilter as 'all' | 'visible' | 'hidden' | 'menu') : 'all';
+    const nextFilter = validCategoryFilters.has(view.status) ? (view.status as 'all' | 'visible' | 'hidden' | 'menu') : 'all';
     if (nextFilter !== activeFilter) {
       setActiveFilter(nextFilter);
       setSelected(new Set());
     }
-  }, [searchParams, activeFilter]);
-
-  useEffect(() => {
-    const querySearch = searchParams.get('q') || '';
-    if (querySearch !== search) {
-      setSearch(querySearch);
-    }
-  }, [searchParams, search, setSearch]);
-
-  useEffect(() => {
-    setPersistedAdminView(ADMIN_VIEW_KEYS.categories, activeFilter);
-  }, [activeFilter]);
+  }, [view.status, activeFilter]);
 
   useEffect(() => {
     if (!undoPayload) return;
@@ -138,29 +125,19 @@ const AdminCategories = () => {
     setTimeout(() => setToast(''), 2200);
   };
 
-  const syncViewParams = (next: { status?: 'all' | 'visible' | 'hidden' | 'menu'; keyword?: string }) => {
-    const nextFilter = next.status ?? activeFilter;
-    const nextKeyword = next.keyword ?? search;
-    const params = new URLSearchParams();
-    if (nextFilter !== 'all') params.set('status', nextFilter);
-    if (nextKeyword.trim()) params.set('q', nextKeyword.trim());
-    setSearchParams(params);
-  };
-
   const changeFilter = (nextFilter: 'all' | 'visible' | 'hidden' | 'menu') => {
     setActiveFilter(nextFilter);
     setSelected(new Set());
-    syncViewParams({ status: nextFilter });
+    view.setStatus(nextFilter);
   };
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    syncViewParams({ keyword: value });
+    view.setSearch(value);
   };
 
   const shareCurrentView = async () => {
     try {
-      await shareAdminViewUrl(`/admin/categories${window.location.search}`);
+      await view.shareCurrentView();
       pushToast('Đã copy link view hiện tại.');
     } catch {
       pushToast('Không thể copy link, vui lòng thử lại.');
@@ -168,16 +145,14 @@ const AdminCategories = () => {
   };
 
   const resetCurrentView = () => {
-    clearFilters();
     setActiveFilter('all');
     setSelected(new Set());
-    setSearchParams({});
-    clearPersistedAdminView(ADMIN_VIEW_KEYS.categories);
+    view.resetCurrentView();
     pushToast('Đã đặt lại view danh mục về mặc định.');
   };
 
   const activeFilterLabel = activeFilter === 'all' ? 'Tất cả' : activeFilter === 'visible' ? 'Đang hiện' : activeFilter === 'hidden' ? 'Ẩn' : 'Có trên menu';
-  const hasViewContext = activeFilter !== 'all' || Boolean(search.trim());
+  const hasViewContext = activeFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
 
   const syncCategoryChanges = async (_next: Category[]) => {
     await new Promise(resolve => setTimeout(resolve, 160));

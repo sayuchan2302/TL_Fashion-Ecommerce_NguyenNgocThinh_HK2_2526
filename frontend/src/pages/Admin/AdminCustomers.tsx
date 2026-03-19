@@ -2,11 +2,11 @@ import './Admin.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Eye, Pencil, Ban, X, Mail, Download, Gift, ChevronDown, Sparkles, Users, ShieldCheck, Gem, Wallet, Link2 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
-import { ADMIN_VIEW_KEYS, clearPersistedAdminView, getPersistedAdminView, setPersistedAdminView, shareAdminViewUrl } from './adminListView';
+import { ADMIN_VIEW_KEYS } from './adminListView';
+import { useAdminViewState } from './useAdminViewState';
 
 type LoyaltyTier = 'Bronze' | 'Silver' | 'Gold' | 'Diamond';
 type AccountStatus = 'active' | 'banned';
@@ -270,23 +270,21 @@ const orderStatusLabel = (status: CustomerOrder['status']) => {
 };
 
 const AdminCustomers = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialSearchQuery = searchParams.get('q') || '';
+  const view = useAdminViewState({
+    storageKey: ADMIN_VIEW_KEYS.customers,
+    path: '/admin/customers',
+    validStatusKeys: tabs.map((tab) => tab.key),
+    defaultStatus: 'all',
+    statusAliases: ['tab'],
+    extraFilters: [
+      { key: 'tier', defaultValue: 'all', validate: (value) => validTierFilters.has(value) },
+      { key: 'spend', defaultValue: 'all', validate: (value) => validSpendingFilters.has(value) },
+    ],
+  });
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const queryTab = searchParams.get('status') || searchParams.get('tab') || '';
-    if (validCustomerTabs.has(queryTab)) return queryTab;
-    const persisted = getPersistedAdminView(ADMIN_VIEW_KEYS.customers);
-    return validCustomerTabs.has(persisted) ? persisted : 'all';
-  });
-  const [tierFilter, setTierFilter] = useState<'all' | LoyaltyTier>(() => {
-    const queryTier = searchParams.get('tier') || 'all';
-    return validTierFilters.has(queryTier) ? (queryTier as 'all' | LoyaltyTier) : 'all';
-  });
-  const [spendingFilter, setSpendingFilter] = useState<string>(() => {
-    const querySpend = searchParams.get('spend') || 'all';
-    return validSpendingFilters.has(querySpend) ? querySpend : 'all';
-  });
+  const [activeTab, setActiveTab] = useState<string>(view.status);
+  const [tierFilter, setTierFilter] = useState<'all' | LoyaltyTier>((view.extras.tier as 'all' | LoyaltyTier) || 'all');
+  const [spendingFilter, setSpendingFilter] = useState<string>(view.extras.spend || 'all');
   const [openFilter, setOpenFilter] = useState<'tier' | 'spending' | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerCustomerId, setDrawerCustomerId] = useState<string | null>(null);
@@ -297,7 +295,6 @@ const AdminCustomers = () => {
 
   const {
     search,
-    setSearch,
     isLoading,
     filteredItems: filtered,
     page,
@@ -308,11 +305,13 @@ const AdminCustomers = () => {
     next,
     prev,
     setPage,
-    clearFilters,
   } = useAdminListState<Customer>({
     items: customers,
     pageSize: 8,
-    initialSearch: initialSearchQuery,
+    searchValue: view.search,
+    onSearchChange: view.setSearch,
+    pageValue: view.page,
+    onPageChange: view.setPage,
     getSearchText: (c) => `${c.name} ${c.email} ${c.phone}`,
     filterPredicate: (c) => {
       if (activeTab === 'new' && !isNewCustomer(c.createdAt)) return false;
@@ -333,38 +332,26 @@ const AdminCustomers = () => {
   const filteredActiveCount = useMemo(() => filtered.filter((item) => item.status === 'active').length, [filtered]);
 
   useEffect(() => {
-    const queryTab = searchParams.get('status') || searchParams.get('tab') || '';
-    const nextTab = validCustomerTabs.has(queryTab) ? queryTab : 'all';
+    const nextTab = validCustomerTabs.has(view.status) ? view.status : 'all';
     if (nextTab !== activeTab) {
       setActiveTab(nextTab);
       setSelected(new Set());
     }
 
-    const queryTier = searchParams.get('tier') || 'all';
-    const nextTier = validTierFilters.has(queryTier) ? (queryTier as 'all' | LoyaltyTier) : 'all';
+    const nextTierValue = view.extras.tier || 'all';
+    const nextTier = validTierFilters.has(nextTierValue) ? (nextTierValue as 'all' | LoyaltyTier) : 'all';
     if (nextTier !== tierFilter) {
       setTierFilter(nextTier);
       setSelected(new Set());
     }
 
-    const querySpend = searchParams.get('spend') || 'all';
-    const nextSpend = validSpendingFilters.has(querySpend) ? querySpend : 'all';
+    const nextSpendValue = view.extras.spend || 'all';
+    const nextSpend = validSpendingFilters.has(nextSpendValue) ? nextSpendValue : 'all';
     if (nextSpend !== spendingFilter) {
       setSpendingFilter(nextSpend);
       setSelected(new Set());
     }
-  }, [searchParams, activeTab, tierFilter, spendingFilter]);
-
-  useEffect(() => {
-    const querySearch = searchParams.get('q') || '';
-    if (querySearch !== search) {
-      setSearch(querySearch);
-    }
-  }, [searchParams, search, setSearch]);
-
-  useEffect(() => {
-    setPersistedAdminView(ADMIN_VIEW_KEYS.customers, activeTab);
-  }, [activeTab]);
+  }, [view.status, view.extras.tier, view.extras.spend, activeTab, tierFilter, spendingFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -394,47 +381,33 @@ const AdminCustomers = () => {
     setTimeout(() => setToast(''), 2300);
   };
 
-  const syncViewParams = (next: { tab?: string; keyword?: string; tier?: 'all' | LoyaltyTier; spend?: string }) => {
-    const nextTab = next.tab ?? activeTab;
-    const nextKeyword = next.keyword ?? search;
-    const nextTier = next.tier ?? tierFilter;
-    const nextSpend = next.spend ?? spendingFilter;
-    const params = new URLSearchParams();
-    if (nextTab !== 'all') params.set('status', nextTab);
-    if (nextKeyword.trim()) params.set('q', nextKeyword.trim());
-    if (nextTier !== 'all') params.set('tier', nextTier);
-    if (nextSpend !== 'all') params.set('spend', nextSpend);
-    setSearchParams(params);
-  };
-
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    syncViewParams({ keyword: value });
+    view.setSearch(value);
   };
 
   const changeTab = (nextTab: string) => {
     setActiveTab(nextTab);
     setSelected(new Set());
-    syncViewParams({ tab: nextTab });
+    view.setStatus(nextTab);
   };
 
   const changeTierFilter = (nextTier: 'all' | LoyaltyTier) => {
     setTierFilter(nextTier);
     setSelected(new Set());
     setOpenFilter(null);
-    syncViewParams({ tier: nextTier });
+    view.setExtra('tier', nextTier);
   };
 
   const changeSpendingFilter = (nextSpend: string) => {
     setSpendingFilter(nextSpend);
     setSelected(new Set());
     setOpenFilter(null);
-    syncViewParams({ spend: nextSpend });
+    view.setExtra('spend', nextSpend);
   };
 
   const shareCurrentView = async () => {
     try {
-      await shareAdminViewUrl(`/admin/customers${window.location.search}`);
+      await view.shareCurrentView();
       pushToast('Đã copy link view hiện tại.');
     } catch {
       pushToast('Không thể copy link, vui lòng thử lại.');
@@ -442,14 +415,12 @@ const AdminCustomers = () => {
   };
 
   const resetCurrentView = () => {
-    clearFilters();
     setActiveTab('all');
     setTierFilter('all');
     setSpendingFilter('all');
     setSelected(new Set());
     setOpenFilter(null);
-    setSearchParams({});
-    clearPersistedAdminView(ADMIN_VIEW_KEYS.customers);
+    view.resetCurrentView();
     pushToast('Đã đặt lại view khách hàng về mặc định.');
   };
 
@@ -487,7 +458,7 @@ const AdminCustomers = () => {
 
   const selectedIds = Array.from(selected);
   const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
-  const hasViewContext = activeTab !== 'all' || tierFilter !== 'all' || spendingFilter !== 'all' || Boolean(search.trim());
+  const hasViewContext = activeTab !== 'all' || tierFilter !== 'all' || spendingFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
 
   const handleBulkSendVoucher = () => {
     if (!selectedIds.length) return;

@@ -7,11 +7,18 @@ interface UseAdminListStateOptions<T> {
   items: T[];
   pageSize?: number;
   initialSearch?: string;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
   getSearchText: (item: T) => string;
   filterPredicate?: (item: T) => boolean;
   sorters?: Record<string, (a: T, b: T) => number>;
   initialSortKey?: string | null;
   initialSortDirection?: SortDirection;
+  sortKeyValue?: string | null;
+  sortDirectionValue?: SortDirection;
+  onSortChange?: (nextSortKey: string | null, nextDirection: SortDirection) => void;
+  pageValue?: number;
+  onPageChange?: (nextPage: number) => void;
   loadingDelayMs?: number;
   loadingDeps?: readonly unknown[];
 }
@@ -20,18 +27,57 @@ export const useAdminListState = <T,>({
   items,
   pageSize = 10,
   initialSearch = '',
+  searchValue,
+  onSearchChange,
   getSearchText,
   filterPredicate,
   sorters,
   initialSortKey = null,
   initialSortDirection = 'asc',
+  sortKeyValue,
+  sortDirectionValue,
+  onSortChange,
+  pageValue,
+  onPageChange,
   loadingDelayMs = 220,
   loadingDeps = [],
 }: UseAdminListStateOptions<T>) => {
-  const [search, setSearch] = useState(initialSearch);
-  const [sortKey, setSortKey] = useState<string | null>(initialSortKey);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(initialSortDirection);
+  const [internalSearch, setInternalSearch] = useState(initialSearch);
+  const [internalSortKey, setInternalSortKey] = useState<string | null>(initialSortKey);
+  const [internalSortDirection, setInternalSortDirection] = useState<SortDirection>(initialSortDirection);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isSearchControlled = typeof searchValue === 'string';
+  const isSortControlled = typeof sortKeyValue !== 'undefined' || typeof sortDirectionValue !== 'undefined';
+
+  const search = isSearchControlled ? (searchValue || '') : internalSearch;
+  const sortKey = typeof sortKeyValue !== 'undefined' ? sortKeyValue : internalSortKey;
+  const sortDirection = sortDirectionValue || internalSortDirection;
+
+  const setSearch = (value: string) => {
+    if (isSearchControlled) {
+      onSearchChange?.(value);
+      return;
+    }
+    setInternalSearch(value);
+  };
+
+  const applySortState = (nextSortKey: string | null, nextDirection: SortDirection) => {
+    if (isSortControlled) {
+      onSortChange?.(nextSortKey, nextDirection);
+      return;
+    }
+    setInternalSortKey(nextSortKey);
+    setInternalSortDirection(nextDirection);
+  };
+
+  const setSortKey = (nextSortKey: string | null) => {
+    applySortState(nextSortKey, sortDirection);
+  };
+
+  const setSortDirection = (nextDirection: SortDirection) => {
+    applySortState(sortKey, nextDirection);
+  };
 
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -52,7 +98,10 @@ export const useAdminListState = <T,>({
     return next;
   }, [items, filterPredicate, getSearchText, search, sortKey, sorters, sortDirection]);
 
-  const pagination = useAdminPagination(filteredItems, pageSize);
+  const pagination = useAdminPagination(filteredItems, pageSize, {
+    pageValue,
+    onPageChange,
+  });
 
   useEffect(() => {
     setIsLoading(true);
@@ -63,17 +112,15 @@ export const useAdminListState = <T,>({
   const toggleSort = (key: string) => {
     if (!sorters || !sorters[key]) return;
     if (sortKey !== key) {
-      setSortKey(key);
-      setSortDirection('asc');
+      applySortState(key, 'asc');
       return;
     }
-    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    applySortState(key, sortDirection === 'asc' ? 'desc' : 'asc');
   };
 
   const clearFilters = () => {
     setSearch('');
-    setSortKey(initialSortKey);
-    setSortDirection(initialSortDirection);
+    applySortState(initialSortKey, initialSortDirection);
   };
 
   return {

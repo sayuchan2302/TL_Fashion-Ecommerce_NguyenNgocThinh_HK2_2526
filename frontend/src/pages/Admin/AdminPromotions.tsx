@@ -1,12 +1,13 @@
 import './Admin.css';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Plus, Ticket, Pencil, Pause, Play, X, Tag, Copy, Activity, Clock3, PauseCircle, Gauge, Link2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
-import { ADMIN_VIEW_KEYS, clearPersistedAdminView, getPersistedAdminView, setPersistedAdminView, shareAdminViewUrl } from './adminListView';
+import { ADMIN_VIEW_KEYS } from './adminListView';
+import { useAdminViewState } from './useAdminViewState';
 
 type PromotionStatus = 'running' | 'expired' | 'paused';
 type DiscountType = 'percent' | 'fixed';
@@ -182,20 +183,14 @@ const validatePromotionForm = (form: Promotion, rows: Promotion[], editingId: st
 };
 
 const AdminPromotions = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialSearchQuery = searchParams.get('q') || '';
-  const [rows, setRows] = useState<Promotion[]>(initialPromotions);
-  const [statusFilter, setStatusFilter] = useState<'all' | PromotionStatus>(() => {
-    const queryStatus = searchParams.get('status') || '';
-    if (queryStatus === 'running' || queryStatus === 'paused' || queryStatus === 'expired' || queryStatus === 'all') {
-      return queryStatus as 'all' | PromotionStatus;
-    }
-    const persisted = getPersistedAdminView(ADMIN_VIEW_KEYS.promotions);
-    if (persisted === 'running' || persisted === 'paused' || persisted === 'expired' || persisted === 'all') {
-      return persisted as 'all' | PromotionStatus;
-    }
-    return 'all';
+  const view = useAdminViewState({
+    storageKey: ADMIN_VIEW_KEYS.promotions,
+    path: '/admin/promotions',
+    validStatusKeys: ['all', 'running', 'paused', 'expired'],
+    defaultStatus: 'all',
   });
+  const [rows, setRows] = useState<Promotion[]>(initialPromotions);
+  const [statusFilter, setStatusFilter] = useState<'all' | PromotionStatus>(view.status as 'all' | PromotionStatus);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Promotion>(emptyPromotion);
@@ -203,7 +198,6 @@ const AdminPromotions = () => {
 
   const {
     search,
-    setSearch,
     isLoading,
     filteredItems: filtered,
     pagedItems: pagedPromotions,
@@ -214,11 +208,13 @@ const AdminPromotions = () => {
     next,
     prev,
     setPage,
-    clearFilters,
   } = useAdminListState<Promotion>({
     items: rows,
     pageSize: 7,
-    initialSearch: initialSearchQuery,
+    searchValue: view.search,
+    onSearchChange: view.setSearch,
+    pageValue: view.page,
+    onPageChange: view.setPage,
     getSearchText: (item) => `${item.name} ${item.code} ${item.description}`,
     filterPredicate: (item) => {
       const currentStatus = deriveStatus(item);
@@ -228,45 +224,24 @@ const AdminPromotions = () => {
   });
 
   useEffect(() => {
-    setPersistedAdminView(ADMIN_VIEW_KEYS.promotions, statusFilter);
-  }, [statusFilter]);
-
-  useEffect(() => {
-    const queryStatus = searchParams.get('status');
-    if (!queryStatus) return;
-    if ((queryStatus === 'running' || queryStatus === 'paused' || queryStatus === 'expired' || queryStatus === 'all') && queryStatus !== statusFilter) {
-      setStatusFilter(queryStatus as 'all' | PromotionStatus);
+    const nextStatus = view.status as 'all' | PromotionStatus;
+    if (nextStatus !== statusFilter) {
+      setStatusFilter(nextStatus);
     }
-  }, [searchParams, statusFilter]);
-
-  useEffect(() => {
-    const querySearch = searchParams.get('q') || '';
-    if (querySearch !== search) {
-      setSearch(querySearch);
-    }
-  }, [searchParams, search, setSearch]);
+  }, [view.status, statusFilter]);
 
   const changeStatusFilter = (nextStatus: 'all' | PromotionStatus) => {
     setStatusFilter(nextStatus);
-    const nextParams = new URLSearchParams(searchParams);
-    if (nextStatus === 'all') nextParams.delete('status');
-    else nextParams.set('status', nextStatus);
-    setSearchParams(nextParams);
+    view.setStatus(nextStatus);
   };
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    const nextParams = new URLSearchParams(searchParams);
-    if (value.trim()) nextParams.set('q', value.trim());
-    else nextParams.delete('q');
-    if (statusFilter === 'all') nextParams.delete('status');
-    else nextParams.set('status', statusFilter);
-    setSearchParams(nextParams);
+    view.setSearch(value);
   };
 
   const shareCurrentView = async () => {
     try {
-      await shareAdminViewUrl(`/admin/promotions${window.location.search}`);
+      await view.shareCurrentView();
       pushToast('Đã copy link view hiện tại.');
     } catch {
       pushToast('Không thể copy link, vui lòng thử lại.');
@@ -274,14 +249,12 @@ const AdminPromotions = () => {
   };
 
   const resetCurrentView = () => {
-    clearFilters();
     setStatusFilter('all');
-    setSearchParams({});
-    clearPersistedAdminView(ADMIN_VIEW_KEYS.promotions);
+    view.resetCurrentView();
     pushToast('Đã đặt lại view khuyến mãi về mặc định.');
   };
 
-  const hasViewContext = statusFilter !== 'all' || Boolean(search.trim());
+  const hasViewContext = statusFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
   const statusFilterLabel = statusFilter === 'all' ? 'Tất cả' : statusFilter === 'running' ? 'Đang chạy' : statusFilter === 'paused' ? 'Tạm dừng' : 'Hết hạn';
 
   const stats = useMemo(() => {

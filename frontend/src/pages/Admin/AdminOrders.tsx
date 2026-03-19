@@ -1,8 +1,8 @@
 import './Admin.css';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Filter, Search, Truck, Eye, Printer, Link2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   canTransitionFulfillment,
@@ -14,7 +14,8 @@ import {
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
 import { adminOrdersData } from './adminOrdersData';
-import { ADMIN_VIEW_KEYS, clearPersistedAdminView, getPersistedAdminView, setPersistedAdminView, shareAdminViewUrl } from './adminListView';
+import { ADMIN_VIEW_KEYS } from './adminListView';
+import { useAdminViewState } from './useAdminViewState';
 
 interface AdminOrderRow {
   code: string;
@@ -73,23 +74,29 @@ const formatDateTime = (value: string) => {
   return d.toLocaleString('vi-VN', { hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const validStatusKeysArray = Array.from(validStatusKeys);
+
 const AdminOrders = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialSearchQuery = searchParams.get('q') || '';
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const currentStatusQuery = searchParams.get('status') || '';
-    if (validStatusKeys.has(currentStatusQuery)) return currentStatusQuery;
-    const persisted = getPersistedAdminView(ADMIN_VIEW_KEYS.orders);
-    if (validStatusKeys.has(persisted)) return persisted;
-    return 'all';
+  const view = useAdminViewState({
+    storageKey: ADMIN_VIEW_KEYS.orders,
+    path: '/admin/orders',
+    validStatusKeys: validStatusKeysArray,
+    defaultStatus: 'all',
   });
+  const activeTab = validStatusKeys.has(view.status) ? view.status : 'all';
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState<AdminOrderRow[]>(initialOrders);
   const [toast, setToast] = useState('');
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
+  const getSearchText = useCallback((o: AdminOrderRow) => `${o.code} ${o.customer} ${paymentLabel(o.paymentStatus)} ${shipLabel(o.fulfillment)}`, []);
+  const filterPredicate = useCallback((o: AdminOrderRow) => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'urgent') return isPendingOver30Minutes(o);
+    return o.fulfillment === activeTab;
+  }, [activeTab]);
+
   const {
     search,
-    setSearch,
     isLoading,
     filteredItems: filteredOrders,
     pagedItems: pagedOrders,
@@ -100,44 +107,21 @@ const AdminOrders = () => {
     next,
     prev,
     setPage,
-    clearFilters,
   } = useAdminListState<AdminOrderRow>({
     items: rows,
     pageSize: 6,
-    initialSearch: initialSearchQuery,
-    getSearchText: (o) => `${o.code} ${o.customer} ${paymentLabel(o.paymentStatus)} ${shipLabel(o.fulfillment)}`,
-    filterPredicate: (o) => {
-      if (activeTab === 'all') return true;
-      if (activeTab === 'urgent') return isPendingOver30Minutes(o);
-      return o.fulfillment === activeTab;
-    },
+    searchValue: view.search,
+    onSearchChange: view.setSearch,
+    pageValue: view.page,
+    onPageChange: view.setPage,
+    getSearchText,
+    filterPredicate,
     loadingDeps: [activeTab],
   });
 
-  useEffect(() => {
-    const statusQuery = searchParams.get('status');
-    if (!statusQuery) return;
-    const nextTab = validStatusKeys.has(statusQuery) ? statusQuery : 'all';
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
-      setSelected(new Set());
-    }
-  }, [searchParams, activeTab]);
-
-  useEffect(() => {
-    const querySearch = searchParams.get('q') || '';
-    if (querySearch !== search) {
-      setSearch(querySearch);
-    }
-  }, [searchParams, search, setSearch]);
-
-  useEffect(() => {
-    setPersistedAdminView(ADMIN_VIEW_KEYS.orders, activeTab);
-  }, [activeTab]);
-
   const shareCurrentView = async () => {
     try {
-      await shareAdminViewUrl(`/admin/orders${window.location.search}`);
+      await view.shareCurrentView();
       pushToast('Đã copy link view hiện tại.');
     } catch {
       pushToast('Không thể copy link, vui lòng thử lại.');
@@ -145,16 +129,10 @@ const AdminOrders = () => {
   };
 
   const resetCurrentView = () => {
-    clearFilters();
     setSelected(new Set());
-    setActiveTab('all');
-    setSearchParams({});
-    clearPersistedAdminView(ADMIN_VIEW_KEYS.orders);
+    view.resetCurrentView();
     pushToast('Đã đặt lại view đơn hàng về mặc định.');
   };
-
-  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim());
 
   const tabCounts = {
     all: rows.length,
@@ -167,22 +145,12 @@ const AdminOrders = () => {
   } as const;
 
   const changeTab = (nextTab: string) => {
-    setActiveTab(nextTab);
     setSelected(new Set());
-    const nextParams = new URLSearchParams(searchParams);
-    if (nextTab === 'all') nextParams.delete('status');
-    else nextParams.set('status', nextTab);
-    setSearchParams(nextParams);
+    view.setStatus(nextTab);
   };
 
   const handleSearchChange = (value: string) => {
-    setSearch(value);
-    const nextParams = new URLSearchParams(searchParams);
-    if (value.trim()) nextParams.set('q', value.trim());
-    else nextParams.delete('q');
-    if (activeTab === 'all') nextParams.delete('status');
-    else nextParams.set('status', activeTab);
-    setSearchParams(nextParams);
+    view.setSearch(value);
   };
 
   const pushToast = (message: string) => {
@@ -257,14 +225,6 @@ const AdminOrders = () => {
           </button>
         ))}
       </div>
-
-      {hasViewContext && (
-        <div className="admin-view-summary">
-          <span className="summary-chip">Trạng thái: {activeTabLabel}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa bộ lọc</button>
-        </div>
-      )}
 
       <section className="admin-panels single">
         <div className="admin-panel">
