@@ -1,6 +1,7 @@
 import './Admin.css';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { ADMIN_ACTION_TITLES } from './adminUiLabels';
 
 export interface VariantRow {
   id: string;
@@ -95,9 +96,9 @@ const AdminVariantModal = ({ onClose, onSaved, initialMatrix }: Props) => {
         <div className="modal-header">
           <div>
             <p className="drawer-eyebrow">Quản lý Size & Màu sắc</p>
-            <h3>Variant Matrix</h3>
+            <h3>Ma trận biến thể</h3>
           </div>
-          <button className="admin-icon-btn" onClick={onClose} aria-label="Đóng"><X size={16} /></button>
+          <button className="admin-icon-btn" onClick={onClose} aria-label={ADMIN_ACTION_TITLES.close}><X size={16} /></button>
         </div>
 
         <div className="modal-body">

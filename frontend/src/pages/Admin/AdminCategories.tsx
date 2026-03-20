@@ -4,9 +4,14 @@ import { Plus, Pencil, Layers, GripVertical, Search, X, Trash2, Link2 } from 'lu
 import { AnimatePresence, motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
+import AdminConfirmDialog from './AdminConfirmDialog';
 import { useAdminListState } from './useAdminListState';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import { useAdminViewState } from './useAdminViewState';
+import { useAdminToast } from './useAdminToast';
+import { ADMIN_ACTION_TITLES, ADMIN_COMMON_LABELS } from './adminUiLabels';
+import { ADMIN_TOAST_MESSAGES } from './adminMessages';
+import { ADMIN_TEXT } from './adminText';
 
 interface Category {
   id: string;
@@ -19,6 +24,15 @@ interface Category {
   showOnMenu: boolean;
   image: string;
   description?: string;
+}
+
+interface DeleteConfirmState {
+  ids: string[];
+  title: string;
+  description: string;
+  confirmLabel: string;
+  undoMessage: string;
+  blockedCount?: number;
 }
 
 type CategoryFormErrors = {
@@ -37,6 +51,8 @@ const initialCategories: Category[] = [
 const validCategoryFilters = new Set(['all', 'visible', 'hidden', 'menu']);
 
 const AdminCategories = () => {
+  const t = ADMIN_TEXT.categories;
+  const c = ADMIN_TEXT.common;
   const view = useAdminViewState({
     storageKey: ADMIN_VIEW_KEYS.categories,
     path: '/admin/categories',
@@ -49,9 +65,10 @@ const AdminCategories = () => {
   const [categoryForm, setCategoryForm] = useState<Category>(emptyCategory);
   const [formErrors, setFormErrors] = useState<CategoryFormErrors>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [activeFilter, setActiveFilter] = useState<'all' | 'visible' | 'hidden' | 'menu'>(view.status as 'all' | 'visible' | 'hidden' | 'menu');
+  const activeFilter = validCategoryFilters.has(view.status) ? (view.status as 'all' | 'visible' | 'hidden' | 'menu') : 'all';
   const [undoPayload, setUndoPayload] = useState<{ items: Category[]; message: string } | null>(null);
-  const [toast, setToast] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const { toast, pushToast } = useAdminToast();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -96,7 +113,7 @@ const AdminCategories = () => {
     filterPredicate: (c) => {
       if (activeFilter === 'visible') return c.status === 'visible';
       if (activeFilter === 'hidden') return c.status === 'hidden';
-      if (activeFilter === 'menu') return c.showOnMenu;
+      if (activeFilter === 'menu') return c.showOnMenu && c.status === 'visible';
       return true;
     },
     sorters: {
@@ -107,12 +124,8 @@ const AdminCategories = () => {
   });
 
   useEffect(() => {
-    const nextFilter = validCategoryFilters.has(view.status) ? (view.status as 'all' | 'visible' | 'hidden' | 'menu') : 'all';
-    if (nextFilter !== activeFilter) {
-      setActiveFilter(nextFilter);
-      setSelected(new Set());
-    }
-  }, [view.status, activeFilter]);
+    setSelected(new Set());
+  }, [activeFilter]);
 
   useEffect(() => {
     if (!undoPayload) return;
@@ -120,13 +133,7 @@ const AdminCategories = () => {
     return () => clearTimeout(timer);
   }, [undoPayload]);
 
-  const pushToast = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(''), 2200);
-  };
-
   const changeFilter = (nextFilter: 'all' | 'visible' | 'hidden' | 'menu') => {
-    setActiveFilter(nextFilter);
     setSelected(new Set());
     view.setStatus(nextFilter);
   };
@@ -138,27 +145,33 @@ const AdminCategories = () => {
   const shareCurrentView = async () => {
     try {
       await view.shareCurrentView();
-      pushToast('Đã copy link view hiện tại.');
+      pushToast(ADMIN_TOAST_MESSAGES.viewCopied);
     } catch {
-      pushToast('Không thể copy link, vui lòng thử lại.');
+      pushToast(ADMIN_TOAST_MESSAGES.copyFailed);
     }
   };
 
   const resetCurrentView = () => {
-    setActiveFilter('all');
     setSelected(new Set());
     view.resetCurrentView();
-    pushToast('Đã đặt lại view danh mục về mặc định.');
+    pushToast(ADMIN_TOAST_MESSAGES.categories.resetView);
   };
 
-  const activeFilterLabel = activeFilter === 'all' ? 'Tất cả' : activeFilter === 'visible' ? 'Đang hiện' : activeFilter === 'hidden' ? 'Ẩn' : 'Có trên menu';
+  const activeFilterLabel = activeFilter === 'all' ? t.tabs.all : activeFilter === 'visible' ? t.tabs.visible : activeFilter === 'hidden' ? t.tabs.hidden : t.tabs.menu;
   const hasViewContext = activeFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
   const tabCounts = {
     all: categories.length,
     visible: categories.filter((category) => category.status === 'visible').length,
     hidden: categories.filter((category) => category.status === 'hidden').length,
-    menu: categories.filter((category) => category.showOnMenu).length,
+    menu: categories.filter((category) => category.showOnMenu && category.status === 'visible').length,
   } as const;
+
+  const getCategoryDeleteBlockReason = (category: Category) => {
+    const hasChildren = categories.some((item) => item.parentId === category.id);
+    if (hasChildren) return `Danh mục "${category.name}" còn danh mục con.`;
+    if (category.count > 0) return `Danh mục "${category.name}" còn ${category.count} sản phẩm.`;
+    return '';
+  };
 
   const syncCategoryChanges = async (_next: Category[]) => {
     await new Promise(resolve => setTimeout(resolve, 160));
@@ -174,7 +187,7 @@ const AdminCategories = () => {
         if (successMessage) pushToast(successMessage);
       } catch {
         setCategories(snapshot);
-        pushToast(failMessage || 'Không thể đồng bộ dữ liệu, đã hoàn tác thay đổi.');
+        pushToast(failMessage || ADMIN_TOAST_MESSAGES.categories.syncRollback);
       }
     },
     [categories],
@@ -240,6 +253,7 @@ const AdminCategories = () => {
       name: categoryForm.name.trim(),
       slug: toSlug(categoryForm.slug || categoryForm.name),
       order: Number.isFinite(categoryForm.order) ? Math.max(0, categoryForm.order) : 0,
+      showOnMenu: categoryForm.status === 'hidden' ? false : categoryForm.showOnMenu,
     };
 
     const errors = validateCategoryForm(normalizedForm);
@@ -270,17 +284,46 @@ const AdminCategories = () => {
     setSelected(next);
   };
 
-  const bulkDelete = () => {
-    if (!window.confirm(`Xác nhận xóa ${selected.size} danh mục đã chọn?`)) return;
-    const deleted = categories.filter(c => selected.has(c.id));
-    void applyOptimisticCategoryUpdate(prev => prev.filter(c => !selected.has(c.id)), undefined, 'Xóa danh mục thất bại, đã hoàn tác.');
+  const requestBulkDelete = () => {
+    const selectedCategories = categories.filter((item) => selected.has(item.id));
+    const deletable = selectedCategories.filter((item) => !getCategoryDeleteBlockReason(item));
+    const blocked = selectedCategories.filter((item) => Boolean(getCategoryDeleteBlockReason(item)));
+    if (deletable.length === 0) {
+      pushToast(ADMIN_TOAST_MESSAGES.categories.noDeletable);
+      return;
+    }
+    setDeleteConfirm({
+      ids: deletable.map((item) => item.id),
+      title: 'Xóa danh mục đã chọn',
+      description: `Bạn có chắc chắn muốn xóa ${deletable.length} danh mục đã chọn?`,
+      confirmLabel: 'Xóa danh mục',
+      undoMessage: `Đã xóa ${deletable.length} danh mục`,
+      blockedCount: blocked.length,
+    });
+  };
+
+  const confirmDeleteCategories = () => {
+    if (!deleteConfirm) return;
+    const idsToDelete = new Set(deleteConfirm.ids);
+    const deletedItems = categories.filter((item) => idsToDelete.has(item.id));
+    void applyOptimisticCategoryUpdate(prev => prev.filter(c => !idsToDelete.has(c.id)), undefined, 'Xóa danh mục thất bại, đã hoàn tác.');
     setSelected(new Set());
-    setUndoPayload({ items: deleted, message: `Đã xóa ${deleted.length} danh mục` });
+    setUndoPayload({ items: deletedItems, message: deleteConfirm.undoMessage });
+    if ((deleteConfirm.blockedCount || 0) > 0) {
+      pushToast(ADMIN_TOAST_MESSAGES.categories.skippedBlocked(deleteConfirm.blockedCount || 0));
+    }
+    setDeleteConfirm(null);
   };
 
   const bulkToggleStatus = () => {
     void applyOptimisticCategoryUpdate(
-      prev => prev.map(c => selected.has(c.id) ? { ...c, status: c.status === 'visible' ? 'hidden' : 'visible' } : c),
+      prev => prev.map((c) => {
+        if (!selected.has(c.id)) return c;
+        if (c.status === 'visible') {
+          return { ...c, status: 'hidden', showOnMenu: false };
+        }
+        return { ...c, status: 'visible' };
+      }),
       'Đã cập nhật trạng thái danh mục đã chọn',
     );
     setSelected(new Set());
@@ -331,43 +374,43 @@ const AdminCategories = () => {
 
   return (
     <AdminLayout
-      title="Danh mục"
+      title={t.title}
       actions={(
         <>
           <div className="admin-search">
             <Search size={16} />
-            <input placeholder="Tìm danh mục..." value={search} onChange={e => handleSearchChange(e.target.value)} />
+            <input placeholder={t.searchPlaceholder} value={search} onChange={e => handleSearchChange(e.target.value)} />
           </div>
-          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> Share view</button>
-          <button className="admin-ghost-btn" onClick={resetCurrentView}>Reset view</button>
-          <button className="admin-primary-btn" onClick={openNewCategory}><Plus size={14} /> Thêm danh mục</button>
+          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> {ADMIN_COMMON_LABELS.shareView}</button>
+          <button className="admin-ghost-btn" onClick={resetCurrentView}>{ADMIN_COMMON_LABELS.resetView}</button>
+          <button className="admin-primary-btn" onClick={openNewCategory}><Plus size={14} /> {t.addCategory}</button>
         </>
       )}
     >
       <div className="admin-tabs">
         <button className={`admin-tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => changeFilter('all')}>
-          <span>Tất cả</span>
+          <span>{t.tabs.all}</span>
           <span className="admin-tab-count">{tabCounts.all}</span>
         </button>
         <button className={`admin-tab ${activeFilter === 'visible' ? 'active' : ''}`} onClick={() => changeFilter('visible')}>
-          <span>Đang hiện</span>
+          <span>{t.tabs.visible}</span>
           <span className="admin-tab-count">{tabCounts.visible}</span>
         </button>
         <button className={`admin-tab ${activeFilter === 'hidden' ? 'active' : ''}`} onClick={() => changeFilter('hidden')}>
-          <span>Ẩn</span>
+          <span>{t.tabs.hidden}</span>
           <span className="admin-tab-count">{tabCounts.hidden}</span>
         </button>
         <button className={`admin-tab ${activeFilter === 'menu' ? 'active' : ''}`} onClick={() => changeFilter('menu')}>
-          <span>Có trên menu</span>
+          <span>{t.tabs.menu}</span>
           <span className="admin-tab-count">{tabCounts.menu}</span>
         </button>
       </div>
 
       {hasViewContext && (
         <div className="admin-view-summary">
-          <span className="summary-chip">Trạng thái: {activeFilterLabel}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa bộ lọc</button>
+          <span className="summary-chip">{c.status}: {activeFilterLabel}</span>
+          {search.trim() && <span className="summary-chip">{c.keyword}: {search.trim()}</span>}
+          <button className="summary-clear" onClick={resetCurrentView}>{c.clearFilters}</button>
         </div>
       )}
 
@@ -378,22 +421,22 @@ const AdminCategories = () => {
           ) : visibleCategories.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
-              title={search.trim() ? 'Không tìm thấy danh mục phù hợp' : 'Chưa có danh mục nào'}
-                description={search.trim() ? 'Hãy thử từ khóa khác hoặc đổi tab lọc.' : 'Tạo danh mục đầu tiên để bắt đầu phân loại sản phẩm.'}
-                actionLabel="Đặt lại bộ lọc"
+              title={search.trim() ? t.empty.searchTitle : t.empty.defaultTitle}
+                description={search.trim() ? t.empty.searchDescription : t.empty.defaultDescription}
+                actionLabel={ADMIN_COMMON_LABELS.resetFilters}
                 onAction={resetCurrentView}
               />
           ) : (
-          <div className="admin-table" role="table" aria-label="Danh sách danh mục">
+          <div className="admin-table" role="table" aria-label={t.tableAria}>
             <div className="admin-table-row categories admin-table-head" role="row">
               <div role="columnheader"><input type="checkbox" aria-label="Chọn tất cả" checked={selected.size === visibleCategories.length && visibleCategories.length > 0} onChange={e => toggleSelectAll(e.target.checked)} /></div>
-              <div role="columnheader">Hình ảnh</div>
-              <div role="columnheader">Tên danh mục</div>
-              <div role="columnheader">Danh mục cha</div>
-              <div role="columnheader">Số lượng SP</div>
-              <div role="columnheader">Thứ tự</div>
-              <div role="columnheader">Trạng thái</div>
-              <div role="columnheader">Hành động</div>
+              <div role="columnheader">{t.columns.image}</div>
+              <div role="columnheader">{t.columns.name}</div>
+              <div role="columnheader">{t.columns.parent}</div>
+              <div role="columnheader">{t.columns.productCount}</div>
+              <div role="columnheader">{t.columns.order}</div>
+              <div role="columnheader">{t.columns.status}</div>
+              <div role="columnheader">{t.columns.actions}</div>
             </div>
             {pagedCategories.map((cat, idx) => (
               <motion.div
@@ -443,23 +486,38 @@ const AdminCategories = () => {
                 </div>
                 <div role="cell"><span className={`admin-pill ${cat.status === 'visible' ? 'success' : 'neutral'}`}>{cat.status === 'visible' ? 'Đang hiện' : 'Ẩn'}</span></div>
                 <div role="cell" className="admin-actions">
-                  <button className="admin-icon-btn subtle" title="Sửa" onClick={() => openEditCategory(cat.id)}><Pencil size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.edit} aria-label={ADMIN_ACTION_TITLES.edit} onClick={() => openEditCategory(cat.id)}><Pencil size={16} /></button>
                   <button
                     className="admin-icon-btn subtle"
-                    title="Xóa"
+                    title={ADMIN_ACTION_TITLES.delete}
+                    aria-label={ADMIN_ACTION_TITLES.delete}
                     onClick={() => {
-                      if (!window.confirm(`Xóa danh mục "${cat.name}"?`)) return;
-                      setUndoPayload({ items: [cat], message: `Đã xóa danh mục ${cat.name}` });
-                      void applyOptimisticCategoryUpdate(prev => prev.filter(c => c.id !== cat.id), undefined, 'Xóa danh mục thất bại, đã hoàn tác.');
+                      const blockReason = getCategoryDeleteBlockReason(cat);
+                      if (blockReason) {
+                        pushToast(blockReason);
+                        return;
+                      }
+                      setDeleteConfirm({
+                        ids: [cat.id],
+                        title: 'Xóa danh mục',
+                        description: `Bạn có chắc chắn muốn xóa danh mục "${cat.name}"?`,
+                        confirmLabel: 'Xóa danh mục',
+                        undoMessage: `Đã xóa danh mục ${cat.name}`,
+                      });
                     }}
                     style={{ color: '#dc2626', borderColor: '#fecdd3' }}
                   ><Trash2 size={16} /></button>
                   <button
                     className="admin-icon-btn subtle"
-                    title="Xem danh mục con"
+                    title={cat.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}
+                    aria-label={cat.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}
                     onClick={() => {
                       void applyOptimisticCategoryUpdate(
-                        prev => prev.map(c => c.id === cat.id ? { ...c, status: c.status === 'visible' ? 'hidden' : 'visible' } : c),
+                        prev => prev.map((c) => {
+                          if (c.id !== cat.id) return c;
+                          if (c.status === 'visible') return { ...c, status: 'hidden', showOnMenu: false };
+                          return { ...c, status: 'visible' };
+                        }),
                         'Đã cập nhật trạng thái danh mục',
                       );
                     }}
@@ -472,15 +530,15 @@ const AdminCategories = () => {
 
           {!isLoading && visibleCategories.length > 0 && (
             <div className="table-footer">
-              <span className="admin-muted">Hiển thị {startIndex}-{endIndex} của {visibleCategories.length} danh mục</span>
+              <span className="table-footer-meta">{c.showing(startIndex, endIndex, visibleCategories.length, t.selectedNoun)}</span>
               <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>Trước</button>
+                <button className="page-btn" onClick={prev} disabled={page === 1}>{c.previous}</button>
                 {Array.from({ length: totalPages }).map((_, idx) => (
                   <button key={idx + 1} className={`page-btn ${page === idx + 1 ? 'active' : ''}`} onClick={() => setPage(idx + 1)}>
                     {idx + 1}
                   </button>
                 ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiếp</button>
+                <button className="page-btn" onClick={next} disabled={page === totalPages}>{c.next}</button>
               </div>
             </div>
           )}
@@ -499,7 +557,7 @@ const AdminCategories = () => {
             <span>{undoPayload.message}</span>
             <div className="admin-actions">
               <button className="admin-ghost-btn" onClick={restoreDeleted}>Hoàn tác</button>
-              <button className="admin-icon-btn subtle" onClick={() => setUndoPayload(null)} aria-label="Đóng thông báo"><X size={14} /></button>
+              <button className="admin-icon-btn subtle" onClick={() => setUndoPayload(null)} aria-label={`${ADMIN_ACTION_TITLES.close} thông báo`}><X size={14} /></button>
             </div>
           </motion.div>
         )}
@@ -515,15 +573,25 @@ const AdminCategories = () => {
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
             <div className="admin-floating-content">
-              <span>{selected.size} danh mục đã chọn</span>
+              <span>{c.selected(selected.size, t.selectedNoun)}</span>
               <div className="admin-actions">
-                <button className="admin-ghost-btn danger" onClick={bulkDelete}>Xóa đã chọn</button>
-                <button className="admin-ghost-btn" onClick={bulkToggleStatus}>Đổi trạng thái</button>
+                <button className="admin-ghost-btn danger" onClick={requestBulkDelete}>{t.floatingActions.deleteSelected}</button>
+                <button className="admin-ghost-btn" onClick={bulkToggleStatus}>{t.floatingActions.changeStatus}</button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AdminConfirmDialog
+        open={Boolean(deleteConfirm)}
+        title={deleteConfirm?.title || 'Xác nhận xóa'}
+        description={deleteConfirm?.description || ''}
+        confirmLabel={deleteConfirm?.confirmLabel || 'Xóa'}
+        danger
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={confirmDeleteCategories}
+      />
 
       {showCategoryDrawer && (
         <>
@@ -534,7 +602,7 @@ const AdminCategories = () => {
                 <p className="drawer-eyebrow">{categoryForm.id ? 'Chỉnh sửa' : 'Thêm'} danh mục</p>
                 <h3>{categoryForm.name || 'Danh mục mới'}</h3>
               </div>
-              <button className="admin-icon-btn" onClick={() => setShowCategoryDrawer(false)} aria-label="Đóng"><X size={16} /></button>
+              <button className="admin-icon-btn" onClick={() => setShowCategoryDrawer(false)} aria-label={ADMIN_ACTION_TITLES.close}><X size={16} /></button>
             </div>
 
             <div className="drawer-body">

@@ -4,74 +4,54 @@ import { useParams } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
 import { Printer, XCircle, RotateCcw, Truck, User, Copy, Download } from 'lucide-react';
 import {
-  canTransitionFulfillment,
   fulfillmentLabel,
   fulfillmentTransitions,
   paymentLabel,
   shipLabel,
+  transitionReasonCatalog,
+  type TransitionReasonCode,
   type FulfillmentStatus,
   type PaymentStatus,
 } from './orderWorkflow';
-import { adminOrdersData } from './adminOrdersData';
+import { getAdminOrderByCode, subscribeAdminOrders, transitionAdminOrder } from './adminOrderService';
 import { AdminStateBlock } from './AdminStateBlocks';
+import { useAdminToast } from './useAdminToast';
+import { ADMIN_ACTION_TITLES } from './adminUiLabels';
+import { ADMIN_TOAST_MESSAGES } from './adminMessages';
+import { ADMIN_TEXT } from './adminText';
 
 const formatVND = (n: number) => n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-type TransitionReasonCode =
-  | 'customer_request'
-  | 'payment_timeout'
-  | 'out_of_stock'
-  | 'fraud_risk'
-  | 'delivered_confirmed'
-  | 'cod_collected_manual'
-  | 'system_reconciliation'
-  | 'other';
-
-const reasonCatalog: Record<FulfillmentStatus, { code: TransitionReasonCode; label: string; requireNote?: boolean }[]> = {
-  pending: [],
-  packing: [],
-  shipping: [],
-  done: [
-    { code: 'delivered_confirmed', label: 'Khách xác nhận đã nhận hàng' },
-    { code: 'cod_collected_manual', label: 'Đối soát COD đã thu thủ công' },
-    { code: 'system_reconciliation', label: 'Đối soát vận đơn tự động' },
-    { code: 'other', label: 'Lý do khác', requireNote: true },
-  ],
-  canceled: [
-    { code: 'customer_request', label: 'Khách yêu cầu hủy đơn' },
-    { code: 'payment_timeout', label: 'Quá hạn thanh toán' },
-    { code: 'out_of_stock', label: 'Hết hàng tại kho' },
-    { code: 'fraud_risk', label: 'Nghi ngờ gian lận', requireNote: true },
-    { code: 'other', label: 'Lý do khác', requireNote: true },
-  ],
-};
-
-const reasonLabel = (code: TransitionReasonCode) => {
-  const all = Object.values(reasonCatalog).flat();
-  return all.find((item) => item.code === code)?.label || code;
-};
-
 const AdminOrderDetail = () => {
+  const t = ADMIN_TEXT.orderDetail;
   const { id } = useParams();
-  const order = useMemo(() => adminOrdersData.find((o) => o.code === (id || '').replace('#', '')) || null, [id]);
-  const [fulfillment, setFulfillment] = useState<FulfillmentStatus>(order?.fulfillment || 'pending');
-  const [timeline, setTimeline] = useState(order?.timeline || []);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(order?.paymentStatus || 'unpaid');
-  const [toast, setToast] = useState('');
+  const orderCode = useMemo(() => (id || '').replace('#', ''), [id]);
+  const [order, setOrder] = useState(() => getAdminOrderByCode(orderCode));
+  const { toast, pushToast } = useAdminToast();
   const [pendingTransition, setPendingTransition] = useState<FulfillmentStatus | null>(null);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [reasonCode, setReasonCode] = useState<TransitionReasonCode>('other');
   const [reasonNote, setReasonNote] = useState('');
+
+  const fulfillment = order?.fulfillment || 'pending';
+  const paymentStatus = order?.paymentStatus || 'unpaid';
+  const timeline = order?.timeline || [];
+
   useEffect(() => {
-    if (!order) return;
-    setFulfillment(order.fulfillment);
-    setTimeline(order.timeline);
-    setPaymentStatus(order.paymentStatus);
+    const syncOrder = () => {
+      setOrder(getAdminOrderByCode(orderCode));
+    };
+    const unsubscribe = subscribeAdminOrders(syncOrder);
+    syncOrder();
+    return unsubscribe;
+  }, [orderCode]);
+
+  useEffect(() => {
     setPendingTransition(null);
     setShowTransitionModal(false);
     setReasonCode('other');
     setReasonNote('');
-  }, [order]);
+  }, [orderCode]);
 
   if (!order) {
     return (
@@ -88,14 +68,9 @@ const AdminOrderDetail = () => {
     return (['pending', 'packing', 'shipping', 'done', 'canceled'] as FulfillmentStatus[]).filter(state => allowed.has(state));
   }, [fulfillment]);
 
-  const pushToast = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(''), 2200);
-  };
-
   const requestTransition = (next: FulfillmentStatus) => {
     if (next === fulfillment) return;
-    const options = reasonCatalog[next];
+    const options = transitionReasonCatalog[next];
     if (options.length > 0) {
       setReasonCode(options[0].code);
     } else {
@@ -108,73 +83,34 @@ const AdminOrderDetail = () => {
 
   const updateFulfillment = (next: FulfillmentStatus) => {
     if (next === fulfillment) return;
-    const reasonOptions = reasonCatalog[next];
-    const selectedReason = reasonOptions.find((item) => item.code === reasonCode);
-
-    if ((next === 'canceled' || next === 'done') && !selectedReason) {
-      pushToast('Vui lòng chọn lý do trước khi cập nhật trạng thái.');
-      return;
-    }
-
-    if (selectedReason?.requireNote && !reasonNote.trim()) {
-      pushToast('Lý do này yêu cầu nhập ghi chú chi tiết.');
-      return;
-    }
-
-    if (!canTransitionFulfillment(fulfillment, next, paymentStatus)) {
-      pushToast('Không thể chuyển trạng thái theo luồng hiện tại.');
-      return;
-    }
-    setFulfillment(next);
-    const now = new Date();
-    const time = now.toLocaleString('vi-VN', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+    const result = transitionAdminOrder({
+      code: order.code,
+      nextFulfillment: next,
+      actor: 'Admin',
+      source: 'order_detail',
+      reasonCode,
+      reasonNote,
     });
-    if (next === 'done' && paymentStatus === 'cod_uncollected') {
-      setPaymentStatus('paid');
+    if (!result.ok) {
+      pushToast(result.error || ADMIN_TOAST_MESSAGES.orderDetail.transitionFailed);
+      return;
     }
-
-    setTimeline(prev => [
-      {
-        time,
-        text: `Admin cập nhật trạng thái sang ${fulfillmentLabel(next)}.`,
-        tone: next === 'done' ? 'success' : next === 'canceled' ? 'error' : 'pending',
-      },
-      next === 'done' && paymentStatus === 'cod_uncollected'
-        ? {
-            time,
-            text: 'Hệ thống ghi nhận COD đã thu thành công.',
-            tone: 'success',
-          }
-        : null,
-      selectedReason
-        ? {
-            time,
-            text: `Lý do cập nhật: ${reasonLabel(selectedReason.code)}${reasonNote.trim() ? ` - ${reasonNote.trim()}` : ''}`,
-            tone: 'neutral',
-          }
-        : null,
-      ...prev,
-    ].filter(Boolean) as typeof prev);
     setReasonCode('other');
     setReasonNote('');
     setPendingTransition(null);
     setShowTransitionModal(false);
-    pushToast(`Đã chuyển sang ${fulfillmentLabel(next)}.`);
+    pushToast(result.message || `Đã chuyển sang ${fulfillmentLabel(next)}.`);
   };
 
   const exportAuditLog = () => {
     const payload = {
       orderCode: order.code,
       exportedAt: new Date().toISOString(),
+      version: order.version,
       fulfillmentStatus: fulfillment,
       paymentStatus,
       timeline,
+      auditLog: order.auditLog,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -186,7 +122,7 @@ const AdminOrderDetail = () => {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    pushToast(`Đã xuất audit log cho ${order.code}.`);
+    pushToast(ADMIN_TOAST_MESSAGES.orderDetail.auditExported(order.code));
   };
 
   const nextPaymentStatusPreview = useMemo(() => {
@@ -199,8 +135,8 @@ const AdminOrderDetail = () => {
     <AdminLayout
       title={
         <div className="od-title-row">
-          <button className="admin-ghost-btn" onClick={() => window.history.back()} aria-label="Quay lại">←</button>
-          <span>Đơn hàng #{id || order.code}</span>
+          <button className="admin-ghost-btn" onClick={() => window.history.back()} aria-label={t.back}>←</button>
+          <span>{t.orderPrefix} #{id || order.code}</span>
         </div>
       }
       actions={(
@@ -210,9 +146,9 @@ const AdminOrderDetail = () => {
               <option key={state} value={state}>{fulfillmentLabel(state)}</option>
             ))}
           </select>
-          <button className="admin-primary-btn dark"><Printer size={16} /> In hóa đơn</button>
-          <button className="admin-ghost-btn" disabled={!(fulfillment === 'canceled' && paymentStatus === 'paid')}><RotateCcw size={16} /> Hoàn tiền</button>
-          <button className="admin-ghost-btn danger" disabled={!fulfillmentTransitions[fulfillment].includes('canceled')} onClick={() => requestTransition('canceled')}><XCircle size={16} /> Hủy đơn</button>
+          <button className="admin-primary-btn dark"><Printer size={16} /> {t.actions.printInvoice}</button>
+          <button className="admin-ghost-btn" disabled={!(fulfillment === 'canceled' && paymentStatus === 'paid')}><RotateCcw size={16} /> {t.actions.refund}</button>
+          <button className="admin-ghost-btn danger" disabled={!fulfillmentTransitions[fulfillment].includes('canceled')} onClick={() => requestTransition('canceled')}><XCircle size={16} /> {t.actions.cancelOrder}</button>
         </div>
       )}
     >
@@ -220,7 +156,7 @@ const AdminOrderDetail = () => {
         <div className="od-left">
           <section className="od-section">
             <div className="od-section-head">
-              <h2>Order Items</h2>
+              <h2>{t.sections.orderItems}</h2>
             </div>
             <div className="od-items">
               {order.items.map(item => (
@@ -245,17 +181,17 @@ const AdminOrderDetail = () => {
 
           <section className="od-section">
             <div className="od-section-head">
-              <h2>Payment Details</h2>
+              <h2>{t.sections.paymentInfo}</h2>
             </div>
             <div className="od-card">
-              <div className="od-card-row"><span className="od-label">Payment Method</span><strong>{order.paymentMethod}</strong></div>
+              <div className="od-card-row"><span className="od-label">Phương thức thanh toán</span><strong>{order.paymentMethod}</strong></div>
                <div className="od-card-row"><span className="od-label">Thanh toán</span><span className={`admin-pill ${paymentStatus === 'paid' ? 'success' : paymentStatus === 'refund_pending' ? 'error' : 'pending'}`}>{paymentLabel(paymentStatus)}</span></div>
                <div className="od-card-row"><span className="od-label">Vận chuyển</span><span className={`admin-pill ${fulfillment === 'done' ? 'success' : fulfillment === 'canceled' ? 'error' : 'pending'}`}><Truck size={14} /> {shipLabel(fulfillment)}</span></div>
               <div className="od-card-row tracking-row">
-                <span className="od-label">Tracking</span>
+                <span className="od-label">Mã vận đơn</span>
                 <div className="tracking-value">
                   <strong>{order.tracking}</strong>
-                  <button className="admin-icon-btn" aria-label="Copy tracking" onClick={() => navigator.clipboard?.writeText(order.tracking)}>
+                  <button className="admin-icon-btn" aria-label={ADMIN_ACTION_TITLES.copyTracking} onClick={() => navigator.clipboard?.writeText(order.tracking)}>
                     <Copy size={14} />
                   </button>
                 </div>
@@ -267,22 +203,22 @@ const AdminOrderDetail = () => {
         <div className="od-right">
           <section className="od-section">
             <div className="od-section-head">
-              <h2>Customer & Shipping</h2>
+              <h2>{t.sections.customerShipping}</h2>
             </div>
             <div className="od-card">
-              <div className="od-card-row"><span className="od-label">Customer</span><strong>{order.customerInfo.name}</strong></div>
-              <div className="od-card-row"><span className="od-label">Phone</span><strong>{order.customerInfo.phone}</strong></div>
+              <div className="od-card-row"><span className="od-label">Khách hàng</span><strong>{order.customerInfo.name}</strong></div>
+              <div className="od-card-row"><span className="od-label">Số điện thoại</span><strong>{order.customerInfo.phone}</strong></div>
               <div className="od-card-row"><span className="od-label">Email</span><span>{order.customerInfo.email}</span></div>
-              <div className="od-card-row"><span className="od-label">Address</span><span>{order.address}</span></div>
-              <div className="od-card-row"><span className="od-label">Shipper</span><span>{order.shipMethod}</span></div>
-              <div className="od-note">Guest note: {order.note}</div>
+              <div className="od-card-row"><span className="od-label">Địa chỉ</span><span>{order.address}</span></div>
+              <div className="od-card-row"><span className="od-label">Đơn vị vận chuyển</span><span>{order.shipMethod}</span></div>
+              <div className="od-note">Ghi chú khách hàng: {order.note}</div>
             </div>
           </section>
 
           <section className="od-section">
             <div className="od-section-head">
-              <h2>Order Timeline</h2>
-              <button className="admin-ghost-btn" onClick={exportAuditLog}><Download size={14} /> Xuất audit log</button>
+              <h2>{t.sections.timeline}</h2>
+              <button className="admin-ghost-btn" onClick={exportAuditLog}><Download size={14} /> {t.actions.exportAudit}</button>
             </div>
             <div className="od-timeline">
               {timeline.map((log, idx) => (
@@ -323,7 +259,7 @@ const AdminOrderDetail = () => {
                 <label className="form-field">
                   <span>Lý do chuyển trạng thái</span>
                   <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value as TransitionReasonCode)}>
-                    {reasonCatalog[pendingTransition].map((item) => (
+                    {transitionReasonCatalog[pendingTransition].map((item) => (
                       <option key={item.code} value={item.code}>{item.label}</option>
                     ))}
                   </select>
@@ -337,24 +273,24 @@ const AdminOrderDetail = () => {
             )}
 
             {(() => {
-              const selectedReason = reasonCatalog[pendingTransition].find((item) => item.code === reasonCode);
+              const selectedReason = transitionReasonCatalog[pendingTransition].find((item) => item.code === reasonCode);
               const shouldWarn = (pendingTransition === 'canceled' || pendingTransition === 'done') && (!selectedReason || (selectedReason.requireNote && !reasonNote.trim()));
               return shouldWarn ? <p className="confirm-warning">Cần chọn lý do hợp lệ và nhập ghi chú bắt buộc trước khi xác nhận thao tác này.</p> : null;
             })()}
             <div className="confirm-modal-actions">
-              <button className="admin-ghost-btn" onClick={() => { setShowTransitionModal(false); setPendingTransition(null); }}>Hủy</button>
+              <button className="admin-ghost-btn" onClick={() => { setShowTransitionModal(false); setPendingTransition(null); }}>{t.actions.cancel}</button>
               <button
                 className="admin-primary-btn"
                 disabled={(() => {
                   if (pendingTransition !== 'canceled' && pendingTransition !== 'done') return false;
-                  const selectedReason = reasonCatalog[pendingTransition].find((item) => item.code === reasonCode);
+                  const selectedReason = transitionReasonCatalog[pendingTransition].find((item) => item.code === reasonCode);
                   if (!selectedReason) return true;
                   if (selectedReason.requireNote && !reasonNote.trim()) return true;
                   return false;
                 })()}
                 onClick={() => updateFulfillment(pendingTransition)}
               >
-                Xác nhận cập nhật
+                {t.actions.confirmUpdate}
               </button>
             </div>
           </div>

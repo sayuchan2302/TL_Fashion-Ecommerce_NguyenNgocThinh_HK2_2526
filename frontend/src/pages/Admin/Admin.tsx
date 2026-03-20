@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { adminOrdersData } from './adminOrdersData';
+import { ADMIN_ACTION_TITLES } from './adminUiLabels';
 
 const revenueData = [1.2, 1.5, 1.1, 1.8, 2.2, 2.0, 2.4]; // billions
 const revenueLabels = ['13/03', '14/03', '15/03', '16/03', '17/03', '18/03', '19/03'];
@@ -210,7 +211,7 @@ const Admin = () => {
                   <div role="cell">{order.total}</div>
                   <div role="cell" className="admin-actions compact">
                     <button className={`admin-ghost-btn small ${order.priority === 'high' ? 'primary-cta' : ''}`}>Xác nhận</button>
-                    <Link to={`/admin/orders/${order.code}`} className="admin-icon-btn" aria-label="Xem đơn">
+                    <Link to={`/admin/orders/${order.code}`} className="admin-icon-btn" aria-label={ADMIN_ACTION_TITLES.viewDetail}>
                       <ChevronRight size={15} />
                     </Link>
                   </div>

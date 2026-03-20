@@ -7,6 +7,11 @@ import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import { useAdminViewState } from './useAdminViewState';
+import { useAdminToast } from './useAdminToast';
+import { ADMIN_ACTION_TITLES, ADMIN_COMMON_LABELS } from './adminUiLabels';
+import { customerOrderStatusLabel, customerOrderStatusTone } from './adminStatusMaps';
+import { ADMIN_TOAST_MESSAGES } from './adminMessages';
+import { ADMIN_TEXT } from './adminText';
 
 type LoyaltyTier = 'Bronze' | 'Silver' | 'Gold' | 'Diamond';
 type AccountStatus = 'active' | 'banned';
@@ -183,10 +188,10 @@ const initialCustomers: Customer[] = [
 ];
 
 const tabs = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'new', label: 'Khách mới' },
-  { key: 'vip', label: 'Khách VIP' },
-  { key: 'banned', label: 'Bị khóa' },
+  { key: 'all', label: ADMIN_TEXT.customers.tabs.all },
+  { key: 'new', label: ADMIN_TEXT.customers.tabs.new },
+  { key: 'vip', label: ADMIN_TEXT.customers.tabs.vip },
+  { key: 'banned', label: ADMIN_TEXT.customers.tabs.banned },
 ];
 
 const validCustomerTabs = new Set(tabs.map((tab) => tab.key));
@@ -256,20 +261,9 @@ const isNewCustomer = (createdAt: string) => {
 
 const isVipCustomer = (c: Customer) => c.tier === 'Gold' || c.tier === 'Diamond' || c.totalSpent >= 5000000;
 
-const orderStatusTone = (status: CustomerOrder['status']) => {
-  if (status === 'done') return 'success';
-  if (status === 'shipping' || status === 'pending') return 'pending';
-  return 'error';
-};
-
-const orderStatusLabel = (status: CustomerOrder['status']) => {
-  if (status === 'done') return 'Hoàn tất';
-  if (status === 'shipping') return 'Đang giao';
-  if (status === 'pending') return 'Chờ xác nhận';
-  return 'Đã hủy';
-};
-
 const AdminCustomers = () => {
+  const t = ADMIN_TEXT.customers;
+  const c = ADMIN_TEXT.common;
   const view = useAdminViewState({
     storageKey: ADMIN_VIEW_KEYS.customers,
     path: '/admin/customers',
@@ -282,15 +276,15 @@ const AdminCustomers = () => {
     ],
   });
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-  const [activeTab, setActiveTab] = useState<string>(view.status);
-  const [tierFilter, setTierFilter] = useState<'all' | LoyaltyTier>((view.extras.tier as 'all' | LoyaltyTier) || 'all');
-  const [spendingFilter, setSpendingFilter] = useState<string>(view.extras.spend || 'all');
+  const activeTab = validCustomerTabs.has(view.status) ? view.status : 'all';
+  const tierFilter = validTierFilters.has(view.extras.tier || 'all') ? (view.extras.tier as 'all' | LoyaltyTier) : 'all';
+  const spendingFilter = validSpendingFilters.has(view.extras.spend || 'all') ? (view.extras.spend as string) : 'all';
   const [openFilter, setOpenFilter] = useState<'tier' | 'spending' | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawerCustomerId, setDrawerCustomerId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('activity');
   const [draftNote, setDraftNote] = useState('');
-  const [toast, setToast] = useState('');
+  const { toast, pushToast } = useAdminToast(2300);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -329,26 +323,8 @@ const AdminCustomers = () => {
   const spendingFilterLabel = spendingOptions.find((o) => o.value === spendingFilter)?.label ?? 'Tất cả chi tiêu';
 
   useEffect(() => {
-    const nextTab = validCustomerTabs.has(view.status) ? view.status : 'all';
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
-      setSelected(new Set());
-    }
-
-    const nextTierValue = view.extras.tier || 'all';
-    const nextTier = validTierFilters.has(nextTierValue) ? (nextTierValue as 'all' | LoyaltyTier) : 'all';
-    if (nextTier !== tierFilter) {
-      setTierFilter(nextTier);
-      setSelected(new Set());
-    }
-
-    const nextSpendValue = view.extras.spend || 'all';
-    const nextSpend = validSpendingFilters.has(nextSpendValue) ? nextSpendValue : 'all';
-    if (nextSpend !== spendingFilter) {
-      setSpendingFilter(nextSpend);
-      setSelected(new Set());
-    }
-  }, [view.status, view.extras.tier, view.extras.spend, activeTab, tierFilter, spendingFilter]);
+    setSelected(new Set());
+  }, [activeTab, tierFilter, spendingFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -373,30 +349,22 @@ const AdminCustomers = () => {
     };
   }, [openFilter, drawerCustomerId]);
 
-  const pushToast = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(''), 2300);
-  };
-
   const handleSearchChange = (value: string) => {
     view.setSearch(value);
   };
 
   const changeTab = (nextTab: string) => {
-    setActiveTab(nextTab);
     setSelected(new Set());
     view.setStatus(nextTab);
   };
 
   const changeTierFilter = (nextTier: 'all' | LoyaltyTier) => {
-    setTierFilter(nextTier);
     setSelected(new Set());
     setOpenFilter(null);
     view.setExtra('tier', nextTier);
   };
 
   const changeSpendingFilter = (nextSpend: string) => {
-    setSpendingFilter(nextSpend);
     setSelected(new Set());
     setOpenFilter(null);
     view.setExtra('spend', nextSpend);
@@ -405,20 +373,17 @@ const AdminCustomers = () => {
   const shareCurrentView = async () => {
     try {
       await view.shareCurrentView();
-      pushToast('Đã copy link view hiện tại.');
+      pushToast(ADMIN_TOAST_MESSAGES.viewCopied);
     } catch {
-      pushToast('Không thể copy link, vui lòng thử lại.');
+      pushToast(ADMIN_TOAST_MESSAGES.copyFailed);
     }
   };
 
   const resetCurrentView = () => {
-    setActiveTab('all');
-    setTierFilter('all');
-    setSpendingFilter('all');
     setSelected(new Set());
     setOpenFilter(null);
     view.resetCurrentView();
-    pushToast('Đã đặt lại view khách hàng về mặc định.');
+    pushToast(ADMIN_TOAST_MESSAGES.customers.resetView);
   };
 
   const toggleSelectAll = (checked: boolean) => setSelected(checked ? new Set(filtered.map((c) => c.id)) : new Set());
@@ -442,19 +407,32 @@ const AdminCustomers = () => {
   };
 
   const toggleBanStatus = (customerId: string) => {
-    setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, status: c.status === 'active' ? 'banned' : 'active' } : c)));
     const user = customers.find((c) => c.id === customerId);
-    if (user) pushToast(user.status === 'active' ? `Đã khóa tài khoản ${user.name}` : `Đã mở khóa tài khoản ${user.name}`);
+    if (!user) return;
+    if (user.status === 'active') {
+      const reason = window.prompt(`Nhập lý do khóa tài khoản ${user.name}:`, 'Vi phạm chính sách mua hàng');
+      if (reason === null) return;
+      if (!reason.trim()) {
+        pushToast(ADMIN_TOAST_MESSAGES.customers.lockReasonRequired);
+        return;
+      }
+      setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, status: 'banned' } : c)));
+      pushToast(ADMIN_TOAST_MESSAGES.customers.lockedAccount(user.name));
+      return;
+    }
+
+    setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, status: 'active' } : c)));
+    pushToast(ADMIN_TOAST_MESSAGES.customers.unlockedAccount(user.name));
   };
 
   const saveAdminNote = () => {
     if (!activeCustomer) return;
     setCustomers((prev) => prev.map((c) => (c.id === activeCustomer.id ? { ...c, note: draftNote.trim() } : c)));
-    pushToast('Đã lưu ghi chú nội bộ');
+    pushToast(ADMIN_TOAST_MESSAGES.customers.noteSaved);
   };
 
   const selectedIds = Array.from(selected);
-  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
+  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || t.tabs.all;
   const hasViewContext = activeTab !== 'all' || tierFilter !== 'all' || spendingFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
   const tabCounts = {
     all: customers.length,
@@ -465,44 +443,50 @@ const AdminCustomers = () => {
 
   const handleBulkSendVoucher = () => {
     if (!selectedIds.length) return;
-    pushToast(`Đã gửi voucher cho ${selectedIds.length} khách hàng`);
+    pushToast(ADMIN_TOAST_MESSAGES.customers.vouchersSent(selectedIds.length));
   };
 
   const handleBulkBan = () => {
     if (!selectedIds.length) return;
+    const reason = window.prompt('Nhập lý do khóa các tài khoản đã chọn:', 'Nghi ngờ gian lận/hoàn trả bất thường');
+    if (reason === null) return;
+    if (!reason.trim()) {
+      pushToast(ADMIN_TOAST_MESSAGES.customers.lockReasonRequired);
+      return;
+    }
     const targetIds = new Set(customers.filter((c) => selected.has(c.id) && c.status !== 'banned').map((c) => c.id));
     if (targetIds.size === 0) {
-      pushToast('Các tài khoản đã ở trạng thái bị khóa');
+      pushToast(ADMIN_TOAST_MESSAGES.customers.alreadyBanned);
       return;
     }
     setCustomers((prev) => prev.map((c) => (targetIds.has(c.id) ? { ...c, status: 'banned' } : c)));
-    pushToast(`Đã khóa ${targetIds.size} tài khoản`);
+    pushToast(ADMIN_TOAST_MESSAGES.customers.bulkLocked(targetIds.size));
     setSelected(new Set());
   };
 
   const handleBulkSendEmail = () => {
     if (!selectedIds.length) return;
-    pushToast(`Đã gửi email đến ${selectedIds.length} khách hàng`);
+    pushToast(ADMIN_TOAST_MESSAGES.customers.emailsSent(selectedIds.length));
   };
 
   const handleExport = () => {
-    pushToast(`Đã xuất dữ liệu ${filtered.length} khách hàng (mô phỏng)`);
+    pushToast(ADMIN_TOAST_MESSAGES.customers.exportRequested(filtered.length));
   };
 
   return (
     <AdminLayout
-      title="Khách hàng"
+      title={t.title}
       actions={
         <div className="customer-actions" ref={filterDropdownRef}>
           <div className="admin-search">
             <Search size={16} />
-            <input placeholder="Tìm tên, email, số điện thoại..." value={search} onChange={(e) => handleSearchChange(e.target.value)} />
+            <input placeholder={t.searchPlaceholder} value={search} onChange={(e) => handleSearchChange(e.target.value)} />
           </div>
 
-          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> Share view</button>
-          <button className="admin-ghost-btn" onClick={resetCurrentView}>Reset view</button>
+          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> {ADMIN_COMMON_LABELS.shareView}</button>
+          <button className="admin-ghost-btn" onClick={resetCurrentView}>{ADMIN_COMMON_LABELS.resetView}</button>
 
-          <button className="admin-icon-btn subtle" onClick={handleExport} title="Xuất dữ liệu khách hàng" aria-label="Xuất dữ liệu khách hàng">
+          <button className="admin-icon-btn subtle" onClick={handleExport} title={ADMIN_ACTION_TITLES.exportCustomerData} aria-label={ADMIN_ACTION_TITLES.exportCustomerData}>
             <Download size={16} />
           </button>
 
@@ -544,7 +528,7 @@ const AdminCustomers = () => {
             </AnimatePresence>
           </div>
 
-          <div className="customer-result-chip">Kết quả: {filtered.length}</div>
+          <div className="customer-result-chip">{t.resultLabel(filtered.length)}</div>
         </div>
       }
     >
@@ -559,11 +543,11 @@ const AdminCustomers = () => {
 
       {hasViewContext && (
         <div className="admin-view-summary">
-          <span className="summary-chip">Nhóm: {activeTabLabel}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          {tierFilter !== 'all' && <span className="summary-chip">Hạng: {tierFilterLabel}</span>}
-          {spendingFilter !== 'all' && <span className="summary-chip">Chi tiêu: {spendingFilterLabel}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa bộ lọc</button>
+          <span className="summary-chip">{t.summary.group}: {activeTabLabel}</span>
+          {search.trim() && <span className="summary-chip">{c.keyword}: {search.trim()}</span>}
+          {tierFilter !== 'all' && <span className="summary-chip">{t.summary.tier}: {tierFilterLabel}</span>}
+          {spendingFilter !== 'all' && <span className="summary-chip">{t.summary.spend}: {spendingFilterLabel}</span>}
+          <button className="summary-clear" onClick={resetCurrentView}>{c.clearFilters}</button>
         </div>
       )}
 
@@ -574,23 +558,23 @@ const AdminCustomers = () => {
           ) : filtered.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
-              title={search.trim() ? 'Không tìm thấy khách hàng phù hợp' : 'Chưa có khách hàng nào'}
-                description={search.trim() ? 'Hãy thử thay đổi bộ lọc hạng, chi tiêu hoặc từ khóa tìm kiếm.' : 'Khách hàng mới sẽ được ghi nhận tự động sau khi phát sinh đơn hàng.'}
-                actionLabel="Đặt lại bộ lọc"
+              title={search.trim() ? t.empty.searchTitle : t.empty.defaultTitle}
+                description={search.trim() ? t.empty.searchDescription : t.empty.defaultDescription}
+                actionLabel={ADMIN_COMMON_LABELS.resetFilters}
                 onAction={resetCurrentView}
               />
           ) : (
-          <div className="admin-table" role="table" aria-label="Danh sách khách hàng">
+          <div className="admin-table" role="table" aria-label={t.tableAria}>
             <div className="admin-table-row admin-table-head customers" role="row">
               <div role="columnheader"><input type="checkbox" aria-label="Chọn tất cả" checked={selected.size === filtered.length && filtered.length > 0} onChange={(e) => toggleSelectAll(e.target.checked)} /></div>
-              <div role="columnheader">Khách hàng</div>
-              <div role="columnheader">Số điện thoại</div>
-              <div role="columnheader">Hạng thành viên</div>
-              <div role="columnheader">Tổng đơn</div>
-              <div role="columnheader">Tổng chi tiêu</div>
-              <div role="columnheader">Trạng thái</div>
-              <div role="columnheader">Đơn gần nhất</div>
-              <div role="columnheader">Hành động</div>
+              <div role="columnheader">{t.columns.customer}</div>
+              <div role="columnheader">{t.columns.phone}</div>
+              <div role="columnheader">{t.columns.tier}</div>
+              <div role="columnheader">{t.columns.totalOrders}</div>
+              <div role="columnheader">{t.columns.totalSpent}</div>
+              <div role="columnheader">{t.columns.status}</div>
+              <div role="columnheader">{t.columns.lastOrder}</div>
+              <div role="columnheader">{t.columns.actions}</div>
             </div>
 
             {pagedCustomers.map((customer, idx) => (
@@ -615,12 +599,12 @@ const AdminCustomers = () => {
                 <div role="cell"><span className={`admin-pill ${tierToClass[customer.tier]}`}>{customer.tier}</span></div>
                 <div role="cell" className="admin-bold">{customer.totalOrders}</div>
                 <div role="cell" className="admin-bold customer-spent">{formatCurrencyVnd(customer.totalSpent)}</div>
-                <div role="cell"><span className={`admin-pill ${customer.status === 'active' ? 'success' : 'error'}`}>{customer.status === 'active' ? 'Active' : 'Banned'}</span></div>
+                <div role="cell"><span className={`admin-pill ${customer.status === 'active' ? 'success' : 'error'}`}>{customer.status === 'active' ? 'Đang hoạt động' : 'Bị khóa'}</span></div>
                 <div role="cell" className="admin-muted">{formatDate(customer.lastOrder)}</div>
                 <div role="cell" className="admin-actions">
-                  <button className="admin-icon-btn subtle" title="Xem chi tiết" onClick={() => openDrawer(customer, 'activity')}><Eye size={16} /></button>
-                  <button className="admin-icon-btn subtle" title="Sửa ghi chú" onClick={() => openDrawer(customer, 'notes')}><Pencil size={16} /></button>
-                  <button className="admin-icon-btn subtle" title={customer.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} onClick={() => toggleBanStatus(customer.id)}><Ban size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.viewDetail} aria-label={ADMIN_ACTION_TITLES.viewDetail} onClick={() => openDrawer(customer, 'activity')}><Eye size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.editNote} aria-label={ADMIN_ACTION_TITLES.editNote} onClick={() => openDrawer(customer, 'notes')}><Pencil size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={customer.status === 'active' ? ADMIN_ACTION_TITLES.lockAccount : ADMIN_ACTION_TITLES.unlockAccount} aria-label={customer.status === 'active' ? ADMIN_ACTION_TITLES.lockAccount : ADMIN_ACTION_TITLES.unlockAccount} onClick={() => toggleBanStatus(customer.id)}><Ban size={16} /></button>
                 </div>
               </motion.div>
             ))}
@@ -629,16 +613,15 @@ const AdminCustomers = () => {
 
           {!isLoading && filtered.length > 0 && (
             <div className="table-footer">
-              <span className="admin-muted">Hiển thị {startIndex}-{endIndex} của {filtered.length} / {customers.length} khách hàng</span>
-              <span className="admin-muted">Đã chọn: {selected.size}</span>
+              <span className="table-footer-meta">{c.showing(startIndex, endIndex, filtered.length, t.selectedNoun)}</span>
               <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>Trước</button>
+                <button className="page-btn" onClick={prev} disabled={page === 1}>{c.previous}</button>
                 {Array.from({ length: totalPages }).map((_, idx) => (
                   <button key={idx + 1} className={`page-btn ${page === idx + 1 ? 'active' : ''}`} onClick={() => setPage(idx + 1)}>
                     {idx + 1}
                   </button>
                 ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiếp</button>
+                <button className="page-btn" onClick={next} disabled={page === totalPages}>{c.next}</button>
               </div>
             </div>
           )}
@@ -649,11 +632,11 @@ const AdminCustomers = () => {
         {selected.size > 0 && (
           <motion.div className="customer-floating-bar" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 22 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
             <div className="customer-floating-content">
-              <span>{selected.size} khách hàng đã chọn</span>
+              <span>{c.selected(selected.size, t.selectedNoun)}</span>
               <div className="admin-actions">
-                <button className="admin-ghost-btn" onClick={handleBulkSendVoucher}><Gift size={15} /> Gửi Voucher</button>
-                <button className="admin-ghost-btn danger" onClick={handleBulkBan}><Ban size={15} /> Khóa tài khoản</button>
-                <button className="admin-primary-btn" onClick={handleBulkSendEmail}><Mail size={15} /> Gửi Email</button>
+                <button className="admin-ghost-btn" onClick={handleBulkSendVoucher}><Gift size={15} /> {t.floatingActions.sendVoucher}</button>
+                <button className="admin-ghost-btn danger" onClick={handleBulkBan}><Ban size={15} /> {t.floatingActions.lockAccount}</button>
+                <button className="admin-primary-btn" onClick={handleBulkSendEmail}><Mail size={15} /> {t.floatingActions.sendEmail}</button>
               </div>
             </div>
           </motion.div>
@@ -667,10 +650,10 @@ const AdminCustomers = () => {
             <motion.div className="drawer customer-drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.25, ease: 'easeOut' }}>
               <div className="drawer-header">
                 <div>
-                  <p className="drawer-eyebrow">Chi tiết khách hàng</p>
+                  <p className="drawer-eyebrow">{t.drawer.title}</p>
                   <h3>{activeCustomer.name}</h3>
                 </div>
-                <button className="admin-icon-btn" onClick={closeDrawer} aria-label="Đóng"><X size={16} /></button>
+                <button className="admin-icon-btn" onClick={closeDrawer} aria-label={ADMIN_ACTION_TITLES.close}><X size={16} /></button>
               </div>
 
               <div className="drawer-body customer-drawer-body">
@@ -693,9 +676,9 @@ const AdminCustomers = () => {
 
                 <section className="drawer-section">
                   <div className="customer-drawer-tabs">
-                    <button className={drawerTab === 'activity' ? 'active' : ''} onClick={() => setDrawerTab('activity')}>Hoạt động</button>
-                    <button className={drawerTab === 'preferences' ? 'active' : ''} onClick={() => setDrawerTab('preferences')}>Sở thích</button>
-                    <button className={drawerTab === 'notes' ? 'active' : ''} onClick={() => setDrawerTab('notes')}>Ghi chú Admin</button>
+                    <button className={drawerTab === 'activity' ? 'active' : ''} onClick={() => setDrawerTab('activity')}>{t.drawer.tabs.activity}</button>
+                    <button className={drawerTab === 'preferences' ? 'active' : ''} onClick={() => setDrawerTab('preferences')}>{t.drawer.tabs.preferences}</button>
+                    <button className={drawerTab === 'notes' ? 'active' : ''} onClick={() => setDrawerTab('notes')}>{t.drawer.tabs.notes}</button>
                   </div>
 
                   <AnimatePresence mode="wait">
@@ -704,10 +687,10 @@ const AdminCustomers = () => {
                         <ul className="customer-timeline">
                           {activeCustomer.orderHistory.slice(0, 5).map((order) => (
                             <li key={order.code} className="customer-timeline-item">
-                              <span className={`customer-timeline-dot ${orderStatusTone(order.status)}`} />
+                              <span className={`customer-timeline-dot ${customerOrderStatusTone(order.status)}`} />
                               <div>
                                 <p className="admin-bold">{order.code} · {formatCurrencyVnd(order.total)}</p>
-                                <p className="admin-muted small">{formatDateTime(order.date)} · {orderStatusLabel(order.status)}</p>
+                                <p className="admin-muted small">{formatDateTime(order.date)} · {customerOrderStatusLabel(order.status)}</p>
                               </div>
                             </li>
                           ))}
@@ -732,7 +715,7 @@ const AdminCustomers = () => {
                       <motion.div key="notes" className="customer-tab-content" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}>
                         <label className="form-field">
                           <span>Ghi chú nội bộ chỉ dành cho Admin</span>
-                          <textarea rows={5} value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder="Ví dụ: Khách hay đổi trả size, ưu tiên liên hệ buổi tối..." />
+                          <textarea rows={5} value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder={t.drawer.notePlaceholder} />
                         </label>
                       </motion.div>
                     )}
@@ -741,8 +724,8 @@ const AdminCustomers = () => {
               </div>
 
               <div className="drawer-footer">
-                <button className="admin-ghost-btn" onClick={closeDrawer}>Đóng</button>
-                <button className="admin-primary-btn" onClick={saveAdminNote}>Lưu ghi chú</button>
+                <button className="admin-ghost-btn" onClick={closeDrawer}>{t.drawer.close}</button>
+                <button className="admin-primary-btn" onClick={saveAdminNote}>{t.drawer.saveNote}</button>
               </div>
             </motion.div>
           </>

@@ -1,15 +1,23 @@
 import './Admin.css';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Plus, Ticket, Pencil, Pause, Play, X, Tag, Copy, Link2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
+import AdminConfirmDialog from './AdminConfirmDialog';
 import { useAdminListState } from './useAdminListState';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import { useAdminViewState } from './useAdminViewState';
+import { useAdminToast } from './useAdminToast';
+import { ADMIN_ACTION_TITLES, ADMIN_COMMON_LABELS } from './adminUiLabels';
+import {
+  promotionStatusClass,
+  promotionStatusLabel,
+  type PromotionStatus,
+} from './adminStatusMaps';
+import { ADMIN_TOAST_MESSAGES } from './adminMessages';
+import { ADMIN_TEXT } from './adminText';
 
-type PromotionStatus = 'running' | 'expired' | 'paused';
 type DiscountType = 'percent' | 'fixed';
 
 interface Promotion {
@@ -94,7 +102,7 @@ const emptyPromotion: Promotion = {
   usedCount: 0,
   startDate: '',
   endDate: '',
-  status: 'running',
+  status: 'paused',
 };
 
 const formatCurrencyVnd = (value: number) => `${value.toLocaleString('vi-VN')} đ`;
@@ -102,18 +110,6 @@ const formatDate = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('vi-VN');
-};
-
-const statusLabel = (status: PromotionStatus) => {
-  if (status === 'running') return 'Đang chạy';
-  if (status === 'paused') return 'Tạm dừng';
-  return 'Hết hạn';
-};
-
-const statusClass = (status: PromotionStatus) => {
-  if (status === 'running') return 'promo-status-running';
-  if (status === 'paused') return 'promo-status-paused';
-  return 'promo-status-expired';
 };
 
 const discountTypeLabel = (type: DiscountType) => (type === 'percent' ? 'Giảm theo %' : 'Giảm tiền mặt');
@@ -132,6 +128,25 @@ const deriveStatus = (promotion: Promotion): PromotionStatus => {
   endDate.setHours(0, 0, 0, 0);
   if (endDate < today) return 'expired';
   return 'running';
+};
+
+const canActivatePromotion = (promotion: Promotion) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = new Date(promotion.startDate);
+  const endDate = new Date(promotion.endDate);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return { ok: false as const, error: 'Lịch chạy chiến dịch không hợp lệ.' };
+  }
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+  if (endDate < today) {
+    return { ok: false as const, error: 'Chiến dịch đã hết hạn, không thể kích hoạt lại.' };
+  }
+  if (startDate > today) {
+    return { ok: false as const, error: 'Chiến dịch chưa đến ngày bắt đầu, chỉ có thể để trạng thái tạm dừng.' };
+  }
+  return { ok: true as const };
 };
 
 const buildDuplicateCode = (sourceCode: string, existingCodes: Set<string>) => {
@@ -183,6 +198,8 @@ const validatePromotionForm = (form: Promotion, rows: Promotion[], editingId: st
 };
 
 const AdminPromotions = () => {
+  const t = ADMIN_TEXT.promotions;
+  const c = ADMIN_TEXT.common;
   const view = useAdminViewState({
     storageKey: ADMIN_VIEW_KEYS.promotions,
     path: '/admin/promotions',
@@ -190,11 +207,16 @@ const AdminPromotions = () => {
     defaultStatus: 'all',
   });
   const [rows, setRows] = useState<Promotion[]>(initialPromotions);
-  const [statusFilter, setStatusFilter] = useState<'all' | PromotionStatus>(view.status as 'all' | PromotionStatus);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const statusFilter: 'all' | PromotionStatus =
+    view.status === 'running' || view.status === 'paused' || view.status === 'expired' || view.status === 'all'
+      ? view.status
+      : 'all';
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Promotion>(emptyPromotion);
-  const [toast, setToast] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { toast, pushToast } = useAdminToast();
 
   const {
     search,
@@ -223,15 +245,7 @@ const AdminPromotions = () => {
     loadingDeps: [statusFilter],
   });
 
-  useEffect(() => {
-    const nextStatus = view.status as 'all' | PromotionStatus;
-    if (nextStatus !== statusFilter) {
-      setStatusFilter(nextStatus);
-    }
-  }, [view.status, statusFilter]);
-
   const changeStatusFilter = (nextStatus: 'all' | PromotionStatus) => {
-    setStatusFilter(nextStatus);
     view.setStatus(nextStatus);
   };
 
@@ -242,20 +256,21 @@ const AdminPromotions = () => {
   const shareCurrentView = async () => {
     try {
       await view.shareCurrentView();
-      pushToast('Đã copy link view hiện tại.');
+      pushToast(ADMIN_TOAST_MESSAGES.viewCopied);
     } catch {
-      pushToast('Không thể copy link, vui lòng thử lại.');
+      pushToast(ADMIN_TOAST_MESSAGES.copyFailed);
     }
   };
 
   const resetCurrentView = () => {
-    setStatusFilter('all');
+    setSelected(new Set());
+    setShowDeleteConfirm(false);
     view.resetCurrentView();
-    pushToast('Đã đặt lại view khuyến mãi về mặc định.');
+    pushToast(ADMIN_TOAST_MESSAGES.promotions.resetView);
   };
 
   const hasViewContext = statusFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
-  const statusFilterLabel = statusFilter === 'all' ? 'Tất cả' : statusFilter === 'running' ? 'Đang chạy' : statusFilter === 'paused' ? 'Tạm dừng' : 'Hết hạn';
+  const statusFilterLabel = statusFilter === 'all' ? t.tabs.all : statusFilter === 'running' ? t.tabs.running : statusFilter === 'paused' ? t.tabs.paused : t.tabs.expired;
 
   const stats = useMemo(() => {
     const statusRows = rows.map((item) => ({ ...item, derivedStatus: deriveStatus(item) }));
@@ -279,6 +294,10 @@ const AdminPromotions = () => {
   const hasFormError = Object.keys(formErrors).length > 0;
   const isCodeDuplicated = Boolean(formErrors.code && formErrors.code.includes('tồn tại'));
 
+  useEffect(() => {
+    setSelected(new Set());
+  }, [statusFilter, search]);
+
   const openCreateDrawer = () => {
     setEditingId(null);
     setForm(emptyPromotion);
@@ -299,11 +318,6 @@ const AdminPromotions = () => {
     setEditingId(null);
   };
 
-  const pushToast = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(''), 2200);
-  };
-
   const savePromotion = () => {
     const errors = validatePromotionForm(form, rows, editingId);
     if (Object.keys(errors).length > 0) {
@@ -314,20 +328,31 @@ const AdminPromotions = () => {
 
     if (editingId) {
       setRows((prev) => prev.map((item) => (item.id === editingId ? { ...form, id: editingId } : item)));
-      pushToast('Đã cập nhật chiến dịch khuyến mãi');
+      pushToast(ADMIN_TOAST_MESSAGES.promotions.updated);
     } else {
       const newPromotion: Promotion = {
         ...form,
         id: `pr-${Date.now()}`,
+        status: form.status,
       };
       setRows((prev) => [newPromotion, ...prev]);
-      pushToast('Đã tạo mã khuyến mãi mới');
+      pushToast(ADMIN_TOAST_MESSAGES.promotions.created);
     }
 
     closeDrawer();
   };
 
   const togglePause = (id: string) => {
+    const target = rows.find((item) => item.id === id);
+    if (!target) return;
+    if (target.status === 'paused') {
+      const activation = canActivatePromotion(target);
+      if (!activation.ok) {
+        pushToast(activation.error);
+        return;
+      }
+    }
+
     setRows((prev) =>
       prev.map((item) =>
         item.id === id
@@ -356,49 +381,94 @@ const AdminPromotions = () => {
     };
 
     setRows((prev) => [duplicated, ...prev]);
-    pushToast(`Đã nhân bản voucher ${source.code} thành ${duplicateCode}`);
+    pushToast(ADMIN_TOAST_MESSAGES.promotions.duplicated(source.code, duplicateCode));
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelected(new Set(filtered.map((item) => item.id)));
+      return;
+    }
+    setSelected(new Set());
+  };
+
+  const toggleOne = (id: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    setSelected(next);
+  };
+
+  const pauseSelected = () => {
+    const selectedIds = new Set(selected);
+    const affected = rows.filter((item) => selectedIds.has(item.id) && item.status !== 'paused').length;
+    if (affected === 0) {
+      pushToast(ADMIN_TOAST_MESSAGES.promotions.noEligiblePauseBulk);
+      return;
+    }
+
+    setRows((prev) => prev.map((item) => (selectedIds.has(item.id) ? { ...item, status: 'paused' } : item)));
+    setSelected(new Set());
+    pushToast(ADMIN_TOAST_MESSAGES.promotions.bulkPaused(affected));
+  };
+
+  const deleteSelected = () => {
+    if (selected.size === 0) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+    const selectedIds = new Set(selected);
+    setRows((prev) => prev.filter((item) => !selectedIds.has(item.id)));
+    setSelected(new Set());
+    setShowDeleteConfirm(false);
+    pushToast(ADMIN_TOAST_MESSAGES.promotions.bulkDeleted(selectedIds.size));
+  };
+
+  const requestDeleteSelected = () => {
+    if (selected.size === 0) return;
+    setShowDeleteConfirm(true);
   };
 
   return (
     <AdminLayout
-      title="Khuyến mãi"
+      title={t.title}
       actions={
         <>
           <div className="admin-search">
             <Search size={16} />
-            <input placeholder="Tìm theo tên chiến dịch, mã voucher..." value={search} onChange={(e) => handleSearchChange(e.target.value)} />
+            <input placeholder={t.searchPlaceholder} value={search} onChange={(e) => handleSearchChange(e.target.value)} />
           </div>
-          <Link to="#" className="admin-ghost-btn"><Tag size={16} /> Loại khuyến mãi</Link>
-          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> Share view</button>
-          <button className="admin-ghost-btn" onClick={resetCurrentView}>Reset view</button>
-          <button className="admin-primary-btn" onClick={openCreateDrawer}><Plus size={16} /> Tạo mã mới</button>
+          <button type="button" className="admin-ghost-btn" onClick={() => pushToast(ADMIN_TOAST_MESSAGES.promoTypeFilterComingSoon)}><Tag size={16} /> {t.promoType}</button>
+          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> {ADMIN_COMMON_LABELS.shareView}</button>
+          <button className="admin-ghost-btn" onClick={resetCurrentView}>{ADMIN_COMMON_LABELS.resetView}</button>
+          <button className="admin-primary-btn" onClick={openCreateDrawer}><Plus size={16} /> {t.create}</button>
         </>
       }
     >
       <div className="admin-tabs">
         <button className={`admin-tab ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => changeStatusFilter('all')}>
-          <span>Tất cả</span>
+          <span>{t.tabs.all}</span>
           <span className="admin-tab-count">{tabCounts.all}</span>
         </button>
         <button className={`admin-tab ${statusFilter === 'running' ? 'active' : ''}`} onClick={() => changeStatusFilter('running')}>
-          <span>Đang chạy</span>
+          <span>{t.tabs.running}</span>
           <span className="admin-tab-count">{tabCounts.running}</span>
         </button>
         <button className={`admin-tab ${statusFilter === 'paused' ? 'active' : ''}`} onClick={() => changeStatusFilter('paused')}>
-          <span>Tạm dừng</span>
+          <span>{t.tabs.paused}</span>
           <span className="admin-tab-count">{tabCounts.paused}</span>
         </button>
         <button className={`admin-tab ${statusFilter === 'expired' ? 'active' : ''}`} onClick={() => changeStatusFilter('expired')}>
-          <span>Hết hạn</span>
+          <span>{t.tabs.expired}</span>
           <span className="admin-tab-count">{tabCounts.expired}</span>
         </button>
       </div>
 
       {hasViewContext && (
         <div className="admin-view-summary">
-          <span className="summary-chip">Trạng thái: {statusFilterLabel}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa bộ lọc</button>
+          <span className="summary-chip">{c.status}: {statusFilterLabel}</span>
+          {search.trim() && <span className="summary-chip">{c.keyword}: {search.trim()}</span>}
+          <button className="summary-clear" onClick={resetCurrentView}>{c.clearFilters}</button>
         </div>
       )}
 
@@ -406,32 +476,33 @@ const AdminPromotions = () => {
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>
-              <Ticket size={16} /> Danh sách voucher
+              <Ticket size={16} /> {t.panelTitle}
             </h2>
-            <span className="admin-muted">{filtered.length} chiến dịch</span>
+            <span className="admin-muted">{filtered.length} {t.selectedNoun}</span>
           </div>
 
           {isLoading ? (
-            <AdminTableSkeleton columns={8} rows={6} />
+            <AdminTableSkeleton columns={9} rows={6} />
           ) : filtered.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
-              title={search.trim() ? 'Không tìm thấy chiến dịch phù hợp' : 'Chưa có chiến dịch khuyến mãi nào'}
-              description={search.trim() ? 'Hãy thử thay đổi từ khóa hoặc tab trạng thái.' : 'Tạo voucher đầu tiên để bắt đầu vận hành chiến dịch sale.'}
-              actionLabel="Đặt lại bộ lọc"
+              title={search.trim() ? t.empty.searchTitle : t.empty.defaultTitle}
+              description={search.trim() ? t.empty.searchDescription : t.empty.defaultDescription}
+              actionLabel={ADMIN_COMMON_LABELS.resetFilters}
               onAction={resetCurrentView}
             />
           ) : (
-          <div className="admin-table" role="table" aria-label="Danh sách voucher khuyến mãi">
+          <div className="admin-table" role="table" aria-label={t.tableAria}>
             <div className="admin-table-row admin-table-head promotions" role="row">
-              <div role="columnheader">Tên voucher</div>
-              <div role="columnheader">Loại giảm giá</div>
-              <div role="columnheader">Giá trị</div>
-              <div role="columnheader">Điều kiện</div>
-              <div role="columnheader">Số lượng</div>
-              <div role="columnheader">Thời gian</div>
-              <div role="columnheader">Trạng thái</div>
-              <div role="columnheader">Hành động</div>
+              <div role="columnheader"><input type="checkbox" aria-label="Chọn tất cả" checked={selected.size === filtered.length && filtered.length > 0} onChange={(e) => toggleSelectAll(e.target.checked)} /></div>
+              <div role="columnheader">{t.columns.voucherName}</div>
+              <div role="columnheader">{t.columns.discountType}</div>
+              <div role="columnheader">{t.columns.value}</div>
+              <div role="columnheader">{t.columns.condition}</div>
+              <div role="columnheader">{t.columns.quantity}</div>
+              <div role="columnheader">{t.columns.schedule}</div>
+              <div role="columnheader">{t.columns.status}</div>
+              <div role="columnheader">{t.columns.actions}</div>
             </div>
 
             {pagedPromotions.map((promo, idx) => {
@@ -447,6 +518,7 @@ const AdminPromotions = () => {
                   transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
                   whileHover={{ y: -1 }}
                 >
+                  <div role="cell"><input type="checkbox" aria-label={`Chọn ${promo.code}`} checked={selected.has(promo.id)} onChange={(e) => toggleOne(promo.id, e.target.checked)} /></div>
                   <div role="cell">
                     <p className="admin-bold promo-name">{promo.name}</p>
                     <p className="admin-muted promo-code">{promo.code}</p>
@@ -464,11 +536,11 @@ const AdminPromotions = () => {
                     <div className="promo-progress-track"><span style={{ width: `${usedPercent}%` }} /></div>
                   </div>
                   <div role="cell" className="admin-muted">{formatDate(promo.startDate)} - {formatDate(promo.endDate)}</div>
-                  <div role="cell"><span className={`admin-pill ${statusClass(currentStatus)}`}>{statusLabel(currentStatus)}</span></div>
+                  <div role="cell"><span className={`admin-pill ${promotionStatusClass(currentStatus)}`}>{promotionStatusLabel(currentStatus)}</span></div>
                   <div role="cell" className="admin-actions">
-                    <button className="admin-icon-btn subtle" title="Chỉnh sửa" onClick={() => openEditDrawer(promo)}><Pencil size={16} /></button>
-                    <button className="admin-icon-btn subtle" title="Nhân bản campaign" onClick={() => duplicatePromotion(promo.id)}><Copy size={16} /></button>
-                    <button className="admin-icon-btn subtle" title={promo.status === 'paused' ? 'Kích hoạt lại' : 'Tạm dừng'} onClick={() => togglePause(promo.id)}>
+                    <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.edit} aria-label={ADMIN_ACTION_TITLES.edit} onClick={() => openEditDrawer(promo)}><Pencil size={16} /></button>
+                    <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.duplicateCampaign} aria-label={ADMIN_ACTION_TITLES.duplicateCampaign} onClick={() => duplicatePromotion(promo.id)}><Copy size={16} /></button>
+                    <button className="admin-icon-btn subtle" title={promo.status === 'paused' ? ADMIN_ACTION_TITLES.resumeCampaign : ADMIN_ACTION_TITLES.pauseCampaign} aria-label={promo.status === 'paused' ? ADMIN_ACTION_TITLES.resumeCampaign : ADMIN_ACTION_TITLES.pauseCampaign} onClick={() => togglePause(promo.id)}>
                       {promo.status === 'paused' ? <Play size={16} /> : <Pause size={16} />}
                     </button>
                   </div>
@@ -480,20 +552,50 @@ const AdminPromotions = () => {
 
           {!isLoading && filtered.length > 0 && (
             <div className="table-footer">
-              <span className="admin-muted">Hiển thị {startIndex}-{endIndex} của {filtered.length} chiến dịch</span>
+              <span className="table-footer-meta">{c.showing(startIndex, endIndex, filtered.length, t.selectedNoun)}</span>
               <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>Trước</button>
+                <button className="page-btn" onClick={prev} disabled={page === 1}>{c.previous}</button>
                 {Array.from({ length: totalPages }).map((_, idx) => (
                   <button key={idx + 1} className={`page-btn ${page === idx + 1 ? 'active' : ''}`} onClick={() => setPage(idx + 1)}>
                     {idx + 1}
                   </button>
                 ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiếp</button>
+                <button className="page-btn" onClick={next} disabled={page === totalPages}>{c.next}</button>
               </div>
             </div>
           )}
         </div>
       </section>
+
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div
+            className="admin-floating-bar"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 22 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            <div className="admin-floating-content">
+              <span>{c.selected(selected.size, t.selectedNoun)}</span>
+              <div className="admin-actions">
+                <button className="admin-ghost-btn" onClick={pauseSelected}>{t.floatingActions.pauseSelected}</button>
+                <button className="admin-ghost-btn danger" onClick={requestDeleteSelected}>{t.floatingActions.deleteSelected}</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AdminConfirmDialog
+        open={showDeleteConfirm}
+        title="Xóa chiến dịch đã chọn"
+        description={`Bạn có chắc chắn muốn xóa ${selected.size} chiến dịch đã chọn? Hành động này không thể hoàn tác.`}
+        confirmLabel="Xóa chiến dịch"
+        danger
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={deleteSelected}
+      />
 
       <AnimatePresence>
         {isDrawerOpen && (
@@ -502,35 +604,35 @@ const AdminPromotions = () => {
             <motion.div className="drawer promo-drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.25, ease: 'easeOut' }}>
               <div className="drawer-header">
                 <div>
-                  <p className="drawer-eyebrow">Marketing Campaign</p>
-                  <h3>{editingId ? 'Chỉnh sửa mã khuyến mãi' : 'Tạo mã khuyến mãi mới'}</h3>
+                  <p className="drawer-eyebrow">{t.drawer.eyebrow}</p>
+                  <h3>{editingId ? t.drawer.editTitle : t.drawer.createTitle}</h3>
                 </div>
-                <button className="admin-icon-btn" onClick={closeDrawer} aria-label="Đóng"><X size={16} /></button>
+                <button className="admin-icon-btn" onClick={closeDrawer} aria-label={ADMIN_ACTION_TITLES.close}><X size={16} /></button>
               </div>
 
               <div className="drawer-body">
                 <section className="drawer-section">
-                  <h4>Section 1: Thông tin chung</h4>
+                  <h4>{t.drawer.section1}</h4>
                   <div className="form-grid">
                     <label className="form-field">
                       <span>Tên chiến dịch</span>
-                      <input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Ví dụ: Summer Flash Sale" />
+                      <input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder={t.drawer.placeholders.name} />
                     </label>
                     <label className="form-field">
                       <span>Mã voucher</span>
-                      <input value={form.code} onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s+/g, '') }))} placeholder="VD: SUMMER20" />
+                      <input value={form.code} onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s+/g, '') }))} placeholder={t.drawer.placeholders.code} />
                       {isCodeDuplicated && <small className="promo-field-error">Mã voucher này đã tồn tại trong hệ thống.</small>}
                       {formErrors.code && !isCodeDuplicated && <small className="promo-field-error">{formErrors.code}</small>}
                     </label>
                     <label className="form-field full">
                       <span>Mô tả chiến dịch</span>
-                      <textarea rows={3} value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Mô tả ngắn gọn mục tiêu và đối tượng áp dụng..." />
+                      <textarea rows={3} value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder={t.drawer.placeholders.description} />
                     </label>
                   </div>
                 </section>
 
                 <section className="drawer-section">
-                  <h4>Section 2: Cấu hình giảm giá</h4>
+                  <h4>{t.drawer.section2}</h4>
                   <div className="form-grid">
                     <label className="form-field">
                       <span>Loại giảm giá</span>
@@ -553,7 +655,7 @@ const AdminPromotions = () => {
                 </section>
 
                 <section className="drawer-section">
-                  <h4>Section 3: Điều kiện & Giới hạn</h4>
+                  <h4>{t.drawer.section3}</h4>
                   <div className="form-grid">
                     <label className="form-field">
                       <span>Đơn tối thiểu (VNĐ)</span>
@@ -574,7 +676,7 @@ const AdminPromotions = () => {
                 </section>
 
                 <section className="drawer-section">
-                  <h4>Section 4: Lịch trình</h4>
+                  <h4>{t.drawer.section4}</h4>
                   <div className="form-grid">
                     <label className="form-field">
                       <span>Ngày bắt đầu</span>
@@ -599,8 +701,8 @@ const AdminPromotions = () => {
               </div>
 
               <div className="drawer-footer">
-                <button className="admin-ghost-btn" onClick={closeDrawer}>Hủy</button>
-                <button className="admin-primary-btn" onClick={savePromotion} disabled={hasFormError}>{editingId ? 'Lưu thay đổi' : 'Tạo voucher'}</button>
+                <button className="admin-ghost-btn" onClick={closeDrawer}>{t.drawer.cancel}</button>
+                <button className="admin-primary-btn" onClick={savePromotion} disabled={hasFormError}>{editingId ? t.drawer.save : t.drawer.create}</button>
               </div>
             </motion.div>
           </>

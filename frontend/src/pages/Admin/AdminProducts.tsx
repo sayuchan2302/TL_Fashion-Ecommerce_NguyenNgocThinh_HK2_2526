@@ -1,5 +1,4 @@
 import './Admin.css';
-import { Link } from 'react-router-dom';
 import { Filter, Search, Plus, Pencil, Layers, Trash2, ArrowUpDown, X, Link2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,37 +9,38 @@ import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import { useAdminViewState } from './useAdminViewState';
+import { useAdminToast } from './useAdminToast';
+import {
+  adjustProductStock,
+  applyVariantMatrix,
+  getProductInventoryLedger,
+  getProductBySku,
+  getProductVariantMatrix,
+  listAdminProducts,
+  subscribeAdminProducts,
+  updateProductPrice,
+  type AdminProductRecord,
+} from './adminProductService';
+import { ADMIN_ACTION_TITLES, ADMIN_COMMON_LABELS } from './adminUiLabels';
+import { productStatusTone } from './adminStatusMaps';
+import { ADMIN_TOAST_MESSAGES } from './adminMessages';
+import { ADMIN_TEXT } from './adminText';
 
-const initialProducts = [
-  { sku: 'POLO-001', name: 'Áo Polo Cotton Khử Mùi', category: 'Áo Polo', price: 359000, stock: 42, status: 'Đang bán', variants: '3 sizes · 4 colors', thumb: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=140&h=170&q=80', statusType: 'active' },
-  { sku: 'JEAN-023', name: 'Quần Jeans Slim', category: 'Quần Jeans', price: 699000, stock: 8, status: 'Sắp hết', variants: '5 sizes · 2 colors', thumb: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=140&h=170&q=80', statusType: 'low' },
-  { sku: 'TEE-105', name: 'Áo Thun Basic', category: 'Áo Thun', price: 199000, stock: 0, status: 'Hết hàng', variants: '4 sizes · 6 colors', thumb: 'https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=140&h=170&q=80', statusType: 'out' },
-  { sku: 'ACC-501', name: 'Thắt Lưng Da', category: 'Phụ kiện', price: 249000, stock: 88, status: 'Đang bán', variants: '1 size · 3 colors', thumb: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=140&h=170&q=80', statusType: 'active' },
-];
-
-const statusTone = (type: string) => {
-  if (type === 'low') return 'warning';
-  if (type === 'out') return 'neutral';
-  return 'success';
-};
-
-const getStatusFromStock = (stock: number) => {
-  if (stock <= 0) return { status: 'Hết hàng', statusType: 'out' as const };
-  if (stock < 10) return { status: 'Sắp hết', statusType: 'low' as const };
-  return { status: 'Đang bán', statusType: 'active' as const };
-};
+const MANAGED_PRODUCT_SKU = 'POLO-001';
 
 const tabs = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'stock-alert', label: 'Cảnh báo kho' },
-  { key: 'active', label: 'Đang bán' },
-  { key: 'low', label: 'Sắp hết' },
-  { key: 'out', label: 'Hết hàng' },
+  { key: 'all', label: ADMIN_TEXT.products.tabs.all },
+  { key: 'stock-alert', label: ADMIN_TEXT.products.tabs.stockAlert },
+  { key: 'active', label: ADMIN_TEXT.products.tabs.active },
+  { key: 'low', label: ADMIN_TEXT.products.tabs.low },
+  { key: 'out', label: ADMIN_TEXT.products.tabs.out },
 ];
 
 const validProductTabs = new Set(tabs.map((tab) => tab.key));
 
 const AdminProducts = () => {
+  const t = ADMIN_TEXT.products;
+  const c = ADMIN_TEXT.common;
   const view = useAdminViewState({
     storageKey: ADMIN_VIEW_KEYS.products,
     path: '/admin/products',
@@ -49,26 +49,22 @@ const AdminProducts = () => {
     statusAliases: ['view'],
     validSortKeys: ['price', 'stock'],
   });
-  const [activeTab, setActiveTab] = useState<string>(view.status);
+  const activeTab = validProductTabs.has(view.status) ? view.status : 'all';
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [rows, setRows] = useState(initialProducts);
+  const [rows, setRows] = useState<AdminProductRecord[]>(() => listAdminProducts());
   const [editingPrice, setEditingPrice] = useState<{ sku: string; value: string } | null>(null);
   const [editingStock, setEditingStock] = useState<{ sku: string; value: string } | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
-  const [toast, setToast] = useState<string>('');
+  const { toast, pushToast } = useAdminToast(1800);
   const [showVariants, setShowVariants] = useState(false);
-  const initialVariantRows: VariantRow[] = [
-    { id: 'S-Đen', size: 'S', color: 'Đen', sku: 'POLO-001-DEN-S', price: '350000', stock: '12' },
-    { id: 'M-Đen', size: 'M', color: 'Đen', sku: 'POLO-001-DEN-M', price: '350000', stock: '10' },
-    { id: 'L-Đen', size: 'L', color: 'Đen', sku: 'POLO-001-DEN-L', price: '350000', stock: '8' },
-    { id: 'S-Trắng', size: 'S', color: 'Trắng', sku: 'POLO-001-TRANG-S', price: '350000', stock: '6' },
-    { id: 'M-Trắng', size: 'M', color: 'Trắng', sku: 'POLO-001-TRANG-M', price: '350000', stock: '4' },
-    { id: 'L-Trắng', size: 'L', color: 'Trắng', sku: 'POLO-001-TRANG-L', price: '350000', stock: '2' },
-  ];
-  const [variantRows, setVariantRows] = useState<VariantRow[]>(initialVariantRows);
+  const [variantRows, setVariantRows] = useState<VariantRow[]>(() => getProductVariantMatrix(MANAGED_PRODUCT_SKU));
+  const [inventoryLogs, setInventoryLogs] = useState(() => getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
   const [price, setPrice] = useState('359.000');
   const [salePrice, setSalePrice] = useState('329.000');
-  const [stock, setStock] = useState('42');
+  const [stock, setStock] = useState(() => {
+    const managed = listAdminProducts().find((item) => item.sku === MANAGED_PRODUCT_SKU);
+    return String(managed?.stock || 0);
+  });
   const [slug, setSlug] = useState('ao-polo-cotton-khu-mui');
   const [metaTitle, setMetaTitle] = useState('Áo Polo Cotton Khử Mùi - Coolmate');
   const {
@@ -111,12 +107,21 @@ const AdminProducts = () => {
   const variantStockTotal = useMemo(() => variantRows.reduce((sum, r) => sum + (parseInt(r.stock.replace(/\D/g, ''), 10) || 0), 0), [variantRows]);
 
   useEffect(() => {
-    const nextTab = validProductTabs.has(view.status) ? view.status : 'all';
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
-      setSelected(new Set());
-    }
-  }, [view.status, activeTab]);
+    const syncProducts = () => {
+      const latest = listAdminProducts();
+      setRows(latest);
+      const managed = latest.find((item) => item.sku === MANAGED_PRODUCT_SKU);
+      if (managed) {
+        setVariantRows(managed.variantMatrix);
+        setStock(String(managed.stock));
+      }
+      setInventoryLogs(getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
+    };
+
+    const unsubscribe = subscribeAdminProducts(syncProducts);
+    syncProducts();
+    return unsubscribe;
+  }, []);
 
   const handleSearchChange = (value: string) => {
     view.setSearch(value);
@@ -125,27 +130,22 @@ const AdminProducts = () => {
   const shareCurrentView = async () => {
     try {
       await view.shareCurrentView();
-      setToast('Đã copy link view hiện tại');
-      setTimeout(() => setToast(''), 1800);
+      pushToast(ADMIN_TOAST_MESSAGES.viewCopied);
     } catch {
-      setToast('Không thể copy link, vui lòng thử lại');
-      setTimeout(() => setToast(''), 1800);
+      pushToast(ADMIN_TOAST_MESSAGES.copyFailed);
     }
   };
 
   const resetCurrentView = () => {
     setSelected(new Set());
-    setActiveTab('all');
     view.resetCurrentView();
-    setToast('Đã đặt lại view sản phẩm');
-    setTimeout(() => setToast(''), 1800);
+    pushToast(ADMIN_TOAST_MESSAGES.products.resetView);
   };
 
-  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
+  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || t.tabs.all;
   const hasViewContext = activeTab !== 'all' || Boolean(search.trim()) || view.page > 1 || Boolean(view.sortKey);
 
   const changeTab = (nextTab: string) => {
-    setActiveTab(nextTab);
     setSelected(new Set());
     view.setStatus(nextTab);
   };
@@ -188,52 +188,102 @@ const AdminProducts = () => {
   const savePrice = () => {
     if (!editingPrice) return;
     const value = parseInt(editingPrice.value.replace(/\D/g, ''), 10) || 0;
-    setRows(prev => prev.map(p => p.sku === editingPrice.sku ? { ...p, price: value } : p));
+    const result = updateProductPrice(editingPrice.sku, value);
+    if (!result.ok) {
+      pushToast(result.error);
+    } else {
+      pushToast(ADMIN_TOAST_MESSAGES.products.priceUpdated(editingPrice.sku));
+    }
     setEditingPrice(null);
   };
 
   const saveStock = () => {
     if (!editingStock) return;
     const value = parseInt(editingStock.value.replace(/\D/g, ''), 10) || 0;
-    setRows(prev => prev.map(p => {
-      if (p.sku !== editingStock.sku) return p;
-      const nextStatus = getStatusFromStock(value);
-      return { ...p, stock: value, ...nextStatus };
-    }));
+    const current = rows.find((item) => item.sku === editingStock.sku);
+    if (!current) {
+      pushToast(ADMIN_TOAST_MESSAGES.products.stockTargetMissing);
+      setEditingStock(null);
+      return;
+    }
+
+    if (value === current.stock) {
+      setEditingStock(null);
+      return;
+    }
+
+    const reason = window.prompt(
+      `Nhập lý do điều chỉnh tồn kho cho ${editingStock.sku}:`,
+      value > current.stock ? 'Nhập kho bổ sung' : 'Điều chỉnh hao hụt tồn kho',
+    );
+    if (reason === null) {
+      setEditingStock(null);
+      return;
+    }
+
+    const result = adjustProductStock({
+      sku: editingStock.sku,
+      nextStock: value,
+      actor: 'Admin',
+      reason,
+      source: 'manual_adjustment',
+    });
+    if (!result.ok) {
+      pushToast(result.error);
+      return;
+    }
+
+    pushToast(ADMIN_TOAST_MESSAGES.products.stockAdjusted(editingStock.sku, current.stock, value));
     setEditingStock(null);
   };
 
-  const openDrawer = () => setShowDrawer(true);
+  const openDrawer = () => {
+    const managed = getProductBySku(MANAGED_PRODUCT_SKU);
+    if (managed) {
+      setVariantRows(managed.variantMatrix);
+      setStock(String(managed.stock));
+      setInventoryLogs(getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
+    }
+    setShowDrawer(true);
+  };
   const closeDrawer = () => setShowDrawer(false);
 
   const handleSaveDrawer = () => {
-    setToast('Lưu thành công');
+    pushToast(ADMIN_TOAST_MESSAGES.products.saved, 2000);
     setShowDrawer(false);
-    setTimeout(() => setToast(''), 2000);
   };
 
   const openVariants = () => setShowVariants(true);
   const closeVariants = () => setShowVariants(false);
 
   const handleVariantsSaved = (matrix: VariantRow[]) => {
+    const result = applyVariantMatrix({
+      sku: MANAGED_PRODUCT_SKU,
+      matrix,
+      actor: 'Admin',
+    });
+    if (!result.ok) {
+      pushToast(result.error, 2200);
+      return;
+    }
     setVariantRows(matrix);
-    setToast('Lưu cấu hình biến thể thành công');
-    setTimeout(() => setToast(''), 2000);
+    setInventoryLogs(getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
+    pushToast(ADMIN_TOAST_MESSAGES.products.variantsSynced, 2000);
   };
 
   return (
     <AdminLayout
-      title="Sản phẩm"
+      title={t.title}
       actions={(
         <>
           <div className="admin-search">
             <Search size={16} />
-            <input placeholder="Tìm tên, SKU..." value={search} onChange={e => handleSearchChange(e.target.value)} />
+            <input placeholder={t.searchPlaceholder} value={search} onChange={e => handleSearchChange(e.target.value)} />
           </div>
-          <button className="admin-ghost-btn"><Filter size={16} /> Bộ lọc</button>
-          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> Share view</button>
-          <button className="admin-ghost-btn" onClick={resetCurrentView}>Reset view</button>
-          <Link to="#" className="admin-primary-btn"> <Plus size={16} /> Thêm sản phẩm</Link>
+          <button className="admin-ghost-btn" onClick={() => pushToast(ADMIN_TOAST_MESSAGES.advancedFilterComingSoon)}><Filter size={16} /> {c.filter}</button>
+          <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> {ADMIN_COMMON_LABELS.shareView}</button>
+          <button className="admin-ghost-btn" onClick={resetCurrentView}>{ADMIN_COMMON_LABELS.resetView}</button>
+          <button type="button" className="admin-primary-btn" onClick={openDrawer}><Plus size={16} /> {t.addProduct}</button>
         </>
       )}
     >
@@ -252,9 +302,9 @@ const AdminProducts = () => {
 
       {hasViewContext && (
         <div className="admin-view-summary">
-          <span className="summary-chip">Trạng thái: {activeTabLabel}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa bộ lọc</button>
+          <span className="summary-chip">{c.status}: {activeTabLabel}</span>
+          {search.trim() && <span className="summary-chip">{c.keyword}: {search.trim()}</span>}
+          <button className="summary-clear" onClick={resetCurrentView}>{c.clearFilters}</button>
         </div>
       )}
 
@@ -265,25 +315,25 @@ const AdminProducts = () => {
           ) : filtered.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
-              title={search.trim() ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có sản phẩm trong danh sách'}
-              description={search.trim() ? 'Thử đổi từ khóa hoặc chuyển tab trạng thái khác.' : 'Thêm sản phẩm mới để bắt đầu quản lý kho và biến thể.'}
-              actionLabel="Đặt lại bộ lọc"
+              title={search.trim() ? t.empty.searchTitle : t.empty.defaultTitle}
+              description={search.trim() ? t.empty.searchDescription : t.empty.defaultDescription}
+              actionLabel={ADMIN_COMMON_LABELS.resetFilters}
               onAction={resetCurrentView}
             />
           ) : (
-          <div className="admin-table" role="table" aria-label="Danh sách sản phẩm">
+          <div className="admin-table" role="table" aria-label={t.tableAria}>
             <div className="admin-table-row admin-table-head products" role="row">
               <div role="columnheader"><input type="checkbox" aria-label="Chọn tất cả" checked={selected.size === filtered.length && filtered.length > 0} onChange={e => toggleAll(e.target.checked)} /></div>
-              <div role="columnheader">Sản phẩm</div>
-              <div role="columnheader">Danh mục</div>
+              <div role="columnheader">{t.columns.product}</div>
+              <div role="columnheader">{t.columns.category}</div>
               <div role="columnheader" className="sortable">
-                <button className="sort-trigger" onClick={() => toggleSort('price')}>Giá <ArrowUpDown size={14} /></button>
+                <button className="sort-trigger" onClick={() => toggleSort('price')}>{t.columns.price} <ArrowUpDown size={14} /></button>
               </div>
               <div role="columnheader" className="sortable">
-                <button className="sort-trigger" onClick={() => toggleSort('stock')}>Tồn kho <ArrowUpDown size={14} /></button>
+                <button className="sort-trigger" onClick={() => toggleSort('stock')}>{t.columns.stock} <ArrowUpDown size={14} /></button>
               </div>
-              <div role="columnheader">Trạng thái</div>
-              <div role="columnheader">Hành động</div>
+              <div role="columnheader">{t.columns.status}</div>
+              <div role="columnheader">{t.columns.actions}</div>
             </div>
             {pagedProducts.map((p, idx) => (
               <motion.div
@@ -342,11 +392,11 @@ const AdminProducts = () => {
                     </button>
                   )}
                 </div>
-                <div role="cell"><span className={`admin-pill ${statusTone(p.statusType)}`}>{p.status}</span></div>
+                <div role="cell"><span className={`admin-pill ${productStatusTone(p.statusType)}`}>{p.status}</span></div>
                 <div role="cell" className="admin-actions">
-                  <button className="admin-icon-btn subtle" title="Sửa" onClick={openDrawer}><Pencil size={16} /></button>
-                  <button className="admin-icon-btn subtle" title="Quản lý size/màu" onClick={openVariants}><Layers size={16} /></button>
-                  <button className="admin-icon-btn subtle" title="Xóa"><Trash2 size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.edit} aria-label={ADMIN_ACTION_TITLES.edit} onClick={openDrawer}><Pencil size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.manageVariants} aria-label={ADMIN_ACTION_TITLES.manageVariants} onClick={openVariants}><Layers size={16} /></button>
+                  <button className="admin-icon-btn subtle" title={ADMIN_ACTION_TITLES.delete} aria-label={ADMIN_ACTION_TITLES.delete}><Trash2 size={16} /></button>
                 </div>
               </motion.div>
             ))}
@@ -354,15 +404,15 @@ const AdminProducts = () => {
           )}
           {!isLoading && filtered.length > 0 && (
             <div className="table-footer">
-              <span className="admin-muted">Hiển thị {startIndex}-{endIndex} của {filtered.length} sản phẩm</span>
+              <span className="table-footer-meta">{c.showing(startIndex, endIndex, filtered.length, t.selectedNoun)}</span>
               <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>Trước</button>
+                <button className="page-btn" onClick={prev} disabled={page === 1}>{c.previous}</button>
                 {Array.from({ length: totalPages }).map((_, idx) => (
                   <button key={idx + 1} className={`page-btn ${page === idx + 1 ? 'active' : ''}`} onClick={() => setPage(idx + 1)}>
                     {idx + 1}
                   </button>
                 ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiếp</button>
+                <button className="page-btn" onClick={next} disabled={page === totalPages}>{c.next}</button>
               </div>
             </div>
           )}
@@ -379,11 +429,11 @@ const AdminProducts = () => {
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
             <div className="admin-floating-content">
-              <span>{selected.size} sản phẩm đã chọn</span>
+              <span>{c.selected(selected.size, t.selectedNoun)}</span>
               <div className="admin-actions">
-                <button className="admin-ghost-btn">Đổi trạng thái</button>
-                <button className="admin-ghost-btn">Xuất Excel</button>
-                <button className="admin-ghost-btn danger">Xóa</button>
+                <button className="admin-ghost-btn">{t.floatingActions.changeStatus}</button>
+                <button className="admin-ghost-btn">{t.floatingActions.exportExcel}</button>
+                <button className="admin-ghost-btn danger">{t.floatingActions.delete}</button>
               </div>
             </div>
           </motion.div>
@@ -399,7 +449,7 @@ const AdminProducts = () => {
                 <p className="drawer-eyebrow">Chỉnh sửa sản phẩm</p>
                 <h3>#POLO-001</h3>
               </div>
-              <button className="admin-icon-btn" onClick={closeDrawer} aria-label="Đóng"><X size={16} /></button>
+              <button className="admin-icon-btn" onClick={closeDrawer} aria-label={ADMIN_ACTION_TITLES.close}><X size={16} /></button>
             </div>
 
             <div className="drawer-body">
@@ -476,6 +526,25 @@ const AdminProducts = () => {
                     {hasVariants && <span className="admin-muted small">Tự động tính từ biến thể</span>}
                   </label>
                 </div>
+              </section>
+
+              <section className="drawer-section">
+                <h4>Nhật ký tồn kho gần nhất</h4>
+                {inventoryLogs.length === 0 ? (
+                  <p className="admin-muted small">Chưa có biến động tồn kho.</p>
+                ) : (
+                  <ul className="inventory-log-list">
+                    {inventoryLogs.map((entry) => (
+                      <li key={entry.id}>
+                        <div>
+                          <p className="admin-bold">{entry.delta >= 0 ? `+${entry.delta}` : entry.delta} đơn vị · {entry.reason}</p>
+                          <p className="admin-muted small">{new Date(entry.at).toLocaleString('vi-VN')} · {entry.actor} · {entry.source}</p>
+                        </div>
+                        <span className="admin-muted small">{entry.beforeStock} → {entry.afterStock}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
 
               <section className="drawer-section">
