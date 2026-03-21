@@ -4,6 +4,7 @@ import { Heart, ShoppingCart, Trash2, ChevronRight, X } from 'lucide-react';
 import { useWishlist } from '../../contexts/WishlistContext';
 import { useCart } from '../../contexts/CartContext';
 import { useCartAnimation } from '../../context/CartAnimationContext';
+import { formatPrice } from '../../utils/formatters';
 import './Wishlist.css';
 
 const AVAILABLE_SIZES = ['S', 'M', 'L', 'XL', '2XL'];
@@ -25,9 +26,6 @@ const Wishlist = () => {
   const [pendingItem, setPendingItem] = useState<PendingItem | null>(null);
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedColor, setSelectedColor] = useState('Đen');
-
-  const formatPrice = (price: number) =>
-    price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
 
   const openVariantModal = (item: typeof items[0]) => {
     setPendingItem(item);

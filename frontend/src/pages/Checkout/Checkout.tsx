@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Check, Wallet, Loader2, Trash2, X, ChevronDown } from 'lucide-react';
 import './Checkout.css';
 import { useCart } from '../../contexts/CartContext';
+import { formatPrice } from '../../utils/formatters';
 import AddressBookModal from './AddressBookModal';
 
 interface FormErrors {
@@ -40,9 +41,8 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [formValues, setFormValues] = useState({
-    name: 'Anh Thịnh', phone: '0382253049', email: 'thinh23022004@gmail.com',
-    address: 'JJJV+Q7F, Quốc lộ 37, Đại Từ, Thái Nguyên',
-    city: 'Thái Nguyên', district: 'Huyện Đại Từ', ward: 'Thị trấn Hùng Sơn', note: ''
+    name: '', phone: '', email: '',
+    address: '', city: '', district: '', ward: '', note: ''
   });
 
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
@@ -167,10 +167,6 @@ const Checkout = () => {
       items.forEach(item => removeFromCart(item.cartId));
       navigate(`/order-success?id=${orderId}`);
     }, 1500);
-  };
-
-  const formatPrice = (price: number) => {
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "đ";
   };
 
   const handleBackToHome = () => {

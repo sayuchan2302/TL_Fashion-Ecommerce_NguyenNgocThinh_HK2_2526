@@ -5,6 +5,7 @@ import ProductSection from '../../components/ProductSection/ProductSection';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import { mensFashion } from '../Home/Home';
 import { useCart } from '../../contexts/CartContext';
+import { formatPrice } from '../../utils/formatters';
 import './Cart.css';
 
 const FREE_SHIPPING_THRESHOLD = 500000;
@@ -52,10 +53,6 @@ const Cart = () => {
     } else {
       setSelectedItems([...validSelectedItems, cartId]);
     }
-  };
-
-  const formatPrice = (price: number) => {
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "đ";
   };
 
   if (items.length === 0) {

@@ -4,6 +4,7 @@ import {
   MapPin, Phone, CreditCard, ArrowLeft, RotateCcw, Copy
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { formatPrice } from '../../utils/formatters';
 import './OrderDetail.css';
 
 interface OrderItem {
@@ -94,9 +95,6 @@ const MOCK_ORDERS: Record<string, OrderData> = {
     ],
   },
 };
-
-const formatPrice = (price: number) =>
-  price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
 
 const statusColorMap: Record<string, string> = {
   delivered: 'status-delivered',

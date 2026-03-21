@@ -3,6 +3,7 @@ import './Account.css';
 import { orderService } from '../../services/orderService';
 import { useCart } from '../../contexts/CartContext';
 import { useToast } from '../../contexts/ToastContext';
+import { formatPrice } from '../../utils/formatters';
 
 const OrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,7 +73,7 @@ const OrderDetailPage = () => {
               <div>
                 <div className="account-meta">{order.addressSummary}</div>
                 <div className="account-meta">Phương thức thanh toán: {order.paymentMethod}</div>
-                <div className="account-meta"><strong>Tổng tiền:</strong> {order.total.toLocaleString('vi-VN')}đ</div>
+                <div className="account-meta"><strong>Tổng tiền:</strong> {formatPrice(order.total)}</div>
               </div>
             </div>
           </div>
@@ -103,7 +104,7 @@ const OrderDetailPage = () => {
                     <div className="account-meta">Size: {item.size || 'N/A'}</div>
                   </td>
                   <td>{item.quantity}</td>
-                  <td>{item.price.toLocaleString('vi-VN')}đ</td>
+                  <td>{formatPrice(item.price)}</td>
                 </tr>
               ))}
             </tbody>
