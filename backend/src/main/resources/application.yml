@@ -3,9 +3,9 @@ spring:
     name: fashionstore
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/fashionstore
+    url: jdbc:postgresql://localhost:5432/fashion-store
     username: postgres
-    password: postgres
+    password: 230204
     driver-class-name: org.postgresql.Driver
 
   jpa:

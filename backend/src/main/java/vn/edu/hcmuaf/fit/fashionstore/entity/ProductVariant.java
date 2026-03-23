@@ -30,7 +30,7 @@ public class ProductVariant extends BaseEntity {
     @Column(name = "stock_quantity")
     private Integer stockQuantity = 0;
 
-    @Column(name = "price_adjustment", precision = 10, scale = 2)
+    @Column(name = "price_adjustment")
     private Double priceAdjustment = 0.0;
 
     private Boolean isActive = true;

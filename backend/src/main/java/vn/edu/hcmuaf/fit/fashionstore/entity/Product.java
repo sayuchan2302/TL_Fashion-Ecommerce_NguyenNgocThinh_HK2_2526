@@ -32,10 +32,10 @@ public class Product extends BaseEntity {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    @Column(name = "base_price", precision = 10, scale = 2)
+    @Column(name = "base_price")
     private Double basePrice;
 
-    @Column(name = "sale_price", precision = 10, scale = 2)
+    @Column(name = "sale_price")
     private Double salePrice;
 
     private String material;

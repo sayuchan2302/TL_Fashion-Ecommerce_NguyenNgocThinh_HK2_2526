@@ -40,16 +40,16 @@ public class Order extends BaseEntity {
     @Column(name = "payment_status", length = 50)
     private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
 
-    @Column(name = "subtotal", precision = 10, scale = 2, nullable = false)
+    @Column(name = "subtotal", nullable = false)
     private Double subtotal;
 
-    @Column(name = "shipping_fee", precision = 10, scale = 2)
+    @Column(name = "shipping_fee")
     private Double shippingFee = 0.0;
 
-    @Column(name = "discount", precision = 10, scale = 2)
+    @Column(name = "discount")
     private Double discount = 0.0;
 
-    @Column(name = "total", precision = 10, scale = 2, nullable = false)
+    @Column(name = "total", nullable = false)
     private Double total;
 
     @Column(name = "coupon_code")

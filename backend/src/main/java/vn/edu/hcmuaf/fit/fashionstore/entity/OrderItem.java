@@ -40,9 +40,9 @@ public class OrderItem extends BaseEntity {
     @Column(nullable = false)
     private Integer quantity;
 
-    @Column(name = "unit_price", precision = 10, scale = 2, nullable = false)
+    @Column(name = "unit_price", nullable = false)
     private Double unitPrice;
 
-    @Column(name = "total_price", precision = 10, scale = 2, nullable = false)
+    @Column(name = "total_price", nullable = false)
     private Double totalPrice;
 }

@@ -27,10 +27,10 @@ public class Coupon extends BaseEntity {
     @Column(name = "discount_type", length = 20)
     private DiscountType discountType;
 
-    @Column(name = "discount_value", precision = 10, scale = 2)
+    @Column(name = "discount_value")
     private Double discountValue;
 
-    @Column(name = "min_order_amount", precision = 10, scale = 2)
+    @Column(name = "min_order_amount")
     private Double minOrderAmount;
 
     @Column(name = "max_uses")
