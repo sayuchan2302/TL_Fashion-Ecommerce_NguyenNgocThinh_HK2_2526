@@ -8,10 +8,10 @@ const TopBar = () => {
       <div className="topbar-content container">
         <div className="topbar-left">
           <Link to="/about">Về COOLMATE</Link>
-          <Link to="/stores">Cửa hàng</Link>
+          <Link to="/vendor/register">Trở thành người bán</Link>
           <a href="https://blog.coolmate.me" target="_blank" rel="noreferrer">Blog</a>
         </div>
-        
+
         <div className="topbar-right">
           <a href="#" className="coolclub-link">
             <Star size={14} fill="currentColor" />
@@ -21,7 +21,11 @@ const TopBar = () => {
           <Link to="/faq">FAQ</Link>
           <Link to="/contact">CSKH</Link>
           <button className="lang-btn">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Vietnam.svg" alt="VN Flag" className="flag-icon" />
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Vietnam.svg"
+              alt="VN Flag"
+              className="flag-icon"
+            />
             <span>VN</span>
             <ChevronDown size={14} />
           </button>

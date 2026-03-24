@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,4 +17,6 @@ public class AuthResponse {
     private String email;
     private String name;
     private String role;
+    private UUID storeId;
+    private Boolean approvedVendor;
 }

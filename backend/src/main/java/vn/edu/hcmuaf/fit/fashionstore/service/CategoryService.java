@@ -1,6 +1,5 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.CategoryRequest;
@@ -11,10 +10,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+
+    public CategoryService(CategoryRepository categoryRepository) {
+        this.categoryRepository = categoryRepository;
+    }
 
     public List<Category> findAll() {
         return categoryRepository.findAll();

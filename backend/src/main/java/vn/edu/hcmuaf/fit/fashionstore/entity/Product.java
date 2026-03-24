@@ -9,6 +9,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -24,6 +25,9 @@ public class Product extends BaseEntity {
 
     @Column(unique = true)
     private String slug;
+
+    @Column(name = "store_id")
+    private UUID storeId;
 
     @Column(columnDefinition = "TEXT")
     private String description;

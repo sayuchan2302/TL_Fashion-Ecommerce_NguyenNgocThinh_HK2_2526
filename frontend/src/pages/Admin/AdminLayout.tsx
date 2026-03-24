@@ -1,43 +1,70 @@
 import './Admin.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, Search, Bell, Settings, ChevronRight, LogOut, Home } from 'lucide-react';
-import { useState } from 'react';
+import { useContext, useLayoutEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ADMIN_DICTIONARY } from './adminDictionary';
 import { authService } from '../../services/authService';
 import { useToast } from '../../contexts/ToastContext';
+import { adminPanelNav } from '../../config/panelNavigation';
+import { AdminShellContext } from './AdminShellContext';
+
+export interface PanelNavItem {
+  label: string;
+  to: string;
+  exact?: boolean;
+}
 
 interface AdminLayoutProps {
   title: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   hideTopbarTitle?: boolean;
+  breadcrumbs?: string[];
+  navItems?: PanelNavItem[];
+  logoIcon?: ReactNode;
+  logoText?: string;
+  sidebarDescription?: string;
+  sidebarCtaLabel?: string;
+  sidebarCtaTo?: string;
+  searchPlaceholder?: string;
+  notificationsLabel?: string;
+  settingsLabel?: string;
+  fallbackUserName?: string;
+  fallbackUserEmail?: string;
 }
 
-const navItems = [
-  { label: ADMIN_DICTIONARY.layout.nav.dashboard, to: '/admin' },
-  { label: ADMIN_DICTIONARY.layout.nav.orders, to: '/admin/orders' },
-  { label: 'Yêu cầu đổi trả', to: '/admin/returns' },
-  { label: ADMIN_DICTIONARY.layout.nav.products, to: '/admin/products' },
-  { label: ADMIN_DICTIONARY.layout.nav.categories, to: '/admin/categories' },
-  { label: ADMIN_DICTIONARY.layout.nav.customers, to: '/admin/customers' },
-  { label: ADMIN_DICTIONARY.layout.nav.promotions, to: '/admin/promotions' },
-  { label: ADMIN_DICTIONARY.reviews.title, to: '/admin/reviews' },
-  { label: ADMIN_DICTIONARY.layout.nav.content, to: '/admin/content' },
-  { label: ADMIN_DICTIONARY.layout.nav.settings, to: '/admin/settings' },
-];
+const defaultNavItems: PanelNavItem[] = adminPanelNav;
 
-const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: AdminLayoutProps) => {
+const AdminLayout = ({
+  title,
+  actions,
+  children,
+  hideTopbarTitle = false,
+  breadcrumbs,
+  navItems = defaultNavItems,
+  logoIcon,
+  logoText,
+  sidebarDescription,
+  sidebarCtaLabel,
+  sidebarCtaTo,
+  searchPlaceholder,
+  notificationsLabel,
+  settingsLabel,
+  fallbackUserName,
+  fallbackUserEmail,
+}: AdminLayoutProps) => {
+  const setEmbeddedShell = useContext(AdminShellContext);
   const location = useLocation();
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const t = ADMIN_DICTIONARY.layout;
 
-  const adminSession = authService.getAdminSession();
-  const adminUser = adminSession?.user;
+  const sessionUser = authService.getSession()?.user || authService.getAdminSession()?.user;
 
   const handleLogout = () => {
+    authService.logout();
     authService.adminLogout();
     addToast('Đã đăng xuất', 'info');
     navigate('/');
@@ -48,7 +75,7 @@ const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: Admi
     navigate('/');
   };
 
-  const breadcrumbs = () => {
+  const inferBreadcrumbs = () => {
     const path = location.pathname;
     if (path.startsWith('/admin/orders/')) return [t.nav.orders, t.breadcrumbs.orderDetail];
     if (path.startsWith('/admin/orders')) return [t.nav.orders, t.breadcrumbs.orderList];
@@ -60,21 +87,33 @@ const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: Admi
     return [t.nav.dashboard];
   };
 
-  const crumbs = breadcrumbs();
+  const crumbs = breadcrumbs?.length ? breadcrumbs : inferBreadcrumbs();
+
+  useLayoutEffect(() => {
+    if (!setEmbeddedShell) return;
+    setEmbeddedShell({
+      title,
+      actions,
+      hideTopbarTitle,
+      breadcrumbs: crumbs,
+    });
+  }, [location.pathname, setEmbeddedShell]);
+
+  if (setEmbeddedShell) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="admin-page">
       <aside className="admin-sidebar">
         <div className="admin-logo">
-          <LayoutGrid size={22} />
-          <span>{t.logo}</span>
+          {logoIcon || <LayoutGrid size={22} />}
+          <span>{logoText || t.logo}</span>
         </div>
         <nav className="admin-nav">
           {navItems.map((item) => {
-            const isActive = item.to === '/admin' 
-              ? location.pathname === '/admin' 
-              : location.pathname.startsWith(item.to);
-              
+            const isActive = item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to);
+
             return (
               <Link
                 key={item.to}
@@ -87,8 +126,10 @@ const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: Admi
           })}
         </nav>
         <div className="admin-sidebar-card">
-          <p>{t.sidebar.description}</p>
-          <Link to="/admin/settings" className="admin-sidebar-btn">{t.sidebar.cta}</Link>
+          <p>{sidebarDescription || t.sidebar.description}</p>
+          <Link to={sidebarCtaTo || '/admin/settings'} className="admin-sidebar-btn">
+            {sidebarCtaLabel || t.sidebar.cta}
+          </Link>
         </div>
       </aside>
 
@@ -96,7 +137,7 @@ const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: Admi
         <header className="admin-header">
           <div className="admin-breadcrumbs" aria-label="Breadcrumb">
             {crumbs.map((crumb, idx) => (
-              <span key={crumb} className="breadcrumb-item">
+              <span key={`${crumb}-${idx}`} className="breadcrumb-item">
                 {crumb}
                 {idx < crumbs.length - 1 && <ChevronRight size={14} />}
               </span>
@@ -105,32 +146,35 @@ const AdminLayout = ({ title, actions, children, hideTopbarTitle = false }: Admi
 
           <div className="admin-header-search">
             <Search size={16} />
-            <input placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
+            <input
+              placeholder={searchPlaceholder || t.searchPlaceholder}
+              aria-label={searchPlaceholder || t.searchPlaceholder}
+            />
           </div>
 
           <div className="admin-header-actions">
-            <button className="admin-icon-btn subtle has-dot" aria-label={t.notifications}>
+            <button className="admin-icon-btn subtle has-dot" aria-label={notificationsLabel || t.notifications}>
               <Bell size={16} />
               <span className="notif-dot" />
             </button>
-            <button className="admin-icon-btn subtle" aria-label={t.settings}>
+            <button className="admin-icon-btn subtle" aria-label={settingsLabel || t.settings}>
               <Settings size={16} />
             </button>
-            <div 
+            <div
               className="admin-avatar-wrapper"
               onMouseEnter={() => setIsDropdownOpen(true)}
               onMouseLeave={() => setIsDropdownOpen(false)}
             >
               <button className="admin-avatar-btn">
-                <span className="avatar-circle">{adminUser?.avatar || adminUser?.name?.charAt(0).toUpperCase() || 'A'}</span>
-                <span className="avatar-name">{adminUser?.name || t.adminName}</span>
+                <span className="avatar-circle">{sessionUser?.avatar || sessionUser?.name?.charAt(0).toUpperCase() || 'A'}</span>
+                <span className="avatar-name">{sessionUser?.name || fallbackUserName || t.adminName}</span>
               </button>
               <div className={`admin-avatar-dropdown ${isDropdownOpen ? 'show' : ''}`}>
                 <div className="admin-dropdown-header">
-                  <span className="admin-dropdown-avatar">{adminUser?.avatar || adminUser?.name?.charAt(0).toUpperCase() || 'A'}</span>
+                  <span className="admin-dropdown-avatar">{sessionUser?.avatar || sessionUser?.name?.charAt(0).toUpperCase() || 'A'}</span>
                   <div className="admin-dropdown-info">
-                    <span className="admin-dropdown-name">{adminUser?.name || 'Admin'}</span>
-                    <span className="admin-dropdown-email">{adminUser?.email || 'admin@gmail.com'}</span>
+                    <span className="admin-dropdown-name">{sessionUser?.name || fallbackUserName || 'Admin'}</span>
+                    <span className="admin-dropdown-email">{sessionUser?.email || fallbackUserEmail || 'admin@gmail.com'}</span>
                   </div>
                 </div>
                 <div className="admin-dropdown-divider"></div>

@@ -4,10 +4,13 @@ import { Link } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useWishlist } from '../../contexts/WishlistContext';
 import { useCartAnimation } from '../../context/CartAnimationContext';
+import { productService } from '../../services/productService';
 import './QuickViewModal.css';
 
 interface QuickViewProduct {
-  id: number;
+  id: number | string;
+  backendId?: string;
+  sku?: string;
   name: string;
   price: number;
   originalPrice?: number;
@@ -41,9 +44,15 @@ const QuickViewModal = ({ product, isOpen, onClose }: QuickViewModalProps) => {
   const availableSizes = product.sizes ?? DEFAULT_SIZES;
   const selectedColorValue = product.colors?.[selectedColorIdx] ?? 'Mặc định';
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
+    const purchaseReference = product.backendId
+      ? { backendProductId: product.backendId, backendVariantId: undefined }
+      : await productService.resolvePurchaseReference(String(product.sku || product.id), selectedColorValue, selectedSize);
+
     addToCart({
       id: product.id,
+      backendProductId: purchaseReference.backendProductId,
+      backendVariantId: purchaseReference.backendVariantId,
       name: product.name,
       price: product.price,
       originalPrice: product.originalPrice,
@@ -206,7 +215,7 @@ const QuickViewModal = ({ product, isOpen, onClose }: QuickViewModalProps) => {
             </div>
 
             {/* View Detail Link */}
-            <Link to={`/product/${product.id}`} className="qv-view-detail" onClick={onClose}>
+            <Link to={`/product/${product.sku || product.id}`} className="qv-view-detail" onClick={onClose}>
               <ExternalLink size={16} /> Xem chi tiết sản phẩm
             </Link>
           </div>

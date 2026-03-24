@@ -1,6 +1,5 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,12 +12,13 @@ import vn.edu.hcmuaf.fit.fashionstore.dto.request.LoginRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.RegisterRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.AuthResponse;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Cart;
+import vn.edu.hcmuaf.fit.fashionstore.entity.Store;
 import vn.edu.hcmuaf.fit.fashionstore.entity.User;
+import vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 import vn.edu.hcmuaf.fit.fashionstore.security.JwtService;
 
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -26,6 +26,18 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+    private final StoreRepository storeRepository;
+
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       JwtService jwtService, AuthenticationManager authenticationManager,
+                       UserDetailsService userDetailsService, StoreRepository storeRepository) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.authenticationManager = authenticationManager;
+        this.userDetailsService = userDetailsService;
+        this.storeRepository = storeRepository;
+    }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -38,7 +50,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .phone(request.getPhone())
-                .role(User.Role.USER)
+                .role(User.Role.CUSTOMER)
                 .isActive(true)
                 .build();
 
@@ -53,13 +65,7 @@ public class AuthService {
         String token = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
-        return AuthResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .email(user.getEmail())
-                .name(user.getName())
-                .role(user.getRole().name())
-                .build();
+        return buildAuthResponse(user, token, refreshToken);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -71,16 +77,10 @@ public class AuthService {
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String token = jwtService.generateToken(userDetails);
+        String token = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
-        return AuthResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .email(user.getEmail())
-                .name(user.getName())
-                .role(user.getRole().name())
-                .build();
+        return buildAuthResponse(user, token, refreshToken);
     }
 
     public AuthResponse refreshToken(String refreshToken) {
@@ -91,17 +91,31 @@ public class AuthService {
             throw new BadCredentialsException("Invalid refresh token");
         }
 
-        String newToken = jwtService.generateToken(userDetails);
-        String newRefreshToken = jwtService.generateRefreshToken(userDetails);
-
         User user = userRepository.findByEmail(email).orElseThrow();
 
+        String newToken = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
+        String newRefreshToken = jwtService.generateRefreshToken(userDetails);
+
+        return buildAuthResponse(user, newToken, newRefreshToken);
+    }
+
+    private AuthResponse buildAuthResponse(User user, String token, String refreshToken) {
+        boolean approvedVendor = false;
+        if (user.getStoreId() != null) {
+            approvedVendor = storeRepository.findById(user.getStoreId())
+                    .map(store -> store.getApprovalStatus() == Store.ApprovalStatus.APPROVED
+                            && store.getStatus() == Store.StoreStatus.ACTIVE)
+                    .orElse(false);
+        }
+
         return AuthResponse.builder()
-                .token(newToken)
-                .refreshToken(newRefreshToken)
+                .token(token)
+                .refreshToken(refreshToken)
                 .email(user.getEmail())
                 .name(user.getName())
                 .role(user.getRole().name())
+                .storeId(user.getStoreId())
+                .approvedVendor(approvedVendor)
                 .build();
     }
 }

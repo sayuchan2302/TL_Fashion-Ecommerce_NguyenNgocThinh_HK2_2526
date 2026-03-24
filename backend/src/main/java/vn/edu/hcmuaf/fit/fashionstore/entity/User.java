@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -32,7 +33,10 @@ public class User extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private Role role = Role.USER;
+    private Role role = Role.CUSTOMER;
+
+    @Column(name = "store_id")
+    private UUID storeId;
 
     private String avatar;
 
@@ -56,6 +60,6 @@ public class User extends BaseEntity {
     private List<Wishlist> wishlists = new ArrayList<>();
 
     public enum Role {
-        USER, ADMIN
+        CUSTOMER, VENDOR, SUPER_ADMIN
     }
 }

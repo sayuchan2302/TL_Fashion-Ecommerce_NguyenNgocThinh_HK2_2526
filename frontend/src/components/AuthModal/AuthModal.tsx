@@ -133,9 +133,9 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }: AuthModalProps) =>
         addToast('Đăng nhập thành công', 'success');
         
         const adminSession = authService.getAdminSession();
-        if (adminSession?.user?.role === 'admin') {
+        if (adminSession?.user?.role === 'SUPER_ADMIN' || adminSession?.user?.role === 'VENDOR') {
           onClose();
-          navigate('/admin', { replace: true });
+          navigate(adminSession?.user?.role === 'SUPER_ADMIN' ? '/admin' : '/vendor', { replace: true });
           return;
         }
       } else {

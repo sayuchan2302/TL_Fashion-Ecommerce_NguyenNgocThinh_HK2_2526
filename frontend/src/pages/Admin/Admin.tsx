@@ -1,33 +1,43 @@
 import './Admin.css';
 import { Link } from 'react-router-dom';
-import { Package, DollarSign, AlertTriangle, Users, ArrowUpRight, ArrowDownRight, Search, Plus, Zap, Gift, RefreshCcw, Flame, Timer, ChevronRight, Boxes, CreditCard } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ChevronRight,
+  DollarSign,
+  FolderTree,
+  Package,
+  ShieldAlert,
+  Sparkles,
+  Store,
+  TicketPercent,
+  Users,
+  WalletCards,
+  Zap,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
-import AdminLayout from './AdminLayout';
-import { AdminStateBlock } from './AdminStateBlocks';
-import { adminOrdersData } from './adminOrdersData';
-import { ADMIN_DICTIONARY } from './adminDictionary';
 import { useMemo } from 'react';
+import AdminLayout from './AdminLayout';
 
-const revenueData = [1.2, 1.5, 1.1, 1.8, 2.2, 2.0, 2.4]; // billions
-const revenueLabels = ['13/03', '14/03', '15/03', '16/03', '17/03', '18/03', '19/03'];
+const marketTrend = [1.9, 2.1, 2.4, 2.3, 2.8, 3.1, 3.4];
+const trendLabels = ['13/03', '14/03', '15/03', '16/03', '17/03', '18/03', '19/03'];
 
-const recentOrders = [
-  { code: 'ORD-10234', customer: 'Nguyễn Văn A', total: '1.250.000 đ', status: 'Đang xử lý', waitTime: '58 phút', priority: 'high', thumb: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=120&h=140&q=80' },
-  { code: 'ORD-10233', customer: 'Trần Thu B', total: '780.000 đ', status: 'Đang đóng gói', waitTime: '24 phút', priority: 'medium', thumb: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=120&h=140&q=80' },
-  { code: 'ORD-10232', customer: 'Lê Hữu C', total: '2.150.000 đ', status: 'Chờ giao', waitTime: '1 giờ 12 phút', priority: 'high', thumb: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=120&h=140&q=80' },
-  { code: 'ORD-DEMO-001', customer: 'Nguyễn Ngọc Thịnh', total: '690.000 đ', status: 'Chờ xác nhận', waitTime: '12 phút', priority: 'low', thumb: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=120&h=140&q=80' },
+const parentOrders = [
+  { code: 'PARENT-10234', customer: 'Nguyễn Văn A', total: '3.250.000 đ', issue: 'Xem xét tranh chấp', priority: 'high', waitTime: '58 phút', thumb: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=120&h=140&q=80' },
+  { code: 'PARENT-10233', customer: 'Trần Thị B', total: '1.780.000 đ', issue: 'Chờ xác nhận vendor', priority: 'medium', waitTime: '24 phút', thumb: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=120&h=140&q=80' },
+  { code: 'PARENT-10232', customer: 'Lê Hữu C', total: '5.150.000 đ', issue: 'Chờ giải ngân', priority: 'high', waitTime: '1 giờ 12 phút', thumb: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=120&h=140&q=80' },
+  { code: 'PARENT-10231', customer: 'Phạm Minh D', total: '950.000 đ', issue: 'Chờ xác minh thanh toán', priority: 'low', waitTime: '12 phút', thumb: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=120&h=140&q=80' },
 ];
 
-const topProducts = [
-  { name: 'Áo Polo Cotton', sales: 1240, stockLeft: 16, img: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=120&h=140&q=80' },
-  { name: 'Quần Jeans Slim', sales: 980, stockLeft: 8, img: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=120&h=140&q=80' },
-  { name: 'Áo Thun Basic', sales: 860, stockLeft: 22, img: 'https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=120&h=140&q=80' },
+const governanceFeed = [
+  { id: 'gov-1', tone: 'danger', text: '4 đơn hàng cha cần xử lý tranh chấp', cta: 'Mở đơn hàng cha', to: '/admin/orders', icon: <ShieldAlert size={16} /> },
+  { id: 'gov-2', tone: 'warning', text: '7 gian hàng mới đang chờ duyệt onboarding', cta: 'Duyệt gian hàng', to: '/admin/stores', icon: <Store size={16} /> },
+  { id: 'gov-3', tone: 'info', text: 'Commission nhóm áo thun tăng mạnh từ chiến dịch Mega Sale', cta: 'Xem tài chính', to: '/admin/financials', icon: <WalletCards size={16} /> },
 ];
 
-const actionFeed = [
-  { id: 'feed-1', tone: 'danger', text: '6 đơn trễ SLA > 2 giờ cần ưu tiên xử lý', cta: 'Mở danh sách', to: '/admin/orders', icon: <AlertTriangle size={16} /> },
-  { id: 'feed-2', tone: 'warning', text: '3 SKU top seller tồn kho dưới 10', cta: 'Xem sản phẩm', to: '/admin/products', icon: <Boxes size={16} /> },
-  { id: 'feed-3', tone: 'info', text: 'Campaign SUMMER20 đạt 72% quota phát hành', cta: 'Vào khuyến mãi', to: '/admin/promotions', icon: <CreditCard size={16} /> },
+const taxonomyHighlights = [
+  { name: 'Thời trang Nam > Áo > Áo thun', sales: 1640, signal: 'Top GMV' },
+  { name: 'Thời trang Nữ > Váy > Váy liền', sales: 1280, signal: 'Top conversion' },
+  { name: 'Phụ kiện > Túi xách', sales: 940, signal: 'Top margin' },
 ];
 
 const priorityTone = (priority: string) => {
@@ -36,82 +46,59 @@ const priorityTone = (priority: string) => {
   return 'neutral';
 };
 
-const getPriorityLabel = (priority: string) => {
-  if (priority === 'high') return ADMIN_DICTIONARY.dashboard.recentOrders.priority.high;
-  if (priority === 'medium') return ADMIN_DICTIONARY.dashboard.recentOrders.priority.medium;
-  return ADMIN_DICTIONARY.dashboard.recentOrders.priority.low;
+const priorityLabel = (priority: string) => {
+  if (priority === 'high') return 'Quan trọng';
+  if (priority === 'medium') return 'Chú ý';
+  return 'Theo dõi';
 };
 
-const Admin = () => {
-  const { dashboard: t } = ADMIN_DICTIONARY;
-  const parseOrderMoney = (value: string) => Number(value.replace(/\D/g, '')) || 0;
-  const refDay = new Date(Math.max(...adminOrdersData.map((o) => new Date(o.date).getTime())));
-  const refDayKey = refDay.toLocaleDateString('vi-VN');
-  const ordersInRefDay = adminOrdersData.filter((o) => new Date(o.date).toLocaleDateString('vi-VN') === refDayKey);
-  const newCustomerCount = new Set(ordersInRefDay.map((o) => o.customerInfo.email.toLowerCase())).size;
-  const processingCount = adminOrdersData.filter((o) => o.fulfillment === 'pending' || o.fulfillment === 'packing').length;
-  const urgentCount = adminOrdersData.filter((o) => {
-    if (o.fulfillment !== 'pending') return false;
-    const diffMinutes = (Date.now() - new Date(o.date).getTime()) / (1000 * 60);
-    return diffMinutes > 30;
-  }).length;
-  const paidRevenue = adminOrdersData
-    .filter((o) => o.paymentStatus === 'paid' && o.fulfillment === 'done')
-    .reduce((sum, o) => sum + parseOrderMoney(o.total), 0);
-  const revenueDisplay = paidRevenue >= 1000000000
-    ? `${(paidRevenue / 1000000000).toFixed(2)}B đ`
-    : `${Math.round(paidRevenue / 1000000)}M đ`;
+const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} đ`;
 
+const Admin = () => {
   const stats = useMemo(() => [
-    { label: t.stats.ordersToday, value: `${ordersInRefDay.length}`, change: '+12%', tone: 'up', icon: <Package size={18} />, spark: [12, 14, 11, 16, 18, 20, 22], to: '/admin/orders' },
-    { label: t.stats.revenue, value: revenueDisplay, change: '+8%', tone: 'up', icon: <DollarSign size={18} />, spark: [80, 82, 79, 85, 88, 90, 94], to: '/admin/orders?status=done' },
-    { label: t.stats.pending, value: `${processingCount}`, change: '-5%', tone: 'down', icon: <AlertTriangle size={18} />, spark: [40, 42, 38, 36, 35, 37, 36], to: '/admin/orders?status=urgent' },
-    { label: t.stats.newCustomers, value: `${newCustomerCount}`, change: '+3%', tone: 'up', icon: <Users size={18} />, spark: [50, 52, 51, 55, 56, 57, 58], to: '/admin/customers' },
-  ], [t, ordersInRefDay.length, revenueDisplay, processingCount, newCustomerCount]);
+    { label: 'GMV toàn hệ thống', value: formatCurrency(3_400_000_000), change: '+12%', icon: <DollarSign size={18} />, to: '/admin/financials', spark: [80, 82, 84, 88, 91, 95, 100] },
+    { label: 'Commission thu được', value: formatCurrency(168_000_000), change: '+9%', icon: <WalletCards size={18} />, to: '/admin/financials', spark: [52, 55, 58, 57, 60, 63, 67] },
+    { label: 'Đơn hàng', value: '124', change: '+18', icon: <Package size={18} />, to: '/admin/orders', spark: [20, 21, 22, 24, 26, 28, 31] },
+    { label: 'Chờ duyệt vendor', value: '7', change: '+2', icon: <Store size={18} />, to: '/admin/stores', spark: [2, 3, 4, 4, 5, 6, 7] },
+    { label: 'Tài khoản bị khóa', value: '3', change: '-1', icon: <Users size={18} />, to: '/admin/users', spark: [7, 6, 6, 5, 4, 4, 3] },
+    { label: 'Chiến dịch đang chạy', value: '2', change: '+1', icon: <TicketPercent size={18} />, to: '/admin/promotions', spark: [0, 1, 1, 1, 2, 2, 2] },
+  ], []);
 
   const quickViews = useMemo(() => [
-    { label: t.quickViews.urgentOrders, count: urgentCount, to: '/admin/orders?status=urgent' },
-    { label: t.quickViews.pendingOrders, count: adminOrdersData.filter((o) => o.fulfillment === 'pending').length, to: '/admin/orders?status=pending' },
-    { label: t.quickViews.lowStockProducts, count: 2, to: '/admin/products?status=stock-alert' },
-    { label: t.quickViews.expiringPromos, count: 1, to: '/admin/promotions?status=running' },
-  ], [t, urgentCount]);
+    { label: 'Vendor onboarding chờ duyệt', count: 7, to: '/admin/stores' },
+    { label: 'Danh mục cần kiểm tra', count: 3, to: '/admin/categories' },
+    { label: 'Đơn tranh chấp cần xử lý', count: 4, to: '/admin/orders' },
+    { label: 'FAQ và bot script cần cập nhật', count: 5, to: '/admin/bot-ai' },
+  ], []);
 
-  const topSaleBase = Math.max(...topProducts.map((p) => p.sales), 1);
+  const topSignalBase = Math.max(...taxonomyHighlights.map((item) => item.sales), 1);
 
   return (
     <AdminLayout
-      title={t.title}
-      hideTopbarTitle
+      title="Tổng quan"
       actions={(
         <>
-          <div className="admin-search">
-            <Search size={16} />
-            <input placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
-          </div>
-          <Link to="/admin/orders" className="admin-ghost-btn">{t.buttons.viewOrders}</Link>
-          <Link to="/admin/products" className="admin-primary-btn">{t.buttons.addProduct}</Link>
+          <Link to="/admin/stores" className="admin-ghost-btn">Duyệt gian hàng</Link>
+          <Link to="/admin/categories" className="admin-primary-btn">Quản lý danh mục</Link>
         </>
       )}
     >
       <section className="admin-stats grid-4">
-        {stats.map((item, idx) => (
+        {stats.map((item) => (
           <motion.div
             className="admin-stat-card compact"
             key={item.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: idx * 0.04 }}
             whileHover={{ y: -2 }}
           >
             <div className="admin-stat-header">
               <div className="admin-stat-icon">{item.icon}</div>
-              <div className={`admin-stat-change ${item.tone}`}>
-                {item.tone === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+              <div className="admin-stat-change up">
+                <ArrowUpRight size={14} />
                 <span>{item.change}</span>
               </div>
             </div>
             <p className="admin-stat-label">{item.label}</p>
-            <Link to={item.to} className="admin-stat-link" title={`Xem chi tiết ${item.label}`}>
+            <Link to={item.to} className="admin-stat-link" title={`Xem ${item.label}`}>
               <span className="admin-stat-value">{item.value}</span>
               <ChevronRight size={14} />
             </Link>
@@ -119,7 +106,7 @@ const Admin = () => {
               <path
                 d={`M ${item.spark.map((v, i) => `${(i / (item.spark.length - 1)) * 100} ${30 - (v / Math.max(...item.spark)) * 26}`).join(' L ')}`}
                 fill="none"
-                stroke={item.tone === 'up' ? '#10b981' : '#f43f5e'}
+                stroke="#10b981"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -138,27 +125,27 @@ const Admin = () => {
         ))}
       </section>
 
-      <motion.section className="admin-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: 0.06 }}>
+      <motion.section className="admin-panel">
         <div className="admin-panel-head">
-          <h2>{t.revenue.title}</h2>
-          <span className="admin-muted">{t.revenue.comparison}</span>
+          <h2>GMV và commission 7 ngày</h2>
+          <span className="admin-muted">Tổng quan marketplace</span>
         </div>
         <div className="area-chart-wrap">
           <svg className="area-chart" viewBox="0 0 100 50" preserveAspectRatio="none">
             <defs>
-              <linearGradient id="revGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(30,58,138,0.35)" />
-                <stop offset="100%" stopColor="rgba(30,58,138,0.00)" />
+              <linearGradient id="marketGmvGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.30)" />
+                <stop offset="100%" stopColor="rgba(15,23,42,0.00)" />
               </linearGradient>
             </defs>
             <path
-              d={`M 0 50 L ${revenueData.map((v, i) => `${(i / (revenueData.length - 1)) * 100} ${50 - (v / Math.max(...revenueData)) * 44}`).join(' L ')} L 100 50 Z`}
-              fill="url(#revGradient)"
+              d={`M 0 50 L ${marketTrend.map((v, i) => `${(i / (marketTrend.length - 1)) * 100} ${50 - (v / Math.max(...marketTrend)) * 44}`).join(' L ')} L 100 50 Z`}
+              fill="url(#marketGmvGradient)"
             />
             <path
-              d={`M ${revenueData.map((v, i) => `${(i / (revenueData.length - 1)) * 100} ${50 - (v / Math.max(...revenueData)) * 44}`).join(' L ')}`}
+              d={`M ${marketTrend.map((v, i) => `${(i / (marketTrend.length - 1)) * 100} ${50 - (v / Math.max(...marketTrend)) * 44}`).join(' L ')}`}
               fill="none"
-              stroke="#1e3a8a"
+              stroke="#0f172a"
               strokeWidth="1.6"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -167,11 +154,11 @@ const Admin = () => {
             <line x1="0" y1="0" x2="0" y2="50" stroke="#e5e7eb" strokeWidth="1" />
           </svg>
           <div className="chart-axes">
-            <span>{t.revenue.axes.day}</span>
-            <span>{t.revenue.axes.vnd}</span>
+            <span>Ngày</span>
+            <span>GMV / Commission</span>
           </div>
           <div className="chart-x-labels">
-            {revenueLabels.map((label) => (
+            {trendLabels.map((label) => (
               <span key={label}>{label}</span>
             ))}
           </div>
@@ -179,24 +166,24 @@ const Admin = () => {
       </motion.section>
 
       <div className="admin-action-bar">
-        <motion.section className="admin-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: 0.08 }}>
+        <motion.section className="admin-panel">
           <div className="admin-panel-head">
-            <h2>{t.actionCenter.title}</h2>
+            <h2>Hành động của quản trị viên</h2>
           </div>
           <div className="action-bar-tiles">
-            <Link to="/admin/products" className="action-bar-tile"><Plus size={20} /> {t.actionCenter.addProduct}</Link>
-            <Link to="/admin/promotions" className="action-bar-tile"><Gift size={20} /> {t.actionCenter.createVoucher}</Link>
-            <Link to="/returns" className="action-bar-tile"><RefreshCcw size={20} /> {t.actionCenter.processReturn}</Link>
-            <Link to="/admin/orders" className="action-bar-tile"><Zap size={20} /> {t.actionCenter.quickProcess}</Link>
+            <Link to="/admin/stores" className="action-bar-tile"><Zap size={20} /> Duyệt vendor</Link>
+            <Link to="/admin/promotions" className="action-bar-tile"><TicketPercent size={20} /> Tạo mega sale</Link>
+            <Link to="/admin/categories" className="action-bar-tile"><FolderTree size={20} /> Quản lý danh mục</Link>
+            <Link to="/admin/bot-ai" className="action-bar-tile"><Sparkles size={20} /> Bot, FAQ và AI</Link>
           </div>
         </motion.section>
 
-        <motion.section className="admin-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: 0.1 }}>
+        <motion.section className="admin-panel">
           <div className="admin-panel-head">
-            <h2>{t.actionFeed.title}</h2>
+            <h2>Nguồn cấp dữ liệu quản trị</h2>
           </div>
           <div className="action-bar-feed">
-            {actionFeed.map((item) => (
+            {governanceFeed.map((item) => (
               <Link key={item.id} to={item.to} className={`action-bar-feed-item ${item.tone}`}>
                 <span className="feed-icon">{item.icon}</span>
                 <div className="feed-content">
@@ -210,31 +197,24 @@ const Admin = () => {
         </motion.section>
       </div>
 
-      <motion.section className="admin-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: 0.12 }}>
+      <motion.section className="admin-panel">
         <div className="admin-panel-head">
-          <h2>{t.recentOrders.title}</h2>
-          <Link to="/admin/orders">{t.recentOrders.viewAll}</Link>
+          <h2>Đơn hàng cha cần xử lý</h2>
+          <Link to="/admin/orders">Mở tất cả</Link>
         </div>
-        <div className="admin-table" role="table" aria-label="Đơn hàng gần đây">
+        <div className="admin-table" role="table" aria-label="Đơn hàng cha cần xử lý">
           <div className="admin-table-row admin-table-head recent-v2" role="row">
-            <div role="columnheader">{t.recentOrders.columns.order}</div>
-            <div role="columnheader">{t.recentOrders.columns.priority}</div>
-            <div role="columnheader">{t.recentOrders.columns.waitTime}</div>
-            <div role="columnheader">{t.recentOrders.columns.total}</div>
-            <div role="columnheader">{t.recentOrders.columns.actions}</div>
+            <div role="columnheader">Đơn hàng cha</div>
+            <div role="columnheader">Mức độ</div>
+            <div role="columnheader">Chờ xử lý</div>
+            <div role="columnheader">Tổng giá trị</div>
+            <div role="columnheader">Hành động</div>
           </div>
-          {recentOrders.length === 0 ? (
-            <div role="row">
-              <AdminStateBlock type="empty" title={t.recentOrders.empty.title} description={t.recentOrders.empty.description} />
-            </div>
-          ) : recentOrders.map((order, idx) => (
+          {parentOrders.map((order) => (
             <motion.div
               className="admin-table-row recent-v2 recent-order-row"
               role="row"
               key={order.code}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: 0.12 + idx * 0.03 }}
               whileHover={{ y: -1 }}
             >
               <div role="cell" className="admin-customer">
@@ -244,12 +224,12 @@ const Admin = () => {
                   <span>{order.customer}</span>
                 </div>
               </div>
-              <div role="cell"><span className={`admin-pill ${priorityTone(order.priority)}`}>{getPriorityLabel(order.priority)}</span></div>
-              <div role="cell" className="wait-time-cell"><Timer size={14} /> {order.waitTime}</div>
+              <div role="cell"><span className={`admin-pill ${priorityTone(order.priority)}`}>{priorityLabel(order.priority)}</span></div>
+              <div role="cell" className="wait-time-cell">{order.waitTime}</div>
               <div role="cell">{order.total}</div>
               <div role="cell" className="admin-actions compact">
-                <button className={`admin-ghost-btn small ${order.priority === 'high' ? 'primary-cta' : ''}`}>{t.recentOrders.confirm}</button>
-                <Link to={`/admin/orders/${order.code}`} className="admin-icon-btn" aria-label={ADMIN_DICTIONARY.actionTitles.viewDetail}>
+                <button className={`admin-ghost-btn small ${order.priority === 'high' ? 'primary-cta' : ''}`}>{order.issue}</button>
+                <Link to={`/admin/orders/${order.code}`} className="admin-icon-btn" aria-label="Xem chi tiet">
                   <ChevronRight size={15} />
                 </Link>
               </div>
@@ -258,22 +238,22 @@ const Admin = () => {
         </div>
       </motion.section>
 
-      <motion.section className="admin-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: 0.14 }}>
+      <motion.section className="admin-panel">
         <div className="admin-panel-head">
-          <h2>{t.topProducts.title}</h2>
+          <h2>Danh mục dẫn đầu hệ thống</h2>
+          <Link to="/admin/categories">Mở danh mục</Link>
         </div>
         <div className="top-products">
-          {topProducts.length === 0 ? (
-            <AdminStateBlock type="empty" title={t.topProducts.empty.title} description={t.topProducts.empty.description} />
-          ) : topProducts.map((p, idx) => (
-            <motion.div key={p.name} className="top-product" whileHover={{ y: -2 }}>
+          {taxonomyHighlights.map((item, idx) => (
+            <motion.div key={item.name} className="top-product" whileHover={{ y: -2 }}>
               <div className="top-rank">Top {idx + 1}</div>
-              <img src={p.img} alt={p.name} />
               <div className="top-product-meta">
-                <p className="admin-bold">{p.name}</p>
-                <p className="admin-muted"><Flame size={13} /> {p.sales} {t.topProducts.sales}</p>
-                <div className="top-product-bar"><span className={p.stockLeft < 10 ? 'low-stock' : ''} style={{ width: `${Math.round((p.sales / topSaleBase) * 100)}%` }} /></div>
-                <p className={`admin-muted stock-note ${p.stockLeft < 10 ? 'low' : ''}`}>{t.topProducts.stockLeft} {p.stockLeft}</p>
+                <p className="admin-bold">{item.name}</p>
+                <p className="admin-muted">{item.signal}</p>
+                <div className="top-product-bar">
+                  <span style={{ width: `${Math.round((item.sales / topSignalBase) * 100)}%` }} />
+                </div>
+                <p className="admin-muted stock-note">{item.sales} tín hiệu</p>
               </div>
             </motion.div>
           ))}

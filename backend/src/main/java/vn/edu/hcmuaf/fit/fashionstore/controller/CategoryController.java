@@ -1,6 +1,5 @@
 package vn.edu.hcmuaf.fit.fashionstore.controller;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.CategoryRequest;
@@ -12,10 +11,13 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/categories")
-@RequiredArgsConstructor
 public class CategoryController {
 
     private final CategoryService categoryService;
+
+    public CategoryController(CategoryService categoryService) {
+        this.categoryService = categoryService;
+    }
 
     @GetMapping
     public ResponseEntity<List<Category>> getAll() {

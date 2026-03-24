@@ -1,6 +1,6 @@
 export const ADMIN_DICTIONARY = {
   layout: {
-    logo: 'Admin',
+    logo: 'Admin Panel',
     searchPlaceholder: 'Tìm nhanh đơn hàng, sản phẩm...',
     notifications: 'Thông báo',
     settings: 'Cài đặt',
@@ -51,14 +51,14 @@ export const ADMIN_DICTIONARY = {
       axes: { day: 'Ngày', vnd: 'VNĐ' },
     },
     actionCenter: {
-      title: 'Action Center',
+      title: 'Trung tâm hành động',
       addProduct: 'Thêm sản phẩm',
       createVoucher: 'Tạo voucher',
       processReturn: 'Xử lý đổi/trả',
       quickProcess: 'Xử lý nhanh',
     },
     actionFeed: {
-      title: 'Action Feed',
+      title: 'Nguồn cấp dữ liệu',
       openList: 'Mở danh sách',
       viewProducts: 'Xem sản phẩm',
       viewPromo: 'Vào khuyến mãi',
@@ -375,13 +375,13 @@ export const ADMIN_DICTIONARY = {
       deleteSelected: 'Xóa đã chọn',
     },
     drawer: {
-      eyebrow: 'Marketing Campaign',
+      eyebrow: 'Chiến dịch marketing',
       editTitle: 'Chỉnh sửa mã khuyến mãi',
       createTitle: 'Tạo mã khuyến mãi mới',
-      section1: 'Section 1: Thông tin chung',
-      section2: 'Section 2: Cấu hình giảm giá',
-      section3: 'Section 3: Điều kiện & Giới hạn',
-      section4: 'Section 4: Lịch trình',
+      section1: 'Phần 1: Thông tin chung',
+      section2: 'Phần 2: Cấu hình giảm giá',
+      section3: 'Phần 3: Điều kiện & Giới hạn',
+      section4: 'Phần 4: Lịch trình',
       cancel: 'Hủy',
       save: 'Lưu thay đổi',
       create: 'Tạo voucher',

@@ -5,12 +5,13 @@ export interface ProductVariant {
   sku: string;
   price: number;
   stock: number;
+  backendId?: string;
 }
 
 export type ProductStatusType = 'active' | 'low' | 'out';
 
 export interface Product {
-  id: number;
+  id: number | string;
   sku: string;
   name: string;
   category?: string;
@@ -23,4 +24,11 @@ export interface Product {
   status: string;
   statusType: ProductStatusType;
   variants?: ProductVariant[];
+  backendId?: string;
+  // Store/Vendor info
+  storeId?: string;
+  storeName?: string;
+  storeSlug?: string;
+  storeLogo?: string;
+  isOfficialStore?: boolean;
 }

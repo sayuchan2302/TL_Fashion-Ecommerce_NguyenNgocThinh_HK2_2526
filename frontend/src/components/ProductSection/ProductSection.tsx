@@ -4,8 +4,9 @@ import './ProductSection.css';
 import ProductCard from '../ProductCard/ProductCard';
 import ProductCardSkeleton from '../ProductCardSkeleton/ProductCardSkeleton';
 
-interface ProductData {
-  id: number;
+interface ProductSectionItem {
+  id: number | string;
+  sku?: string;
   name: string;
   price: number;
   originalPrice?: number;
@@ -13,11 +14,16 @@ interface ProductData {
   badge?: string;
   colors?: string[];
   sizes?: string[];
+  backendId?: string;
+  storeId?: string;
+  storeName?: string;
+  storeSlug?: string;
+  isOfficialStore?: boolean;
 }
 
 interface ProductSectionProps {
   title: string;
-  products: ProductData[];
+  products: ProductSectionItem[];
   viewAllLink?: string;
 }
 

@@ -27,18 +27,32 @@ interface ProductGridProps {
 
 const ProductGrid = ({ customResults, viewState }: ProductGridProps) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [catalog, setCatalog] = useState<Product[]>(() => customResults || productService.list());
   const internalView = useClientViewState({ validSortKeys: ['newest', 'bestseller', 'price-asc', 'price-desc', 'discount'] });
   const view = viewState ?? internalView;
 
   useEffect(() => {
+    let isMounted = true;
+
     const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+      void (async () => {
+        const nextCatalog = customResults || await productService.listPublic();
+        if (!isMounted) {
+          return;
+        }
+        setCatalog(nextCatalog);
+        setIsLoading(false);
+      })();
+    }, 400);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [customResults]);
 
   const filteredProducts = useMemo(() => {
-    let results = customResults || productService.list();
+    let results = customResults || catalog;
 
     if (!customResults) {
       if (view.priceRanges.length > 0) {
@@ -80,15 +94,11 @@ const ProductGrid = ({ customResults, viewState }: ProductGridProps) => {
     }
 
     return results;
-  }, [view.priceRanges, view.colors, view.sortKey, customResults]);
+  }, [view.priceRanges, view.colors, view.sortKey, customResults, catalog]);
 
   const totalProducts = customResults
     ? filteredProducts.length
-    : productService.getTotalCount({
-        priceRanges: view.priceRanges,
-        colors: view.colors,
-        sortBy: view.sortKey,
-      });
+    : filteredProducts.length;
   const dictionary = CLIENT_DICTIONARY.listing;
 
   return (

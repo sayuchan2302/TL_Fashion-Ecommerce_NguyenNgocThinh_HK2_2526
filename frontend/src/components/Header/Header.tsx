@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, Heart, Menu, X, ChevronDown, Bell } from 'lucide-react';
+import { Search, ShoppingCart, Heart, Menu, X, ChevronDown, Bell, Store, LayoutGrid } from 'lucide-react';
 import AuthModal from '../AuthModal/AuthModal';
 import SearchDropdown from '../SearchDropdown/SearchDropdown';
 import NotificationDropdown from '../NotificationDropdown/NotificationDropdown';
@@ -296,11 +296,28 @@ const handleSearchSubmit = (query: string) => {
                   <button className="account-item" onClick={() => { navigate('/profile?tab=reviews'); setIsAccountMenuOpen(false); }}>
                     {CLIENT_TEXT.profile.tabs.reviews}
                   </button>
-                  {user?.role === 'admin' && (
-                    <button className="account-item admin-link" onClick={() => { navigate('/admin'); setIsAccountMenuOpen(false); }}>
-                      Quản lý Admin
-                    </button>
+                  
+                  {/* Portal Switcher - Apple/Stripe Style */}
+                  {(user?.role === 'VENDOR' || user?.role === 'SUPER_ADMIN') && (
+                    <>
+                      <div className="account-dropdown-divider"></div>
+                      <div className="portal-switcher-label">Chuyển kênh</div>
+                      {user?.role === 'VENDOR' && (
+                        <button className="account-item portal-item" onClick={() => { navigate('/vendor/dashboard'); setIsAccountMenuOpen(false); }}>
+                          <span className="portal-icon">🏪</span>
+                          <span>Kênh Người Bán</span>
+                          {!user?.isApprovedVendor && <span className="portal-badge pending">Chờ duyệt</span>}
+                        </button>
+                      )}
+                      {user?.role === 'SUPER_ADMIN' && (
+                        <button className="account-item portal-item" onClick={() => { navigate('/admin'); setIsAccountMenuOpen(false); }}>
+                          <span className="portal-icon">⚡</span>
+                          <span>Quản Trị Sàn</span>
+                        </button>
+                      )}
+                    </>
                   )}
+                  
                   <div className="account-dropdown-divider"></div>
                   <button className="account-item logout" onClick={() => { logout(); addToast(CLIENT_TOAST_MESSAGES.auth.logoutSuccess, 'info'); setIsAccountMenuOpen(false); navigate('/'); }}>
                     Đăng xuất
@@ -309,6 +326,18 @@ const handleSearchSubmit = (query: string) => {
               </div>
             )}
           </div>
+          
+          {/* Portal Quick Access - For VENDOR/SUPER_ADMIN */}
+          {isAuthenticated && (user?.role === 'VENDOR' || user?.role === 'SUPER_ADMIN') && (
+            <button
+              className={`portal-quick-btn ${user?.role?.toLowerCase()}`}
+              onClick={() => navigate(user?.role === 'SUPER_ADMIN' ? '/admin' : '/vendor/dashboard')}
+              title={user?.role === 'SUPER_ADMIN' ? 'Quản trị sàn' : 'Kênh người bán'}
+            >
+              {user?.role === 'SUPER_ADMIN' ? <LayoutGrid size={18} /> : <Store size={18} />}
+            </button>
+          )}
+          
           <button ref={wishlistIconRef} className="icon-btn wishlist-btn" aria-label="Yêu thích" onClick={() => navigate('/wishlist')}>
             <Heart size={22} />
             {wishlistCount > 0 && <span className="icon-badge">{wishlistCount > 99 ? '99+' : wishlistCount}</span>}
@@ -425,8 +454,11 @@ const handleSearchSubmit = (query: string) => {
                 </div>
               </div>
               <Link to="/profile" className="mobile-auth-btn" onClick={closeMobileMenu}>Tài khoản</Link>
-              {user?.role === 'admin' && (
-                <Link to="/admin" className="mobile-auth-btn mobile-auth-admin" onClick={closeMobileMenu}>Quản lý Admin</Link>
+              {user?.role === 'VENDOR' && (
+                <Link to="/vendor/dashboard" className="mobile-auth-btn mobile-auth-admin" onClick={closeMobileMenu}>🏪 Kênh Người Bán</Link>
+              )}
+              {user?.role === 'SUPER_ADMIN' && (
+                <Link to="/admin" className="mobile-auth-btn mobile-auth-admin" onClick={closeMobileMenu}>⚡ Quản Trị Sàn</Link>
               )}
               <button className="mobile-auth-btn mobile-auth-register" onClick={() => { logout(); addToast(CLIENT_TOAST_MESSAGES.auth.logoutSuccess, 'info'); closeMobileMenu(); }}>Đăng xuất</button>
             </>

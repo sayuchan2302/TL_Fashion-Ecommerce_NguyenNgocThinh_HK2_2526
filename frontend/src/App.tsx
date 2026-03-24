@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom';
 import './App.css';
 
 // Lazy loaded pages
@@ -9,6 +9,7 @@ const ProductDetail = lazy(() => import('./pages/ProductDetail/ProductDetail'));
 const Cart = lazy(() => import('./pages/Cart/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout/Checkout'));
 const Profile = lazy(() => import('./pages/Profile/Profile'));
+const VendorRegister = lazy(() => import('./pages/VendorRegister/VendorRegister'));
 const NotFound = lazy(() => import('./pages/NotFound/NotFound'));
 const OrderSuccess = lazy(() => import('./pages/OrderSuccess/OrderSuccess'));
 const Search = lazy(() => import('./pages/Search/Search'));
@@ -28,19 +29,13 @@ const Returns = lazy(() => import('./pages/Returns/Returns'));
 const FAQ = lazy(() => import('./pages/FAQ/FAQ'));
 const PaymentResult = lazy(() => import('./pages/PaymentResult/PaymentResult'));
 const SizeGuide = lazy(() => import('./pages/SizeGuide/SizeGuide'));
-const Stores = lazy(() => import('./pages/Stores/Stores'));
+const StoreProfile = lazy(() => import('./pages/StoreProfile/StoreProfile'));
 
 // Admin pages
-const Admin = lazy(() => import('./pages/Admin/Admin'));
-const AdminOrders = lazy(() => import('./pages/Admin/AdminOrders'));
-const AdminProducts = lazy(() => import('./pages/Admin/AdminProducts'));
-const AdminOrderDetail = lazy(() => import('./pages/Admin/AdminOrderDetail'));
-const AdminCategories = lazy(() => import('./pages/Admin/AdminCategories'));
-const AdminCustomers = lazy(() => import('./pages/Admin/AdminCustomers'));
-const AdminPromotions = lazy(() => import('./pages/Admin/AdminPromotions'));
-const AdminReviews = lazy(() => import('./pages/Admin/AdminReviews'));
-const AdminReturns = lazy(() => import('./pages/Admin/AdminReturns'));
-const AdminContent = lazy(() => import('./pages/Admin/AdminContent'));
+import AdminWorkspace from './pages/Admin/AdminWorkspace';
+
+// Vendor Portal
+import VendorWorkspace from './pages/Vendor/VendorWorkspace';
 
 // Core components (not lazy loaded - needed immediately)
 import TopBar from './components/TopBar/TopBar';
@@ -59,13 +54,14 @@ const MainLayout = () => {
   const location = useLocation();
   const isCheckout = location.pathname === '/checkout';
   const isAdmin = location.pathname.startsWith('/admin');
+  const isVendor = location.pathname.startsWith('/vendor/');
 
   return (
     <>
-      {!isAdmin && <TopBar />}
-      {!isAdmin && <Header />}
+      {!isAdmin && !isVendor && <TopBar />}
+      {!isAdmin && !isVendor && <Header />}
       <Outlet />
-      {!isCheckout && !isAdmin && <Footer />}
+      {!isCheckout && !isAdmin && !isVendor && <Footer />}
     </>
   );
 };
@@ -98,6 +94,7 @@ function App() {
                           <Route path="/cart" element={<Cart />} />
                           <Route path="/checkout" element={<Checkout />} />
                           <Route path="/profile" element={<Profile />} />
+                          <Route path="/vendor/register" element={<VendorRegister />} />
                           <Route path="/order-success" element={<OrderSuccess />} />
                           <Route path="/search" element={<Search />} />
                           <Route path="/wishlist" element={<Wishlist />} />
@@ -106,7 +103,7 @@ function App() {
                           <Route path="/payment-result" element={<PaymentResult />} />
                           <Route path="/faq" element={<FAQ />} />
                           <Route path="/size-guide" element={<SizeGuide />} />
-                          <Route path="/stores" element={<Stores />} />
+                          <Route path="/store/:slug" element={<StoreProfile />} />
                           <Route path="/policy/:type" element={<Policy />} />
                           <Route path="/about" element={<About />} />
                           <Route path="/contact" element={<Contact />} />
@@ -118,18 +115,18 @@ function App() {
                           <Route path="*" element={<NotFound />} />
                         </Route>
 
-                        {/* Admin routes */}
-                        <Route path="/admin" element={<Admin />} />
-                        <Route path="/admin/orders" element={<AdminOrders />} />
-                        <Route path="/admin/orders/:id" element={<AdminOrderDetail />} />
-                        <Route path="/admin/products" element={<AdminProducts />} />
-                        <Route path="/admin/categories" element={<AdminCategories />} />
-                        <Route path="/admin/customers" element={<AdminCustomers />} />
-                        <Route path="/admin/customer" element={<AdminCustomers />} />
-                        <Route path="/admin/promotions" element={<AdminPromotions />} />
-                        <Route path="/admin/reviews" element={<AdminReviews />} />
-                        <Route path="/admin/returns" element={<AdminReturns />} />
-                        <Route path="/admin/content" element={<AdminContent />} />
+                        {/* Admin routes - SUPER_ADMIN only */}
+                        <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} animation="none"><AdminWorkspace /></ProtectedRoute>} />
+
+                        {/* Legacy admin routes redirected into marketplace operator IA */}
+                        <Route path="/admin/products" element={<Navigate to="/admin/categories" replace />} />
+                        <Route path="/admin/customers" element={<Navigate to="/admin/users" replace />} />
+                        <Route path="/admin/customer" element={<Navigate to="/admin/users" replace />} />
+                        <Route path="/admin/returns" element={<Navigate to="/admin/orders" replace />} />
+                        <Route path="/admin/content" element={<Navigate to="/admin/bot-ai" replace />} />
+
+                        {/* Vendor Portal routes - VENDOR only */}
+                        <Route path="/vendor/*" element={<ProtectedRoute allowedRoles={['VENDOR']} requireVendorApproval animation="none"><VendorWorkspace /></ProtectedRoute>} />
                       </Routes>
                     </div>
                   </RouteLoader>

@@ -1,14 +1,16 @@
 import { useRef, useState, memo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Heart, Eye } from 'lucide-react';
+import { Plus, Heart, Eye, BadgeCheck, Store } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useCart } from '../../contexts/CartContext';
 import { useCartAnimation } from '../../context/CartAnimationContext';
 import { useWishlist } from '../../contexts/WishlistContext';
+import { productService } from '../../services/productService';
 import QuickViewModal from '../QuickViewModal/QuickViewModal';
 import './ProductCard.css';
 
 interface ProductCardProps {
-  id: number;
+  id: number | string;
   sku?: string;
   name: string;
   price: number;
@@ -17,11 +19,17 @@ interface ProductCardProps {
   badge?: string;
   colors?: string[];
   sizes?: string[];
+  backendId?: string;
+  // Multi-vendor fields
+  storeId?: string;
+  storeName?: string;
+  storeSlug?: string;
+  isOfficialStore?: boolean;
 }
 
 const DEFAULT_SIZES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 
-const ProductCard = ({ id, sku, name, price, originalPrice, image, badge, colors, sizes }: ProductCardProps) => {
+const ProductCard = ({ id, sku, name, price, originalPrice, image, badge, colors, sizes, backendId, storeId, storeName, storeSlug, isOfficialStore }: ProductCardProps) => {
   const discount = originalPrice ? Math.round((1 - price / originalPrice) * 100) : 0;
   const { addToCart } = useCart();
   const { triggerAnimation } = useCartAnimation();
@@ -36,18 +44,27 @@ const ProductCard = ({ id, sku, name, price, originalPrice, image, badge, colors
   const availableSizes = sizes ?? DEFAULT_SIZES;
 const selectedColorValue = colors?.[selectedColorIdx] ?? '';
 
-  const handleSizeClick = (e: React.MouseEvent, size: string) => {
+  const handleSizeClick = async (e: React.MouseEvent, size: string) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const purchaseReference = backendId
+      ? { backendProductId: backendId, backendVariantId: undefined }
+      : await productService.resolvePurchaseReference(String(sku || id), selectedColorValue || 'Mac dinh', size);
+
     addToCart({
       id: sku || id,
+      backendProductId: purchaseReference.backendProductId,
+      backendVariantId: purchaseReference.backendVariantId,
       name,
       price,
       originalPrice,
       image,
       color: selectedColorValue || 'Mặc định',
       size,
+      storeId: storeId || 'default-store',
+      storeName: storeName || 'Cửa hàng',
+      isOfficialStore: isOfficialStore || false,
     });
 
     setAddedSize(size);
@@ -172,8 +189,34 @@ const selectedColorValue = colors?.[selectedColorIdx] ?? '';
           </div>
         )}
          <Link to={`/product/${sku || id}`} className="product-name-link">
-          <h3 className="product-name">{name}</h3>
-        </Link>
+           <h3 className="product-name">{name}</h3>
+         </Link>
+         
+         {/* Store Attribution */}
+         {(storeName || storeId) && (
+           <div className="product-store-attribution">
+             {isOfficialStore ? (
+               <motion.div 
+                 className="store-badge-official"
+                 whileHover={{ scale: 1.02 }}
+                 title="Cửa hàng chính hãng"
+               >
+                 <BadgeCheck size={12} strokeWidth={2.5} />
+                 <span>{storeName || 'Chính hãng'}</span>
+               </motion.div>
+             ) : (
+               <Link 
+                 to={`/store/${storeSlug || storeId}`} 
+                 className="store-link"
+                 onClick={(e) => e.stopPropagation()}
+               >
+                 <Store size={12} />
+                 <span>{storeName || 'Người bán'}</span>
+               </Link>
+             )}
+           </div>
+         )}
+         
         <div className="product-prices">
           <span className="current-price">{price.toLocaleString('vi-VN')}đ</span>
           {originalPrice && <span className="original-price">{originalPrice.toLocaleString('vi-VN')}đ</span>}
@@ -182,7 +225,7 @@ const selectedColorValue = colors?.[selectedColorIdx] ?? '';
 
       {/* Quick View Modal */}
       <QuickViewModal
-        product={{ id: Number(sku) || id, name, price, originalPrice, image, colors, sizes }}
+        product={{ id: sku || id, backendId, sku, name, price, originalPrice, image, colors, sizes }}
         isOpen={isQuickViewOpen}
         onClose={() => setIsQuickViewOpen(false)}
 />
@@ -200,7 +243,8 @@ function arePropsEqual(prev: ProductCardProps, next: ProductCardProps) {
     prev.image === next.image &&
     prev.badge === next.badge &&
     JSON.stringify(prev.colors) === JSON.stringify(next.colors) &&
-    JSON.stringify(prev.sizes) === JSON.stringify(next.sizes)
+    JSON.stringify(prev.sizes) === JSON.stringify(next.sizes) &&
+    prev.backendId === next.backendId
   );
 }
 

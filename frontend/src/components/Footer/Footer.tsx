@@ -8,7 +8,10 @@ const Footer = () => {
       <div className="container footer-container">
         <div className="footer-column">
           <h3 className="footer-title">COOLMATE LẮNG NGHE BẠN!</h3>
-          <p className="footer-text">Chúng tôi luôn trân trọng và mong đợi nhận được mọi ý kiến đóng góp từ khách hàng để có thể nâng cấp trải nghiệm dịch vụ và sản phẩm tốt hơn nữa.</p>
+          <p className="footer-text">
+            Chúng tôi luôn trân trọng và mong đợi nhận được mọi ý kiến đóng góp từ khách hàng để có thể
+            nâng cấp trải nghiệm dịch vụ và sản phẩm tốt hơn nữa.
+          </p>
           <div className="contact-info">
             <div className="contact-item">
               <Phone size={20} />
@@ -43,7 +46,7 @@ const Footer = () => {
           <h3 className="footer-title">VỀ COOLMATE</h3>
           <ul className="footer-links">
             <li><Link to="/about">Câu chuyện Coolmate</Link></li>
-            <li><Link to="/stores">Cửa hàng</Link></li>
+            <li><Link to="/vendor/register">Trở thành người bán</Link></li>
             <li><Link to="/contact">Liên hệ</Link></li>
             <li><Link to="/size-guide">Bảng size</Link></li>
             <li><Link to="/faq">FAQ</Link></li>
@@ -62,7 +65,7 @@ const Footer = () => {
           </div>
         </div>
       </div>
-      
+
       <div className="footer-bottom">
         <div className="container bottom-content">
           <p className="copyright-text">&copy; 2024 COOLMATE. All rights reserved. (Clone for academic purposes)</p>
@@ -71,7 +74,9 @@ const Footer = () => {
             <span className="payment-icon">VNPay</span>
             <span className="payment-icon">Visa</span>
             <span className="payment-icon">MasterCard</span>
-            <span style={{ fontSize: '10px', opacity: 0.5, border: '1px solid currentColor', padding: '4px', borderRadius: '4px', marginLeft: '12px'}}>ĐÃ THÔNG BÁO BỘ CÔNG THƯƠNG</span>
+            <span style={{ fontSize: '10px', opacity: 0.5, border: '1px solid currentColor', padding: '4px', borderRadius: '4px', marginLeft: '12px' }}>
+              ĐÃ THÔNG BÁO BỘ CÔNG THƯƠNG
+            </span>
           </div>
         </div>
       </div>

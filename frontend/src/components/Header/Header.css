@@ -448,6 +448,121 @@
   background: #fef2f2;
 }
 
+/* Portal Switcher - Apple/Stripe Minimalist Style */
+.portal-switcher-label {
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--co-gray-500);
+}
+
+.account-item.portal-item {
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.account-item.portal-item:hover {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.02) 100%);
+}
+
+.portal-icon {
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--co-gray-100);
+  border-radius: 6px;
+}
+
+.portal-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.portal-badge.pending {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+}
+
+.portal-badge.official {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+}
+
+/* Standalone Portal Button */
+.portal-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, var(--co-black) 0%, #333 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.portal-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.portal-button.vendor {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+.portal-button.admin {
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+}
+
+/* Portal Quick Access Button */
+.portal-quick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+}
+
+.portal-quick-btn.vendor {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: white;
+}
+
+.portal-quick-btn.vendor:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.portal-quick-btn.super_admin {
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+  color: white;
+}
+
+.portal-quick-btn.super_admin:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
 .account-menu {
   position: relative;
   display: inline-block;

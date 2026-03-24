@@ -9,12 +9,24 @@ import { CLIENT_TEXT } from '../../utils/texts';
 import { couponService, type Coupon } from '../../services/couponService';
 import { addressService } from '../../services/addressService';
 import { orderService } from '../../services/orderService';
+import { apiRequest, hasBackendJwt } from '../../services/apiClient';
 import type { Address } from '../../types';
 import AddressBookModal from './AddressBookModal';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
 
 const t = CLIENT_TEXT.checkout;
 const tCommon = CLIENT_TEXT.common;
+
+interface BackendAddressPayload {
+  id: string;
+  fullName?: string;
+  phone?: string;
+  detail?: string;
+  ward?: string;
+  district?: string;
+  province?: string;
+  isDefault?: boolean;
+}
 
 interface FormErrors {
   name?: string;
@@ -29,7 +41,7 @@ interface FormErrors {
 
 const Checkout = () => {
   const navigate = useNavigate();
-  const { items, updateQuantity, removeFromCart } = useCart();
+  const { items, updateQuantity, removeFromCart, clearCart } = useCart();
   const { addToast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'zalopay' | 'momo' | 'vnpay'>('vnpay');
   const [isLoading, setIsLoading] = useState(false);
@@ -158,7 +170,36 @@ const Checkout = () => {
     }
   };
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const findOrCreateBackendAddress = async () => {
+    const addresses = await apiRequest<BackendAddressPayload[]>('/api/addresses', {}, { auth: true });
+    const matching = addresses.find((address) =>
+      (address.fullName || '').trim() === formValues.name.trim() &&
+      (address.phone || '').trim() === formValues.phone.trim() &&
+      (address.detail || '').trim() === formValues.address.trim() &&
+      (address.ward || '').trim() === formValues.ward.trim() &&
+      (address.district || '').trim() === formValues.district.trim() &&
+      (address.province || '').trim() === formValues.province.trim()
+    );
+
+    if (matching) {
+      return matching;
+    }
+
+    return apiRequest<BackendAddressPayload>('/api/addresses', {
+      method: 'POST',
+      body: JSON.stringify({
+        fullName: formValues.name.trim(),
+        phone: formValues.phone.trim(),
+        detail: formValues.address.trim(),
+        ward: formValues.ward.trim(),
+        district: formValues.district.trim(),
+        province: formValues.province.trim(),
+        isDefault: false,
+      }),
+    }, { auth: true });
+  };
+
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors = validate();
     if (Object.keys(errors).length > 0) {
@@ -168,7 +209,42 @@ const Checkout = () => {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      const canUseBackendCheckout = hasBackendJwt() && items.every((item) => Boolean(item.backendProductId));
+
+      if (canUseBackendCheckout) {
+        const backendAddress = await findOrCreateBackendAddress();
+        const backendOrder = await orderService.createBackendOrder({
+          addressId: backendAddress.id,
+          paymentMethod: paymentMethod.toUpperCase(),
+          couponCode: appliedCoupon?.code,
+          note: formValues.note.trim() || undefined,
+          items: items.map((item) => ({
+            productId: String(item.backendProductId),
+            variantId: item.backendVariantId,
+            quantity: item.quantity,
+            unitPrice: item.price,
+          })),
+        });
+
+        if (saveAddressToBook && formValues.name && formValues.phone && formValues.address) {
+          addressService.add({
+            fullName: formValues.name,
+            phone: formValues.phone,
+            detail: formValues.address,
+            ward: formValues.ward,
+            district: formValues.district,
+            province: formValues.province,
+            isDefault: false,
+          });
+        }
+
+        clearCart();
+        navigate(`/order-success?id=${backendOrder.id}`);
+        return;
+      }
+
       if (saveAddressToBook && formValues.name && formValues.phone && formValues.address) {
         addressService.add({
           fullName: formValues.name,
@@ -182,8 +258,7 @@ const Checkout = () => {
       }
 
       const orderId = Math.floor(Math.random() * 1000000);
-
-      orderService.add({
+      const { subOrderIds } = orderService.addWithSubOrders({
         id: `CM${orderId}`,
         createdAt: new Date().toISOString(),
         status: 'pending',
@@ -197,15 +272,24 @@ const Checkout = () => {
           quantity: item.quantity,
           color: item.color,
           size: item.size,
+          storeId: item.storeId,
+          storeName: item.storeName,
         })),
         addressSummary: `${formValues.name}, ${formValues.phone}, ${formValues.address}, ${formValues.ward}, ${formValues.district}, ${formValues.province}`,
         paymentMethod: paymentMethod.toUpperCase(),
       });
 
-      items.forEach(item => removeFromCart(item.cartId));
-      navigate(`/order-success?id=${orderId}`);
+      clearCart();
+      const navUrl = subOrderIds.length > 0
+        ? `/order-success?id=${orderId}&subOrders=${subOrderIds.length}`
+        : `/order-success?id=${orderId}`;
+      navigate(navUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Dat hang that bai. Vui long thu lai.';
+      addToast(message, 'error');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleBackToHome = () => {

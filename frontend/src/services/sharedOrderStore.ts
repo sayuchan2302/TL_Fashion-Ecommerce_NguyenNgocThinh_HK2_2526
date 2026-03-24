@@ -27,12 +27,20 @@ export interface SharedOrderItem {
   quantity: number;
   color?: string;
   size?: string;
+  // Multi-vendor support
+  storeId?: string;
+  storeName?: string;
 }
 
 export interface SharedOrder {
   // Identity
   id: string;            // e.g. "ORD-10235"
   createdAt: string;     // ISO string
+  
+  // Multi-vendor: parent order ID for sub-orders
+  parentOrderId?: string;  // If set, this is a sub-order belonging to a parent
+  storeId?: string;        // Vendor's store ID (null = platform order or parent)
+  storeName?: string;      // Vendor's store name
 
   // Customer
   customerName: string;

@@ -15,6 +15,9 @@ export interface OrderItem {
   quantity: number;
   color?: string;
   size?: string;
+  // Multi-vendor fields
+  storeId?: string;
+  storeName?: string;
 }
 
 export interface Order {
@@ -31,4 +34,8 @@ export interface Order {
   tracking?: string;
   shippingFee?: number;
   discount?: number;
+  // Multi-vendor: sub-order support
+  parentOrderId?: string;  // If set, this is a sub-order
+  storeId?: string;        // Vendor's store ID
+  storeName?: string;      // Vendor's store name
 }

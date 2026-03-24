@@ -1,15 +1,15 @@
 import './Admin.css';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Layers, GripVertical, Search, X, Trash2, Link2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
-import { AdminStateBlock, AdminTableSkeleton } from './AdminStateBlocks';
 import AdminConfirmDialog from './AdminConfirmDialog';
-import { useAdminListState } from './useAdminListState';
-import { ADMIN_VIEW_KEYS } from './adminListView';
-import { useAdminViewState } from './useAdminViewState';
+import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminToast } from './useAdminToast';
-import { ADMIN_DICTIONARY } from './adminDictionary';
+import { PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+
+type CategoryStatus = 'visible' | 'hidden';
+type CategoryFilter = 'all' | 'visible' | 'hidden' | 'leaf';
 
 interface Category {
   id: string;
@@ -17,709 +17,639 @@ interface Category {
   slug: string;
   parentId: string;
   count: number;
-  status: 'visible' | 'hidden';
+  status: CategoryStatus;
   order: number;
   showOnMenu: boolean;
   image: string;
-  description?: string;
-}
-
-interface DeleteConfirmState {
-  ids: string[];
-  selectedItems?: string[];
-  selectedNoun: string;
-  title: string;
   description: string;
-  confirmLabel: string;
-  undoMessage: string;
-  blockedCount?: number;
 }
 
-type CategoryFormErrors = {
-  name?: string;
-  slug?: string;
-  order?: string;
-  parent?: string;
-};
+interface CategoryDraft {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string;
+  order: number;
+  status: CategoryStatus;
+  showOnMenu: boolean;
+  image: string;
+  description: string;
+}
+
+type DraftMode = 'view' | 'edit' | 'create-root' | 'create-child';
 
 const initialCategories: Category[] = [
-  { id: 'c1', name: 'Áo Polo', slug: 'ao-polo', parentId: '', count: 32, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1495107334309-fcf20504a5ab?auto=format&fit=crop&w=200&q=80' },
-  { id: 'c2', name: 'Quần Jeans', slug: 'quan-jeans', parentId: '', count: 24, status: 'visible', order: 2, showOnMenu: true, image: 'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?auto=format&fit=crop&w=200&q=80' },
-  { id: 'c3', name: 'Áo Thun', slug: 'ao-thun', parentId: 'c1', count: 18, status: 'hidden', order: 3, showOnMenu: false, image: 'https://images.unsplash.com/photo-1475180098004-ca77a66827be?auto=format&fit=crop&w=200&q=80' },
+  { id: 'cat-nam', name: 'Nam', slug: 'nam', parentId: '', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dành cho thời trang nam.' },
+  { id: 'cat-nam-ao', name: 'Áo', slug: 'nam-ao', parentId: 'cat-nam', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80', description: 'Danh mục áo dành cho nam.' },
+  { id: 'cat-nam-ao-thun', name: 'Áo thun', slug: 'nam-ao-thun', parentId: 'cat-nam-ao', count: 84, status: 'visible', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho áo thun nam.' },
+  { id: 'cat-nam-ao-polo', name: 'Áo polo', slug: 'nam-ao-polo', parentId: 'cat-nam-ao', count: 42, status: 'visible', order: 2, showOnMenu: false, image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho áo polo nam.' },
+  { id: 'cat-nu', name: 'Nữ', slug: 'nu', parentId: '', count: 0, status: 'visible', order: 2, showOnMenu: true, image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dành cho thời trang nữ.' },
+  { id: 'cat-nu-vay', name: 'Váy', slug: 'nu-vay', parentId: 'cat-nu', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=600&q=80', description: 'Danh mục váy dành cho nữ.' },
+  { id: 'cat-nu-vay-lien', name: 'Váy liền', slug: 'nu-vay-lien', parentId: 'cat-nu-vay', count: 39, status: 'visible', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho váy liền nữ.' },
+  { id: 'cat-unisex', name: 'Unisex', slug: 'unisex', parentId: '', count: 0, status: 'visible', order: 3, showOnMenu: true, image: 'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dùng chung cho cả nam và nữ.' },
+  { id: 'cat-unisex-hoodie', name: 'Hoodie', slug: 'unisex-hoodie', parentId: 'cat-unisex', count: 27, status: 'hidden', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1556821840-3a9fbc3e9b12?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dùng cho hoodie unisex.' },
+  { id: 'cat-phu-kien', name: 'Phụ kiện', slug: 'phu-kien', parentId: '', count: 0, status: 'visible', order: 4, showOnMenu: true, image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng phụ kiện thời trang.' },
+  { id: 'cat-phu-kien-tui', name: 'Túi xách', slug: 'phu-kien-tui-xach', parentId: 'cat-phu-kien', count: 18, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá cho túi xách và túi đeo.' },
 ];
 
-const validCategoryFilters = new Set(['all', 'visible', 'hidden', 'menu']);
+const emptyDraft: CategoryDraft = {
+  id: '',
+  name: '',
+  slug: '',
+  parentId: '',
+  order: 1,
+  status: 'visible',
+  showOnMenu: false,
+  image: '',
+  description: '',
+};
+
+const validFilters = new Set<CategoryFilter>(['all', 'visible', 'hidden', 'leaf']);
+
+const toSlug = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 
 const AdminCategories = () => {
-  const t = ADMIN_DICTIONARY.categories;
-  const c = ADMIN_DICTIONARY.common;
-  const view = useAdminViewState({
-    storageKey: ADMIN_VIEW_KEYS.categories,
-    path: '/admin/categories',
-    validStatusKeys: ['all', 'visible', 'hidden', 'menu'],
-    defaultStatus: 'all',
-  });
+  const { pushToast, toast } = useAdminToast();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [showCategoryDrawer, setShowCategoryDrawer] = useState(false);
-  const emptyCategory: Category = { id: '', name: '', slug: '', parentId: '', count: 0, status: 'visible', order: 0, showOnMenu: false, image: '' };
-  const [categoryForm, setCategoryForm] = useState<Category>(emptyCategory);
-  const [formErrors, setFormErrors] = useState<CategoryFormErrors>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const activeFilter = validCategoryFilters.has(view.status) ? (view.status as 'all' | 'visible' | 'hidden' | 'menu') : 'all';
-  const [undoPayload, setUndoPayload] = useState<{ items: Category[]; message: string } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
-  const { toast, pushToast } = useAdminToast();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all');
+  const [search, setSearch] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(initialCategories.filter((item) => item.parentId === '').map((item) => item.id)),
+  );
+  const [selectedId, setSelectedId] = useState<string>(initialCategories[0]?.id || '');
+  const [draftMode, setDraftMode] = useState<DraftMode>('view');
+  const [draft, setDraft] = useState<CategoryDraft>(emptyDraft);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const toSlug = (val: string) =>
-    val
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
-
-  const parentNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    categories.forEach(c => map.set(c.id, c.name));
+  const byId = useMemo(() => new Map(categories.map((item) => [item.id, item])), [categories]);
+  const childMap = useMemo(() => {
+    const map = new Map<string, Category[]>();
+    categories.forEach((item) => {
+      const key = item.parentId || '__root__';
+      const bucket = map.get(key) || [];
+      bucket.push(item);
+      map.set(key, bucket);
+    });
+    map.forEach((bucket) => bucket.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'vi')));
     return map;
   }, [categories]);
 
-  const {
-    search,
-    isLoading,
-    filteredItems: visibleCategories,
-    page,
-    totalPages,
-    startIndex,
-    endIndex,
-    pagedItems: pagedCategories,
-    next,
-    prev,
-    setPage,
-  } = useAdminListState<Category>({
-    items: categories,
-    pageSize: 8,
-    searchValue: view.search,
-    onSearchChange: view.setSearch,
-    pageValue: view.page,
-    onPageChange: view.setPage,
-    getSearchText: (c) => `${c.name} ${c.slug} ${parentNameById.get(c.parentId) || ''}`,
-    filterPredicate: (c) => {
-      if (activeFilter === 'visible') return c.status === 'visible';
-      if (activeFilter === 'hidden') return c.status === 'hidden';
-      if (activeFilter === 'menu') return c.showOnMenu && c.status === 'visible';
-      return true;
-    },
-    sorters: {
-      order: (a, b) => a.order - b.order || a.name.localeCompare(b.name, 'vi'),
-    },
-    initialSortKey: 'order',
-    loadingDeps: [activeFilter],
-  });
+  const isLeaf = useMemo(() => {
+    const set = new Set<string>();
+    categories.forEach((item) => {
+      if (!(childMap.get(item.id)?.length)) set.add(item.id);
+    });
+    return set;
+  }, [categories, childMap]);
 
-  useEffect(() => {
-    setSelected(new Set());
-  }, [activeFilter]);
+  const rootCategories = childMap.get('__root__') || [];
+  const selectedCategory = selectedId ? byId.get(selectedId) || null : null;
 
-  useEffect(() => {
-    if (!undoPayload) return;
-    const timer = setTimeout(() => setUndoPayload(null), 5000);
-    return () => clearTimeout(timer);
-  }, [undoPayload]);
-
-  const changeFilter = (nextFilter: 'all' | 'visible' | 'hidden' | 'menu') => {
-    setSelected(new Set());
-    view.setStatus(nextFilter);
-  };
-
-  const handleSearchChange = (value: string) => {
-    view.setSearch(value);
-  };
-
-  const shareCurrentView = async () => {
-    try {
-      await view.shareCurrentView();
-       pushToast(ADMIN_DICTIONARY.actions.shareView);
-    } catch {
-       pushToast(ADMIN_DICTIONARY.messages.copyFailed);
-    }
-  };
-
-  const resetCurrentView = () => {
-    setSelected(new Set());
-    setDeleteConfirm(null);
-    view.resetCurrentView();
-     pushToast(ADMIN_DICTIONARY.messages.categories.resetView);
-  };
-
-  const activeFilterLabel = activeFilter === 'all' ? t.tabs.all : activeFilter === 'visible' ? t.tabs.visible : activeFilter === 'hidden' ? t.tabs.hidden : t.tabs.menu;
-  const hasViewContext = activeFilter !== 'all' || Boolean(search.trim()) || view.page > 1;
-  const tabCounts = {
-    all: categories.length,
-    visible: categories.filter((category) => category.status === 'visible').length,
-    hidden: categories.filter((category) => category.status === 'hidden').length,
-    menu: categories.filter((category) => category.showOnMenu && category.status === 'visible').length,
-  } as const;
-
-  const getCategoryDeleteBlockReason = (category: Category) => {
-    const hasChildren = categories.some((item) => item.parentId === category.id);
-    if (hasChildren) return `Danh mục "${category.name}" còn danh mục con.`;
-    if (category.count > 0) return `Danh mục "${category.name}" còn ${category.count} sản phẩm.`;
-    return '';
-  };
-
-  const syncCategoryChanges = async (_next: Category[]) => {
-    await new Promise(resolve => setTimeout(resolve, 160));
-  };
-
-  const applyOptimisticCategoryUpdate = useCallback(
-    async (updater: (current: Category[]) => Category[], successMessage?: string, failMessage?: string) => {
-      const snapshot = categories;
-      const next = updater(snapshot);
-      setCategories(next);
-      try {
-        await syncCategoryChanges(next);
-        if (successMessage) pushToast(successMessage);
-      } catch {
-        setCategories(snapshot);
-         pushToast(failMessage || ADMIN_DICTIONARY.messages.categories.syncRollback);
-      }
-    },
-    [categories],
+  const stats = useMemo(
+    () => ({
+      all: categories.length,
+      visible: categories.filter((item) => item.status === 'visible').length,
+      hidden: categories.filter((item) => item.status === 'hidden').length,
+      leaf: categories.filter((item) => isLeaf.has(item.id)).length,
+      root: categories.filter((item) => !item.parentId).length,
+    }),
+    [categories, isLeaf],
   );
 
-  const handleCatSlugChange = (val: string) => {
-    const clean = toSlug(val);
-    setCategoryForm(prev => ({ ...prev, slug: clean }));
-    if (formErrors.slug) setFormErrors(prev => ({ ...prev, slug: undefined }));
+  const passesFilter = (item: Category) => {
+    if (activeFilter === 'visible') return item.status === 'visible';
+    if (activeFilter === 'hidden') return item.status === 'hidden';
+    if (activeFilter === 'leaf') return isLeaf.has(item.id);
+    return true;
   };
 
-  const openNewCategory = () => {
-    setCategoryForm(emptyCategory);
-    setFormErrors({});
-    setShowCategoryDrawer(true);
-  };
+  const query = search.trim().toLowerCase();
+  const searchMatches = useMemo(() => {
+    if (!query) return new Set(categories.map((item) => item.id));
+    return new Set(
+      categories
+        .filter((item) => {
+          const pathText = buildPath(item.id, byId).join(' ');
+          return `${item.name} ${item.slug} ${pathText}`.toLowerCase().includes(query);
+        })
+        .map((item) => item.id),
+    );
+  }, [byId, categories, query]);
 
-  const openEditCategory = (id: string) => {
-    const cat = categories.find(c => c.id === id);
-    if (!cat) return;
-    setCategoryForm(cat);
-    setFormErrors({});
-    setShowCategoryDrawer(true);
-  };
+  const visibleTreeIds = useMemo(() => {
+    const visible = new Set<string>();
 
-  const validateCategoryForm = (form: Category) => {
-    const errors: CategoryFormErrors = {};
-    if (!form.name.trim()) errors.name = 'Tên danh mục không được để trống.';
-
-    const slugValue = toSlug(form.slug || form.name);
-    if (!slugValue) {
-      errors.slug = 'Slug không hợp lệ.';
-    } else {
-      const duplicated = categories.some(c => c.id !== form.id && c.slug === slugValue);
-      if (duplicated) errors.slug = 'Slug đã tồn tại.';
-    }
-
-    if (form.order < 0) errors.order = 'Thứ tự hiển thị phải >= 0.';
-
-    if (form.parentId && form.id) {
-      const selfCategory = categories.find(c => c.id === form.id);
-      if (selfCategory && form.parentId === selfCategory.id) errors.parent = 'Không thể chọn chính danh mục này làm cha.';
-
-      let cursor = form.parentId;
-      const visited = new Set<string>();
+    const markAncestors = (id: string) => {
+      let cursor = byId.get(id);
       while (cursor) {
-        if (cursor === form.id) {
-          errors.parent = 'Danh mục cha tạo vòng lặp. Vui lòng chọn danh mục khác.';
-          break;
-        }
-        if (visited.has(cursor)) break;
-        visited.add(cursor);
-        cursor = categories.find(c => c.id === cursor)?.parentId || '';
+        visible.add(cursor.id);
+        cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
       }
-    }
-
-    return errors;
-  };
-
-  const handleSaveCategory = () => {
-    const normalizedForm: Category = {
-      ...categoryForm,
-      name: categoryForm.name.trim(),
-      slug: toSlug(categoryForm.slug || categoryForm.name),
-      order: Number.isFinite(categoryForm.order) ? Math.max(0, categoryForm.order) : 0,
-      showOnMenu: categoryForm.status === 'hidden' ? false : categoryForm.showOnMenu,
     };
 
-    const errors = validateCategoryForm(normalizedForm);
-    setFormErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      return;
-    }
+    const markDescendants = (id: string) => {
+      visible.add(id);
+      (childMap.get(id) || []).forEach((child) => markDescendants(child.id));
+    };
 
-    void applyOptimisticCategoryUpdate(prev => {
-      if (normalizedForm.id) {
-        return prev.map(c => c.id === normalizedForm.id ? { ...normalizedForm } : c);
+    categories.forEach((item) => {
+      if (passesFilter(item) && searchMatches.has(item.id)) {
+        markAncestors(item.id);
+        markDescendants(item.id);
       }
-      const newCat = { ...normalizedForm, id: `c-${Date.now()}` };
-      return [...prev, newCat];
-    }, normalizedForm.id ? 'Đã cập nhật danh mục' : 'Đã tạo danh mục mới');
-    setFormErrors({});
-    setShowCategoryDrawer(false);
+    });
+
+    return visible;
+  }, [byId, categories, childMap, searchMatches, activeFilter, isLeaf]);
+
+  const flatFilteredCategories = useMemo(() => {
+    return categories
+      .filter((item) => passesFilter(item) && searchMatches.has(item.id))
+      .sort((a, b) => {
+        const levelDiff = getLevel(a.id, byId) - getLevel(b.id, byId);
+        if (levelDiff !== 0) return levelDiff;
+        return a.order - b.order || a.name.localeCompare(b.name, 'vi');
+      });
+  }, [activeFilter, byId, categories, searchMatches, isLeaf]);
+
+  const hasViewContext = activeFilter !== 'all' || Boolean(query);
+  const currentFilterLabel =
+    activeFilter === 'all'
+      ? 'Tất cả'
+      : activeFilter === 'visible'
+        ? 'Đang hiện'
+        : activeFilter === 'hidden'
+          ? 'Đã ẩn'
+          : 'Danh mục lá';
+
+  const resetView = () => {
+    setActiveFilter('all');
+    setSearch('');
   };
 
-  const toggleSelectAll = (checked: boolean) => {
-    if (checked) setSelected(new Set(visibleCategories.map(c => c.id)));
-    else setSelected(new Set());
+  const openEditor = (category: Category, mode: DraftMode = 'edit') => {
+    setSelectedId(category.id);
+    setDraftMode(mode);
+    setDraft({
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      parentId: category.parentId,
+      order: category.order,
+      status: category.status,
+      showOnMenu: category.showOnMenu,
+      image: category.image,
+      description: category.description,
+    });
   };
 
-  const toggleOne = (id: string, checked: boolean) => {
-    const next = new Set(selected);
-    if (checked) next.add(id); else next.delete(id);
-    setSelected(next);
+  const openCreateRoot = () => {
+    setDraftMode('create-root');
+    setSelectedId('');
+    setDraft({ ...emptyDraft, order: rootCategories.length + 1 });
   };
 
-  const requestBulkDelete = () => {
-    const selectedCategories = categories.filter((item) => selected.has(item.id));
-    const deletable = selectedCategories.filter((item) => !getCategoryDeleteBlockReason(item));
-    const blocked = selectedCategories.filter((item) => Boolean(getCategoryDeleteBlockReason(item)));
-    if (deletable.length === 0) {
-       pushToast(ADMIN_DICTIONARY.messages.categories.noDeletable);
+  const openCreateChild = (parentId: string) => {
+    const siblings = childMap.get(parentId) || [];
+    setDraftMode('create-child');
+    setSelectedId(parentId);
+    setDraft({
+      ...emptyDraft,
+      parentId,
+      order: siblings.length + 1,
+    });
+    setExpandedIds((prev) => new Set(prev).add(parentId));
+  };
+
+  const saveDraft = () => {
+    if (!draft.name.trim()) {
+      pushToast('Tên danh mục không được để trống.');
       return;
     }
-    setDeleteConfirm({
-      ids: deletable.map((item) => item.id),
-      selectedItems: deletable.map((item) => item.name),
-      selectedNoun: t.selectedNoun,
-      title: 'Xóa danh mục đã chọn',
-      description: 'Bạn có chắc chắn muốn xóa các danh mục đã chọn? Hành động này không thể hoàn tác.',
-      confirmLabel: 'Xóa danh mục',
-      undoMessage: `Đã xóa ${deletable.length} danh mục`,
-      blockedCount: blocked.length,
-    });
-  };
 
-  const confirmDeleteCategories = () => {
-    if (!deleteConfirm) return;
-    const idsToDelete = new Set(deleteConfirm.ids);
-    const deletedItems = categories.filter((item) => idsToDelete.has(item.id));
-    void applyOptimisticCategoryUpdate(prev => prev.filter(c => !idsToDelete.has(c.id)), undefined, 'Xóa danh mục thất bại, đã hoàn tác.');
-    setSelected(new Set());
-    setUndoPayload({ items: deletedItems, message: deleteConfirm.undoMessage });
-    if ((deleteConfirm.blockedCount || 0) > 0) {
-       pushToast(ADMIN_DICTIONARY.messages.categories.skippedBlocked(deleteConfirm.blockedCount || 0));
+    const normalizedSlug = toSlug(draft.slug || draft.name);
+    if (!normalizedSlug) {
+      pushToast('Slug không hợp lệ.');
+      return;
     }
-    setDeleteConfirm(null);
+
+    const duplicateSlug = categories.some((item) => item.id !== draft.id && item.slug === normalizedSlug);
+    if (duplicateSlug) {
+      pushToast('Slug đã tồn tại.');
+      return;
+    }
+
+    const nextCategory: Category = {
+      id: draft.id || `cat-${Date.now()}`,
+      name: draft.name.trim(),
+      slug: normalizedSlug,
+      parentId: draft.parentId,
+      count: draft.id ? byId.get(draft.id)?.count || 0 : 0,
+      status: draft.status,
+      order: Math.max(1, draft.order),
+      showOnMenu: draft.status === 'hidden' ? false : draft.showOnMenu,
+      image: draft.image || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80',
+      description: draft.description.trim(),
+    };
+
+    if (!draft.id) {
+      setCategories((prev) => [...prev, nextCategory]);
+      setSelectedId(nextCategory.id);
+      pushToast('Đã tạo danh mục mới.');
+    } else {
+      setCategories((prev) => prev.map((item) => (item.id === nextCategory.id ? nextCategory : item)));
+      setSelectedId(nextCategory.id);
+      pushToast('Đã cập nhật danh mục.');
+    }
+
+    if (nextCategory.parentId) {
+      setExpandedIds((prev) => new Set(prev).add(nextCategory.parentId));
+    }
+    setDraftMode('view');
+    setDraft(emptyDraft);
   };
 
-  const bulkToggleStatus = () => {
-    void applyOptimisticCategoryUpdate(
-      prev => prev.map((c) => {
-        if (!selected.has(c.id)) return c;
-        if (c.status === 'visible') {
-          return { ...c, status: 'hidden', showOnMenu: false };
-        }
-        return { ...c, status: 'visible' };
-      }),
-      'Đã cập nhật trạng thái danh mục đã chọn',
+  const requestDelete = (categoryId: string) => {
+    setDeleteId(categoryId);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteId) return;
+    const target = byId.get(deleteId);
+    if (!target) {
+      setDeleteId(null);
+      return;
+    }
+    const hasChildren = Boolean(childMap.get(deleteId)?.length);
+    if (hasChildren) {
+      pushToast('Không thể xóa danh mục còn danh mục con.');
+      setDeleteId(null);
+      return;
+    }
+    if (target.count > 0) {
+      pushToast('Không thể xóa danh mục đang còn sản phẩm.');
+      setDeleteId(null);
+      return;
+    }
+
+    setCategories((prev) => prev.filter((item) => item.id !== deleteId));
+    if (selectedId === deleteId) {
+      setSelectedId('');
+      setDraftMode('view');
+      setDraft(emptyDraft);
+    }
+    setDeleteId(null);
+    pushToast('Đã xóa danh mục.');
+  };
+
+  const toggleVisibility = (categoryId: string) => {
+    setCategories((prev) =>
+      prev.map((item) =>
+        item.id === categoryId
+          ? {
+              ...item,
+              status: item.status === 'visible' ? 'hidden' : 'visible',
+              showOnMenu: item.status === 'visible' ? false : item.showOnMenu,
+            }
+          : item,
+      ),
     );
-    setSelected(new Set());
+    pushToast('Đã cập nhật trạng thái danh mục.');
   };
 
-  const restoreDeleted = () => {
-    if (!undoPayload) return;
-    setCategories(prev => {
-      const currentIds = new Set(prev.map(c => c.id));
-      const restored = undoPayload.items.filter(c => !currentIds.has(c.id));
-      return [...prev, ...restored];
-    });
-    setUndoPayload(null);
-  };
-
-  const blockedParentIds = useMemo(() => {
-    if (!categoryForm.id) return new Set<string>();
-    const blocked = new Set<string>([categoryForm.id]);
-    const queue = [categoryForm.id];
-    while (queue.length > 0) {
-      const current = queue.shift() as string;
-      categories.forEach(c => {
-        if (c.parentId === current && !blocked.has(c.id)) {
-          blocked.add(c.id);
-          queue.push(c.id);
-        }
-      });
+  const duplicateCategory = (categoryId: string) => {
+    const source = byId.get(categoryId);
+    if (!source) return;
+    const siblings = childMap.get(source.parentId || '__root__') || [];
+    const clone: Category = {
+      ...source,
+      id: `cat-${Date.now()}`,
+      name: `${source.name} bản sao`,
+      slug: `${source.slug}-${Date.now().toString().slice(-4)}`,
+      count: 0,
+      order: siblings.length + 1,
+    };
+    setCategories((prev) => [...prev, clone]);
+    setSelectedId(clone.id);
+    if (clone.parentId) {
+      setExpandedIds((prev) => new Set(prev).add(clone.parentId));
     }
-    return blocked;
-  }, [categories, categoryForm.id]);
-
-  const handleRowReorder = (sourceId: string, targetId: string) => {
-    if (!sourceId || !targetId || sourceId === targetId) return;
-    const ids = visibleCategories.map(c => c.id);
-    const sourceIdx = ids.indexOf(sourceId);
-    const targetIdx = ids.indexOf(targetId);
-    if (sourceIdx === -1 || targetIdx === -1) return;
-    const nextIds = [...ids];
-    const [moved] = nextIds.splice(sourceIdx, 1);
-    nextIds.splice(targetIdx, 0, moved);
-
-    void applyOptimisticCategoryUpdate(prev => {
-      const orderMap = new Map<string, number>();
-      nextIds.forEach((id, idx) => orderMap.set(id, idx + 1));
-      return prev.map(c => (orderMap.has(c.id) ? { ...c, order: orderMap.get(c.id) as number } : c));
-    }, 'Đã cập nhật thứ tự danh mục');
+    pushToast('Đã nhân bản danh mục.');
   };
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderTree = (items: Category[], level = 1) =>
+    items
+      .filter((item) => visibleTreeIds.has(item.id))
+      .map((item) => {
+        const children = (childMap.get(item.id) || []).filter((child) => visibleTreeIds.has(child.id));
+        const expanded = expandedIds.has(item.id);
+        const active = selectedId === item.id && draftMode === 'view';
+        return (
+          <div key={item.id}>
+            <div className={`category-tree-item ${active ? 'active' : ''}`} style={{ paddingLeft: `${12 + (level - 1) * 18}px` }}>
+              <button
+                type="button"
+                className="category-tree-main"
+                onClick={() => {
+                  setSelectedId(item.id);
+                  setDraftMode('view');
+                }}
+              >
+                <span className="category-tree-expander">
+                  {children.length > 0 ? (
+                    <button
+                      type="button"
+                      className="admin-icon-btn subtle small"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleExpand(item.id);
+                      }}
+                      aria-label={expanded ? 'Thu gọn danh mục' : 'Mở rộng danh mục'}
+                    >
+                      {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                  ) : (
+                    <span className="category-tree-bullet" />
+                  )}
+                </span>
+                <div className="category-tree-meta">
+                  <span className="category-tree-name">{item.name}</span>
+                  <span className="category-tree-sub">Cấp {getLevel(item.id, byId)} · {isLeaf.has(item.id) ? 'Danh mục lá' : `${children.length} nhánh con`}</span>
+                </div>
+              </button>
+              <div className="category-tree-trailing">
+                <span className={`admin-pill ${item.status === 'visible' ? 'success' : 'neutral'}`}>{item.status === 'visible' ? 'Đang hiện' : 'Đã ẩn'}</span>
+                <span className="category-tree-count">{item.count} SP</span>
+                <div className="admin-actions">
+                  <button type="button" className="admin-icon-btn subtle" title="Thêm danh mục con" aria-label="Thêm danh mục con" onClick={() => openCreateChild(item.id)}>
+                    <FolderPlus size={15} />
+                  </button>
+                  <button type="button" className="admin-icon-btn subtle" title="Chỉnh sửa" aria-label="Chỉnh sửa" onClick={() => openEditor(item)}>
+                    <Pencil size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            {children.length > 0 && expanded ? renderTree(children, level + 1) : null}
+          </div>
+        );
+      });
+
+  const deleteTarget = deleteId ? byId.get(deleteId) || null : null;
+  const selectedPath = selectedCategory ? buildPath(selectedCategory.id, byId) : [];
+  const draftParentLabel = draft.parentId ? byId.get(draft.parentId)?.name || 'Không xác định' : 'Danh mục gốc';
 
   return (
     <AdminLayout
-      title={t.title}
-      actions={(
-        <>
-          <div className="admin-search">
-            <Search size={16} />
-            <input placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} value={search} onChange={e => handleSearchChange(e.target.value)} />
-          </div>
-           <button className="admin-ghost-btn" onClick={shareCurrentView}><Link2 size={16} /> {ADMIN_DICTIONARY.actions.shareView}</button>
-           <button className="admin-ghost-btn" onClick={resetCurrentView}>{ADMIN_DICTIONARY.actions.resetView}</button>
-          <button className="admin-primary-btn" onClick={openNewCategory}><Plus size={14} /> {t.addCategory}</button>
-        </>
-      )}
+      title="Danh mục"
+      breadcrumbs={['Danh mục toàn sàn', 'Quản lý taxonomy']}
+      actions={<button className="admin-primary-btn" onClick={openCreateRoot}><Plus size={14} /> Thêm danh mục gốc</button>}
     >
-      {/* ── Stat Cards ─────────────────────────────────────── */}
-      <div className="admin-stats grid-4">
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Tổng danh mục</div>
-          <div className="admin-stat-value">{tabCounts.all}</div>
-          <div className="admin-stat-sub">Đang quản lý</div>
-        </div>
-        <div className="admin-stat-card success"
-          onClick={() => changeFilter('visible')} style={{ cursor: 'pointer' }}>
-          <div className="admin-stat-label">Đang hiện</div>
-          <div className="admin-stat-value">{tabCounts.visible}</div>
-          <div className="admin-stat-sub">Danh mục hiển thị</div>
-        </div>
-        <div className={`admin-stat-card ${tabCounts.hidden > 0 ? 'warning' : ''}`}
-          onClick={() => changeFilter('hidden')} style={{ cursor: 'pointer' }}>
-          <div className="admin-stat-label">Đã ẩn</div>
-          <div className="admin-stat-value">{tabCounts.hidden}</div>
-          <div className="admin-stat-sub">Danh mục bị ẩn</div>
-        </div>
-        <div className="admin-stat-card info"
-          onClick={() => changeFilter('menu')} style={{ cursor: 'pointer' }}>
-          <div className="admin-stat-label">Trên Menu</div>
-          <div className="admin-stat-value">{tabCounts.menu}</div>
-          <div className="admin-stat-sub">Hiện trong nav</div>
-        </div>
-      </div>
+      <PanelStatsGrid
+        items={[
+          { key: 'all', label: 'Tổng danh mục', value: stats.all, sub: 'Toàn bộ taxonomy đang quản lý' },
+          { key: 'root', label: 'Danh mục gốc', value: stats.root, sub: 'Cấp 1 điều hướng toàn sàn', tone: 'info' },
+          { key: 'leaf', label: 'Danh mục lá', value: stats.leaf, sub: 'Vendor chỉ được chọn nhóm này', tone: 'success', onClick: () => setActiveFilter('leaf') },
+          { key: 'hidden', label: 'Đã ẩn', value: stats.hidden, sub: 'Nhóm đang tạm ngưng phân phối', tone: stats.hidden > 0 ? 'warning' : '' },
+        ]}
+      />
 
-      <div className="admin-tabs">
-        <button className={`admin-tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => changeFilter('all')}>
-          <span>{t.tabs.all}</span>
-          <span className="admin-tab-count">{tabCounts.all}</span>
-        </button>
-        <button className={`admin-tab ${activeFilter === 'visible' ? 'active' : ''}`} onClick={() => changeFilter('visible')}>
-          <span>{t.tabs.visible}</span>
-          <span className="admin-tab-count">{tabCounts.visible}</span>
-        </button>
-        <button className={`admin-tab ${activeFilter === 'hidden' ? 'active' : ''}`} onClick={() => changeFilter('hidden')}>
-          <span>{t.tabs.hidden}</span>
-          <span className="admin-tab-count">{tabCounts.hidden}</span>
-        </button>
-        <button className={`admin-tab ${activeFilter === 'menu' ? 'active' : ''}`} onClick={() => changeFilter('menu')}>
-          <span>{t.tabs.menu}</span>
-          <span className="admin-tab-count">{tabCounts.menu}</span>
-        </button>
-      </div>
+      <PanelTabs
+        items={[
+          { key: 'all', label: 'Tất cả', count: stats.all },
+          { key: 'visible', label: 'Đang hiện', count: stats.visible },
+          { key: 'hidden', label: 'Đã ẩn', count: stats.hidden },
+          { key: 'leaf', label: 'Danh mục lá', count: stats.leaf },
+        ]}
+        activeKey={activeFilter}
+        onChange={(key) => setActiveFilter((validFilters.has(key as CategoryFilter) ? key : 'all') as CategoryFilter)}
+      />
 
-      {hasViewContext && (
-        <div className="admin-view-summary">
-          <span className="summary-chip">{c.statusLabel}: {activeFilterLabel}</span>
-          {search.trim() && <span className="summary-chip">{c.keyword}: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>{c.clearFilters}</button>
-        </div>
-      )}
+      <PanelViewSummary
+        chips={[
+          ...(hasViewContext ? [{ key: 'status', label: <>Nhóm: {currentFilterLabel}</> }] : []),
+          ...(query ? [{ key: 'search', label: <>Từ khóa: {search.trim()}</> }] : []),
+        ]}
+        clearLabel="Xóa bộ lọc"
+        onClear={resetView}
+      />
 
-      <section className="admin-panels single">
-        <div className="admin-panel">
-          {isLoading ? (
-            <AdminTableSkeleton columns={8} rows={6} />
-          ) : visibleCategories.length === 0 ? (
-            <AdminStateBlock
-              type={search.trim() ? 'search-empty' : 'empty'}
-              title={search.trim() ? t.empty.searchTitle : t.empty.defaultTitle}
-                description={search.trim() ? t.empty.searchDescription : t.empty.defaultDescription}
-                actionLabel={ADMIN_DICTIONARY.actions.resetFilters}
-                onAction={resetCurrentView}
-              />
-          ) : (
-          <div className="admin-table" role="table" aria-label={t.tableAria}>
-            <div className="admin-table-row categories admin-table-head" role="row">
-              <div role="columnheader"><input type="checkbox" aria-label="Chọn tất cả" checked={selected.size === visibleCategories.length && visibleCategories.length > 0} onChange={e => toggleSelectAll(e.target.checked)} /></div>
-              <div role="columnheader">{t.columns.image}</div>
-              <div role="columnheader">{t.columns.name}</div>
-              <div role="columnheader">{t.columns.parent}</div>
-              <div role="columnheader">{t.columns.productCount}</div>
-              <div role="columnheader">{t.columns.order}</div>
-              <div role="columnheader">{t.columns.status}</div>
-              <div role="columnheader">{t.columns.actions}</div>
+      <section className="admin-panels category-manager-layout">
+        <div className="admin-panel category-tree-panel">
+          <div className="admin-panel-head">
+            <div>
+              <h2>Cây danh mục</h2>
+              <span className="admin-muted">Admin quản lý taxonomy theo cây; vendor chỉ chọn danh mục lá.</span>
             </div>
-            {pagedCategories.map((cat, idx) => (
-              <motion.div
-                key={cat.id}
-                className={`admin-table-row categories category-row ${cat.status === 'hidden' ? 'row-muted' : ''} ${draggingId === cat.id ? 'dragging' : ''} ${dragOverId === cat.id ? 'drag-over' : ''}`}
-                role="row"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(idx * 0.025, 0.16) }}
-                whileHover={{ y: -1 }}
-                onClick={() => openEditCategory(cat.id)}
-                style={{ cursor: 'pointer' }}
-                draggable
-                onDragStart={() => setDraggingId(cat.id)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (dragOverId !== cat.id) setDragOverId(cat.id);
-                }}
-                onDrop={() => {
-                  if (draggingId) handleRowReorder(draggingId, cat.id);
-                  setDraggingId(null);
-                  setDragOverId(null);
-                }}
-                onDragEnd={() => {
-                  setDraggingId(null);
-                  setDragOverId(null);
-                }}
-              >
-                <div role="cell" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${cat.name}`} checked={selected.has(cat.id)} onChange={e => toggleOne(cat.id, e.target.checked)} /></div>
-                <div role="cell">
-                  <div className="cat-thumb">
-                    <img src={cat.image} alt={cat.name} />
-                  </div>
-                </div>
-                <div role="cell" className="admin-bold">{cat.name}</div>
-                <div role="cell"><span className="badge gray">{parentNameById.get(cat.parentId) || 'Không có'}</span></div>
-                <div role="cell"><span className="badge blue">{cat.count} SP</span></div>
-                <div role="cell" className="order-cell" onClick={(e) => e.stopPropagation()}>
-                  <GripVertical size={14} className="order-grip" />
-                  <input
-                    type="number"
-                    min={0}
-                    value={cat.order}
-                    onChange={e => {
-                      const nextOrder = Math.max(0, parseInt(e.target.value || '0', 10));
-                      setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, order: nextOrder } : c));
-                    }}
-                  />
-                </div>
-                <div role="cell"><span className={`admin-pill ${cat.status === 'visible' ? 'success' : 'neutral'}`}>{cat.status === 'visible' ? 'Đang hiện' : 'Ẩn'}</span></div>
-                <div role="cell" className="admin-actions" onClick={(e) => e.stopPropagation()}>
-                   <button className="admin-icon-btn subtle" title={ADMIN_DICTIONARY.actionTitles.edit} aria-label={ADMIN_DICTIONARY.actionTitles.edit} onClick={() => openEditCategory(cat.id)}><Pencil size={16} /></button>
-                  <button
-                    className="admin-icon-btn subtle"
-                    title={cat.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}
-                    aria-label={cat.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}
-                    onClick={() => {
-                      void applyOptimisticCategoryUpdate(
-                        prev => prev.map((c) => {
-                          if (c.id !== cat.id) return c;
-                          if (c.status === 'visible') return { ...c, status: 'hidden', showOnMenu: false };
-                          return { ...c, status: 'visible' };
-                        }),
-                        'Đã cập nhật trạng thái danh mục',
-                      );
-                    }}
-                  ><Layers size={16} /></button>
-                   <button
-                     className="admin-icon-btn subtle danger-icon"
-                     title={ADMIN_DICTIONARY.actionTitles.delete}
-                     aria-label={ADMIN_DICTIONARY.actionTitles.delete}
-                     onClick={() => {
-                      const blockReason = getCategoryDeleteBlockReason(cat);
-                      if (blockReason) {
-                        pushToast(blockReason);
-                        return;
-                      }
-                      setDeleteConfirm({
-                        ids: [cat.id],
-                        selectedNoun: t.selectedNoun,
-                        title: 'Xóa danh mục',
-                        description: 'Bạn có chắc chắn muốn xóa danh mục này? Hành động này không thể hoàn tác.',
-                        confirmLabel: 'Xóa danh mục',
-                        undoMessage: `Đã xóa danh mục ${cat.name}`,
-                      });
-                    }}
-                  ><Trash2 size={16} /></button>
-                </div>
-              </motion.div>
-            ))}
           </div>
+          <div className="admin-search category-search">
+            <input
+              placeholder="Tìm theo tên, slug hoặc đường dẫn"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Tìm theo tên, slug hoặc đường dẫn"
+            />
+          </div>
+          {visibleTreeIds.size === 0 ? (
+            <AdminStateBlock
+              type={query ? 'search-empty' : 'empty'}
+              title={query ? 'Không tìm thấy danh mục phù hợp' : 'Chưa có danh mục nào'}
+              description={query ? 'Thử đổi từ khóa tìm kiếm hoặc xóa bộ lọc hiện tại.' : 'Taxonomy toàn sàn sẽ hiển thị tại đây dưới dạng cây.'}
+              actionLabel="Xóa bộ lọc"
+              onAction={resetView}
+            />
+          ) : (
+            <div className="category-tree-wrap">{renderTree(rootCategories)}</div>
           )}
+        </div>
 
-          {!isLoading && visibleCategories.length > 0 && (
-            <div className="table-footer">
-              <span className="table-footer-meta">{c.showing(startIndex, endIndex, visibleCategories.length, t.selectedNoun)}</span>
-              <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>{c.previous}</button>
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button key={idx + 1} className={`page-btn ${page === idx + 1 ? 'active' : ''}`} onClick={() => setPage(idx + 1)}>
-                    {idx + 1}
-                  </button>
-                ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>{c.next}</button>
+        <div className="admin-panel category-detail-panel">
+          <div className="admin-panel-head">
+            <div>
+              <h2>{draftMode === 'view' ? 'Chi tiết danh mục' : draftMode === 'edit' ? 'Chỉnh sửa danh mục' : 'Tạo danh mục mới'}</h2>
+              <span className="admin-muted">
+                {draftMode === 'view' ? 'Theo dõi cấu trúc, sản phẩm đang gắn và hành động quản trị nhanh.' : 'Cập nhật thông tin taxonomy, parent-path và trạng thái hiển thị.'}
+              </span>
+            </div>
+          </div>
+
+          {draftMode === 'view' && selectedCategory ? (
+            <div className="category-detail-body">
+              <div className="category-detail-hero">
+                <img src={selectedCategory.image} alt={selectedCategory.name} />
+                <div className="category-detail-headings">
+                  <p className="drawer-eyebrow">Taxonomy node</p>
+                  <h3>{selectedCategory.name}</h3>
+                  <div className="category-path">{selectedPath.join(' > ')}</div>
+                </div>
+                <span className={`admin-pill ${selectedCategory.status === 'visible' ? 'success' : 'neutral'}`}>{selectedCategory.status === 'visible' ? 'Đang hiện' : 'Đã ẩn'}</span>
+              </div>
+
+              <div className="category-signal-grid">
+                <div className="category-signal-card"><span className="admin-muted small">Cấp</span><strong>Cấp {getLevel(selectedCategory.id, byId)}</strong></div>
+                <div className="category-signal-card"><span className="admin-muted small">Sản phẩm</span><strong>{selectedCategory.count}</strong></div>
+                <div className="category-signal-card"><span className="admin-muted small">Điều hướng</span><strong>{selectedCategory.showOnMenu ? 'Hiện menu' : 'Ẩn menu'}</strong></div>
+                <div className="category-signal-card"><span className="admin-muted small">Loại node</span><strong>{isLeaf.has(selectedCategory.id) ? 'Danh mục lá' : 'Nhóm cha'}</strong></div>
+              </div>
+
+              <div className="admin-card-list">
+                <div className="admin-card-row"><span className="admin-bold">Slug</span><span className="admin-muted">{selectedCategory.slug}</span></div>
+                <div className="admin-card-row"><span className="admin-bold">Danh mục cha</span><span className="admin-muted">{selectedCategory.parentId ? byId.get(selectedCategory.parentId)?.name || 'Không xác định' : 'Danh mục gốc'}</span></div>
+                <div className="admin-card-row"><span className="admin-bold">Thứ tự hiển thị</span><span className="admin-muted">{selectedCategory.order}</span></div>
+                <div className="admin-card-row"><span className="admin-bold">Mô tả</span><span className="admin-muted">{selectedCategory.description || 'Chưa có mô tả'}</span></div>
+              </div>
+
+              <div className="category-detail-actions">
+                <button className="admin-primary-btn" onClick={() => openEditor(selectedCategory, 'edit')}><Pencil size={14} />Chỉnh sửa</button>
+                <button className="admin-ghost-btn" onClick={() => openCreateChild(selectedCategory.id)}><FolderPlus size={14} />Thêm danh mục con</button>
+                <button className="admin-ghost-btn" onClick={() => duplicateCategory(selectedCategory.id)}><Plus size={14} />Nhân bản</button>
+                <button className={`admin-ghost-btn ${selectedCategory.status === 'visible' ? '' : 'danger'}`} onClick={() => toggleVisibility(selectedCategory.id)}>{selectedCategory.status === 'visible' ? <EyeOff size={14} /> : <Eye size={14} />}{selectedCategory.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}</button>
+                <button className="admin-ghost-btn danger" onClick={() => requestDelete(selectedCategory.id)}><Trash2 size={14} />Xóa</button>
+              </div>
+            </div>
+          ) : (
+            <div className="category-editor">
+              <div className="form-grid">
+                <label className="form-field"><span>Tên danh mục</span><input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value, slug: prev.slug ? prev.slug : toSlug(event.target.value) }))} /></label>
+                <label className="form-field"><span>Slug</span><input value={draft.slug} onChange={(event) => setDraft((prev) => ({ ...prev, slug: toSlug(event.target.value) }))} /></label>
+                <label className="form-field"><span>Danh mục cha</span><select value={draft.parentId} onChange={(event) => setDraft((prev) => ({ ...prev, parentId: event.target.value }))}><option value="">Danh mục gốc</option>{categories.filter((item) => item.id !== draft.id).map((item) => <option key={item.id} value={item.id}>{buildPath(item.id, byId).join(' > ')}</option>)}</select></label>
+                <label className="form-field"><span>Thứ tự hiển thị</span><input type="number" min={1} value={draft.order} onChange={(event) => setDraft((prev) => ({ ...prev, order: Math.max(1, Number(event.target.value) || 1) }))} /></label>
+                <label className="form-field"><span>Trạng thái</span><select value={draft.status} onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as CategoryStatus }))}><option value="visible">Đang hiện</option><option value="hidden">Đã ẩn</option></select></label>
+                <label className="form-field"><span>Ảnh đại diện</span><input value={draft.image} onChange={(event) => setDraft((prev) => ({ ...prev, image: event.target.value }))} placeholder="https://..." /></label>
+                <label className="form-field full"><span>Mô tả ngắn</span><textarea rows={4} value={draft.description} onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))} /></label>
+              </div>
+
+              <div className="switch-row category-switch-row">
+                <div>
+                  <p className="admin-bold">Hiện trên menu chính</p>
+                  <p className="admin-muted small">Dùng cho các node cấp điều hướng, không nên bật tràn lan với danh mục lá.</p>
+                </div>
+                <label className="switch">
+                  <input type="checkbox" checked={draft.showOnMenu} onChange={(event) => setDraft((prev) => ({ ...prev, showOnMenu: event.target.checked }))} disabled={draft.status === 'hidden'} />
+                  <span className="switch-slider" />
+                </label>
+              </div>
+
+              <div className="admin-card-list">
+                <div className="admin-card-row"><span className="admin-bold">Đường dẫn dự kiến</span><span className="admin-muted">{buildDraftPath(draft, byId).join(' > ') || 'Danh mục mới'}</span></div>
+                <div className="admin-card-row"><span className="admin-bold">Node cha</span><span className="admin-muted">{draftParentLabel}</span></div>
+              </div>
+
+              <div className="drawer-footer category-editor-footer">
+                <button className="admin-ghost-btn" onClick={() => setDraftMode(selectedCategory ? 'view' : 'create-root')}>Hủy</button>
+                <button className="admin-primary-btn" onClick={saveDraft}>{draft.id ? 'Lưu thay đổi' : 'Tạo danh mục'}</button>
               </div>
             </div>
           )}
         </div>
       </section>
 
-      <AnimatePresence>
-        {undoPayload && (
-          <motion.div
-            className="admin-undo-bar"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={{ duration: 0.2 }}
-          >
-            <span>{undoPayload.message}</span>
-            <div className="admin-actions">
-              <button className="admin-ghost-btn" onClick={restoreDeleted}>Hoàn tác</button>
-               <button className="admin-icon-btn subtle" onClick={() => setUndoPayload(null)} aria-label={`${ADMIN_DICTIONARY.actionTitles.close} thông báo`}><X size={14} /></button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div
-            className="admin-floating-bar"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 22 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            <div className="admin-floating-content">
-              <span>{c.selected(selected.size, t.selectedNoun)}</span>
-              <div className="admin-actions">
-                <button className="admin-ghost-btn danger" onClick={requestBulkDelete}>{t.floatingActions.deleteSelected}</button>
-                <button className="admin-ghost-btn" onClick={bulkToggleStatus}>{t.floatingActions.changeStatus}</button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AdminConfirmDialog
-        open={Boolean(deleteConfirm)}
-        title={deleteConfirm?.title || 'Xác nhận xóa'}
-        description={deleteConfirm?.description || ''}
-        selectedItems={deleteConfirm?.selectedItems}
-        selectedNoun={deleteConfirm?.selectedNoun}
-        confirmLabel={deleteConfirm?.confirmLabel || 'Xóa'}
-        danger
-        onCancel={() => setDeleteConfirm(null)}
-        onConfirm={confirmDeleteCategories}
-      />
-
-      {showCategoryDrawer && (
-        <>
-          <div className="drawer-overlay" onClick={() => setShowCategoryDrawer(false)} />
-          <div className="drawer">
-            <div className="drawer-header">
-              <div>
-                <p className="drawer-eyebrow">{categoryForm.id ? 'Chỉnh sửa' : 'Thêm'} danh mục</p>
-                <h3>{categoryForm.name || 'Danh mục mới'}</h3>
-              </div>
-               <button className="admin-icon-btn" onClick={() => setShowCategoryDrawer(false)} aria-label={ADMIN_DICTIONARY.actionTitles.close}><X size={16} /></button>
-            </div>
-
-            <div className="drawer-body">
-              <section className="drawer-section">
-                <h4>Banner danh mục</h4>
-                <div className="media-grid">
-                  <div className="media-cover" style={{ backgroundImage: categoryForm.image ? `url(${categoryForm.image})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                    {!categoryForm.image && 'Tải banner'}
-                  </div>
-                  <button className="media-add" onClick={() => setCategoryForm(prev => ({ ...prev, image: 'https://images.unsplash.com/photo-1495107334309-fcf20504a5ab?auto=format&fit=crop&w=600&q=80' }))}>+ Chọn ảnh mẫu</button>
-                </div>
-              </section>
-
-              <section className="drawer-section">
-                <h4>Thông tin danh mục</h4>
-                <div className="form-grid">
-                  <label className="form-field">
-                    <span>Tên danh mục</span>
-                    <input
-                      value={categoryForm.name}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setCategoryForm(prev => ({ ...prev, name: value, slug: prev.slug ? prev.slug : value ? toSlug(value) : '' }));
-                        if (formErrors.name) setFormErrors(prev => ({ ...prev, name: undefined }));
-                      }}
-                    />
-                    {formErrors.name && <small className="form-field-error">{formErrors.name}</small>}
-                  </label>
-                  <label className="form-field">
-                    <span>Slug</span>
-                    <input value={categoryForm.slug} onChange={e => handleCatSlugChange(e.target.value)} />
-                    {formErrors.slug && <small className="form-field-error">{formErrors.slug}</small>}
-                  </label>
-                  <label className="form-field">
-                    <span>Danh mục cha</span>
-                    <select value={categoryForm.parentId} onChange={e => setCategoryForm(prev => ({ ...prev, parentId: e.target.value }))}>
-                      <option value="">Không có</option>
-                      {categories.filter(c => !blockedParentIds.has(c.id)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    {formErrors.parent && <small className="form-field-error">{formErrors.parent}</small>}
-                  </label>
-                  <label className="form-field">
-                    <span>Thứ tự hiển thị</span>
-                    <input type="number" min={0} value={categoryForm.order} onChange={e => setCategoryForm(prev => ({ ...prev, order: Math.max(0, parseInt(e.target.value || '0', 10)) }))} />
-                    {formErrors.order && <small className="form-field-error">{formErrors.order}</small>}
-                  </label>
-                  <label className="form-field full">
-                    <span>Mô tả ngắn</span>
-                    <textarea rows={3} value={categoryForm.description || ''} onChange={e => setCategoryForm(prev => ({ ...prev, description: e.target.value }))} />
-                  </label>
-                </div>
-              </section>
-
-              <section className="drawer-section">
-                <h4>Hiển thị</h4>
-                <div className="switch-row">
-                  <div>
-                    <p className="admin-bold">Hiển thị trên Menu chính</p>
-                    <p className="admin-muted small">Bật để ghim danh mục vào menu</p>
-                  </div>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={categoryForm.showOnMenu}
-                      onChange={e => setCategoryForm(prev => ({ ...prev, showOnMenu: e.target.checked }))}
-                    />
-                    <span className="switch-slider" />
-                  </label>
-                </div>
-              </section>
-            </div>
-
-            <div className="drawer-footer">
-              <button className="admin-ghost-btn" onClick={() => setShowCategoryDrawer(false)}>Hủy</button>
-              <button className="admin-primary-btn" onClick={handleSaveCategory}>Lưu danh mục</button>
+      <section className="admin-panels single">
+        <div className="admin-panel">
+          <div className="admin-panel-head">
+            <div>
+              <h2>Danh sách rà soát taxonomy</h2>
+              <span className="admin-muted">Bảng phẳng để admin scan nhanh level, path, số sản phẩm và thao tác CRUD.</span>
             </div>
           </div>
-        </>
-      )}
+          {flatFilteredCategories.length === 0 ? (
+            <AdminStateBlock
+              type={query ? 'search-empty' : 'empty'}
+              title={query ? 'Không tìm thấy danh mục phù hợp' : 'Chưa có dữ liệu taxonomy'}
+              description={query ? 'Thử đổi từ khóa hoặc xóa bộ lọc để xem toàn bộ taxonomy.' : 'Các node taxonomy sẽ hiển thị tại đây để rà soát nhanh.'}
+              actionLabel="Xóa bộ lọc"
+              onAction={resetView}
+            />
+          ) : (
+            <div className="admin-table" role="table" aria-label="Bảng danh sách taxonomy">
+              <div className="admin-table-row taxonomy-audit admin-table-head" role="row">
+                <div role="columnheader">Danh mục</div>
+                <div role="columnheader">Đường dẫn</div>
+                <div role="columnheader">Cấp</div>
+                <div role="columnheader">Sản phẩm</div>
+                <div role="columnheader">Trạng thái</div>
+                <div role="columnheader">Hành động</div>
+              </div>
+              {flatFilteredCategories.map((item) => (
+                <motion.div key={item.id} className="admin-table-row taxonomy-audit" role="row">
+                  <div role="cell"><div className="admin-bold">{item.name}</div><div className="admin-muted small">{item.slug}</div></div>
+                  <div role="cell" className="admin-muted">{buildPath(item.id, byId).join(' > ')}</div>
+                  <div role="cell"><span className="badge gray">Cấp {getLevel(item.id, byId)}</span></div>
+                  <div role="cell"><span className="badge blue">{item.count} SP</span></div>
+                  <div role="cell"><span className={`admin-pill ${item.status === 'visible' ? 'success' : 'neutral'}`}>{item.status === 'visible' ? 'Đang hiện' : 'Đã ẩn'}</span></div>
+                  <div role="cell" className="admin-actions">
+                    <button className="admin-icon-btn subtle" title="Xem chi tiết" aria-label="Xem chi tiết" onClick={() => setSelectedId(item.id)}><ChevronRight size={16} /></button>
+                    <button className="admin-icon-btn subtle" title="Chỉnh sửa" aria-label="Chỉnh sửa" onClick={() => openEditor(item)}><Pencil size={16} /></button>
+                    <button className="admin-icon-btn subtle" title={item.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'} aria-label={item.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'} onClick={() => toggleVisibility(item.id)}>{item.status === 'visible' ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                    <button className="admin-icon-btn subtle danger-icon" title="Xóa" aria-label="Xóa" onClick={() => requestDelete(item.id)}><Trash2 size={16} /></button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
-      {toast && <div className="toast success">{toast}</div>}
+      <AdminConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa danh mục"
+        description="Chỉ nên xóa khi danh mục không còn danh mục con và không còn sản phẩm đang gắn."
+        selectedItems={deleteTarget ? [deleteTarget.name] : undefined}
+        selectedNoun="danh mục"
+        confirmLabel="Xác nhận xóa"
+        danger
+        onCancel={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+      />
+
+      <AnimatePresence>{toast ? <div className="toast success">{toast}</div> : null}</AnimatePresence>
     </AdminLayout>
   );
 };
+
+function getLevel(id: string, byId: Map<string, Category>) {
+  let level = 1;
+  let cursor = byId.get(id);
+  while (cursor?.parentId) {
+    level += 1;
+    cursor = byId.get(cursor.parentId);
+  }
+  return level;
+}
+
+function buildPath(id: string, byId: Map<string, Category>) {
+  const names: string[] = [];
+  let cursor = byId.get(id);
+  while (cursor) {
+    names.unshift(cursor.name);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return names;
+}
+
+function buildDraftPath(draft: CategoryDraft, byId: Map<string, Category>) {
+  const parentPath = draft.parentId ? buildPath(draft.parentId, byId) : [];
+  if (draft.name.trim()) return [...parentPath, draft.name.trim()];
+  return parentPath;
+}
 
 export default AdminCategories;

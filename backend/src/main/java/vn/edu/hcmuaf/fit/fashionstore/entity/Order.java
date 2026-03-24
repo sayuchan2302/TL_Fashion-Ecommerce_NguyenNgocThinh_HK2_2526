@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -57,6 +58,18 @@ public class Order extends BaseEntity {
 
     @Column(name = "tracking_number")
     private String trackingNumber;
+
+    @Column(name = "store_id")
+    private UUID storeId;
+
+    @Column(name = "sub_order_id")
+    private UUID subOrderId;
+
+    @Column(name = "commission_fee")
+    private Double commissionFee = 0.0;
+
+    @Column(name = "vendor_payout")
+    private Double vendorPayout = 0.0;
 
     @Column(columnDefinition = "TEXT")
     private String note;

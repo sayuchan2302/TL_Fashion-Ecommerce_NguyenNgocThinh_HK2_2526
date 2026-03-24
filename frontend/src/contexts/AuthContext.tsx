@@ -8,6 +8,7 @@ interface AuthContextValue {
   token: string | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  refreshSession: (next: AuthResponse) => void;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -19,12 +20,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const stored = authService.getSession();
-    if (stored) setSession(stored);
+    if (!stored) return;
+
+    const role = stored.user?.role;
+    const requiresBackendJwt = role === 'VENDOR' || role === 'SUPER_ADMIN';
+    if (requiresBackendJwt && !authService.isBackendJwtToken(stored.token)) {
+      authService.logout();
+      return;
+    }
+
+    setSession(stored);
   }, []);
 
   const login = async (email: string, password: string) => {
     const res = await authService.login(email, password);
     setSession(res);
+  };
+
+  const refreshSession = (next: AuthResponse) => {
+    setSession(next);
   };
 
   const register = async (name: string, email: string, password: string) => {
@@ -44,6 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token: session?.token || null,
         isAuthenticated: Boolean(session?.token),
         login,
+        refreshSession,
         register,
         logout,
       }}

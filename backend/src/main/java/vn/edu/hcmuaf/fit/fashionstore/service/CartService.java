@@ -1,6 +1,5 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.CartItemRequest;
@@ -9,6 +8,7 @@ import vn.edu.hcmuaf.fit.fashionstore.entity.CartItem;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Product;
 import vn.edu.hcmuaf.fit.fashionstore.entity.ProductVariant;
 import vn.edu.hcmuaf.fit.fashionstore.entity.User;
+import vn.edu.hcmuaf.fit.fashionstore.exception.ResourceNotFoundException;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CartRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.ProductRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.ProductVariantRepository;
@@ -17,13 +17,20 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class CartService {
 
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
+
+    public CartService(CartRepository cartRepository, UserRepository userRepository, 
+                       ProductRepository productRepository, ProductVariantRepository productVariantRepository) {
+        this.cartRepository = cartRepository;
+        this.userRepository = userRepository;
+        this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
+    }
 
     public Cart getCartByUserId(UUID userId) {
         return cartRepository.findByUserId(userId)
@@ -46,13 +53,15 @@ public class CartService {
     public Cart addItem(UUID userId, CartItemRequest request) {
         Cart cart = getCartByUserId(userId);
         
-        Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findPublicById(request.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
         
         final ProductVariant variant;
         if (request.getVariantId() != null) {
             variant = productVariantRepository.findById(request.getVariantId())
-                    .orElseThrow(() -> new RuntimeException("Variant not found"));
+                    .filter(found -> found.getProduct().getId().equals(product.getId()))
+                    .filter(found -> Boolean.TRUE.equals(found.getIsActive()))
+                    .orElseThrow(() -> new ResourceNotFoundException("Variant not found"));
         } else {
             variant = null;
         }

@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Product;
 
@@ -15,6 +16,44 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     Optional<Product> findBySlug(String slug);
+
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.status = 'ACTIVE'
+              AND p.storeId IS NOT NULL
+              AND p.storeId IN (
+                  SELECT s.id FROM Store s
+                  WHERE s.approvalStatus = 'APPROVED'
+                    AND s.status = 'ACTIVE'
+              )
+            """)
+    List<Product> findAllPublicProducts();
+
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.id = :id
+              AND p.status = 'ACTIVE'
+              AND p.storeId IS NOT NULL
+              AND p.storeId IN (
+                  SELECT s.id FROM Store s
+                  WHERE s.approvalStatus = 'APPROVED'
+                    AND s.status = 'ACTIVE'
+              )
+            """)
+    Optional<Product> findPublicById(@Param("id") UUID id);
+
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.slug = :slug
+              AND p.status = 'ACTIVE'
+              AND p.storeId IS NOT NULL
+              AND p.storeId IN (
+                  SELECT s.id FROM Store s
+                  WHERE s.approvalStatus = 'APPROVED'
+                    AND s.status = 'ACTIVE'
+              )
+            """)
+    Optional<Product> findPublicBySlug(@Param("slug") String slug);
 
     Page<Product> findByCategoryId(UUID categoryId, Pageable pageable);
 
@@ -30,4 +69,55 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.images LEFT JOIN FETCH p.variants WHERE p.id = :id")
     Optional<Product> findByIdWithDetails(UUID id);
+
+    // ─── Multi-vendor: Store-scoped queries ────────────────────────────────────
+    
+    /**
+     * Find all products belonging to a specific store (vendor)
+     */
+    Page<Product> findByStoreId(UUID storeId, Pageable pageable);
+
+    /**
+     * Find active products for a store
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.storeId = :storeId
+              AND p.status = 'ACTIVE'
+              AND p.storeId IN (
+                  SELECT s.id FROM Store s
+                  WHERE s.approvalStatus = 'APPROVED'
+                    AND s.status = 'ACTIVE'
+              )
+            """)
+    Page<Product> findActiveByStoreId(@Param("storeId") UUID storeId, Pageable pageable);
+
+    /**
+     * Find product by ID only if it belongs to the specified store (ownership check)
+     */
+    Optional<Product> findByIdAndStoreId(UUID id, UUID storeId);
+
+    /**
+     * Search products within a specific store
+     */
+    @Query("SELECT p FROM Product p WHERE p.storeId = :storeId AND p.status = 'ACTIVE' AND " +
+            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(p.description) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    Page<Product> searchProductsByStore(@Param("storeId") UUID storeId, @Param("keyword") String keyword, Pageable pageable);
+
+    /**
+     * Find products by category within a specific store
+     */
+    Page<Product> findByStoreIdAndCategoryId(UUID storeId, UUID categoryId, Pageable pageable);
+
+    /**
+     * Count products by store (for vendor dashboard)
+     */
+    long countByStoreId(UUID storeId);
+
+    /**
+     * Count active products by store
+     */
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.storeId = :storeId AND p.status = 'ACTIVE'")
+    long countActiveByStoreId(@Param("storeId") UUID storeId);
 }

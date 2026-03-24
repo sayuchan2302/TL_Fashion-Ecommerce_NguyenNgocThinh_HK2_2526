@@ -1,3 +1,5 @@
+export type UserRole = 'CUSTOMER' | 'VENDOR' | 'SUPER_ADMIN';
+
 export interface User {
   id: string;
   name: string;
@@ -5,10 +7,13 @@ export interface User {
   avatar?: string;
   phone?: string;
   gender?: 'male' | 'female' | 'other';
-  role?: 'admin' | 'user';
+  role?: UserRole;
+  storeId?: string;
+  isApprovedVendor?: boolean;
 }
 
 export interface AuthResponse {
   token: string;
+  refreshToken?: string;
   user: User;
 }

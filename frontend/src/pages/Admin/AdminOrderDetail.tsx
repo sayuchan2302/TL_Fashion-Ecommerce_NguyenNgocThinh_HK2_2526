@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
-import { Printer, XCircle, RotateCcw, Truck, User, Copy, Download, Save } from 'lucide-react';
+import { Printer, XCircle, RotateCcw, Truck, User, Copy, Download, Save, Store, Percent } from 'lucide-react';
 import {
   fulfillmentLabel,
   fulfillmentTransitions,
@@ -19,6 +19,8 @@ import { sharedOrderStore } from '../../services/sharedOrderStore';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminToast } from './useAdminToast';
 import { ADMIN_DICTIONARY } from './adminDictionary';
+import { calculateCommission, formatCurrency } from '../../services/commissionService';
+import { MARKETPLACE_DICTIONARY } from '../../utils/clientDictionary';
 
 const formatVND = (n: number) => n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
@@ -38,6 +40,17 @@ const AdminOrderDetail = () => {
   const fulfillment = order?.fulfillment || 'pending';
   const paymentStatus = order?.paymentStatus || 'unpaid';
   const timeline = order?.timeline || [];
+
+  const statusOptions = useMemo(() => {
+    const allowed = new Set<FulfillmentStatus>([fulfillment, ...fulfillmentTransitions[fulfillment]]);
+    return (['pending', 'packing', 'shipping', 'done', 'canceled'] as FulfillmentStatus[]).filter(state => allowed.has(state));
+  }, [fulfillment]);
+
+  const nextPaymentStatusPreview = useMemo(() => {
+    if (!pendingTransition) return paymentStatus;
+    if (pendingTransition === 'done' && paymentStatus === 'cod_uncollected') return 'paid' as PaymentStatus;
+    return paymentStatus;
+  }, [pendingTransition, paymentStatus]);
 
   useEffect(() => {
     const syncOrder = () => {
@@ -64,11 +77,6 @@ const AdminOrderDetail = () => {
   }
 
   const total = order.pricing.subtotal + order.pricing.shipping - order.pricing.discount;
-
-  const statusOptions = useMemo(() => {
-    const allowed = new Set<FulfillmentStatus>([fulfillment, ...fulfillmentTransitions[fulfillment]]);
-    return (['pending', 'packing', 'shipping', 'done', 'canceled'] as FulfillmentStatus[]).filter(state => allowed.has(state));
-  }, [fulfillment]);
 
   const requestTransition = (next: FulfillmentStatus) => {
     if (next === fulfillment) return;
@@ -127,12 +135,6 @@ const AdminOrderDetail = () => {
     pushToast(ADMIN_DICTIONARY.messages.orderDetail.auditExported(order.code));
   };
 
-  const nextPaymentStatusPreview = useMemo(() => {
-    if (!pendingTransition) return paymentStatus;
-    if (pendingTransition === 'done' && paymentStatus === 'cod_uncollected') return 'paid' as PaymentStatus;
-    return paymentStatus;
-  }, [pendingTransition, paymentStatus]);
-
   return (
     <AdminLayout
       title={
@@ -156,9 +158,6 @@ const AdminOrderDetail = () => {
     >
       <motion.div
         className="order-detail-grid"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
       >
         <div className="od-left">
           <section className="od-section">
@@ -172,6 +171,7 @@ const AdminOrderDetail = () => {
                   <div className="od-item-info">
                     <p className="od-item-name">{item.name}</p>
                     <p className="od-item-variant"><strong>{item.color}</strong> · <strong>Size {item.size}</strong></p>
+                    <p className="od-item-variant">Gian hàng: <strong>{order.storeName || 'Chưa xác định'}</strong></p>
                     <p className="od-item-price">{item.qty} x {formatVND(item.price)}</p>
                   </div>
                   <div className="od-item-total">{formatVND(item.qty * item.price)}</div>
@@ -184,6 +184,53 @@ const AdminOrderDetail = () => {
               <div className="od-summary-row"><span>{t.orderSummary.discount} {order.pricing.voucher && `(${order.pricing.voucher})`}</span><strong>-{formatVND(order.pricing.discount)}</strong></div>
               <div className="od-summary-row od-total"><span>{t.orderSummary.total}</span><strong>{formatVND(total)}</strong></div>
             </div>
+
+            {/* Commission Breakdown - Multi-vendor */}
+            {(() => {
+              const commissionRate = order.commissionRate || 5;
+              const commissionData = calculateCommission(total, commissionRate);
+              const storeName = order.storeName || 'Fashion Hub';
+              
+              return (
+                <div className="od-commission-card" style={{
+                  marginTop: 12,
+                  padding: 14,
+                  background: 'linear-gradient(135deg, #f0fdfa, #ccfbf1)',
+                  border: '1px solid #99f6e4',
+                  borderRadius: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <Store size={16} style={{ color: '#0d9488' }} />
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0d9488' }}>
+                      {MARKETPLACE_DICTIONARY.commission.title}
+                    </h3>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#475569' }}>{MARKETPLACE_DICTIONARY.common.store}</span>
+                      <strong style={{ color: '#334155' }}>{storeName}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Percent size={12} />
+                        {MARKETPLACE_DICTIONARY.commission.rate}
+                      </span>
+                      <strong style={{ color: '#334155' }}>{commissionRate}%</strong>
+                    </div>
+                    <div style={{ height: 1, background: '#99f6e4', margin: '4px 0' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#475569' }}>{MARKETPLACE_DICTIONARY.commission.fee}</span>
+                      <strong style={{ color: '#d97706' }}>-{formatCurrency(commissionData.commission)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                      <span style={{ color: '#475569', fontWeight: 600 }}>{MARKETPLACE_DICTIONARY.commission.payout}</span>
+                      <strong style={{ color: '#0d9488', fontSize: 16 }}>{formatCurrency(commissionData.payout)}</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </section>
 
           <section className="od-section">

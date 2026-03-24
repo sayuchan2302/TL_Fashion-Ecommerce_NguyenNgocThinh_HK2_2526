@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -31,6 +32,9 @@ public class Review extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     private Order order;
+
+    @Column(name = "store_id")
+    private UUID storeId;
 
     @Column(nullable = false)
     private Integer rating;

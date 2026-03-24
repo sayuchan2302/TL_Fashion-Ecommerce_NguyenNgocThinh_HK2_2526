@@ -28,6 +28,8 @@ export interface AdminOrderData {
   customer: string;
   avatar: string;
   total: string;
+  storeName?: string;
+  commissionRate?: number;
   paymentStatus: PaymentStatus;
   fulfillment: FulfillmentStatus;
   shipMethod: string;

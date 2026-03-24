@@ -3,6 +3,7 @@ package vn.edu.hcmuaf.fit.fashionstore.config;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -39,14 +40,76 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"" + authException.getMessage() + "\"}");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"error\":\"Forbidden\",\"message\":\"" + accessDeniedException.getMessage() + "\"}");
+                        })
+                )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/products/**").permitAll()
-                        .requestMatchers("/api/categories/**").permitAll()
-                        .requestMatchers("/api/coupons/**").permitAll()
+                        // ─── Public endpoints (no auth required) ───────────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        
+                        // ─── Products: public read, vendor/admin write ─────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/products").hasAnyRole("VENDOR", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/products/**").hasAnyRole("VENDOR", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAnyRole("VENDOR", "SUPER_ADMIN")
+                        
+                        // ─── Categories: public read, admin-only write ─────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/categories").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/categories/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/categories/**").hasRole("SUPER_ADMIN")
+                        
+                        // ─── Stores: public read, registration requires auth, admin approval ─
+                        .requestMatchers(HttpMethod.GET, "/api/stores").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/stores/register").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/stores/*/approve").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/stores/*/reject").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/stores/*/suspend").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/stores/*/reactivate").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/stores/**").hasAnyRole("VENDOR", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/stores/**").hasRole("SUPER_ADMIN")
+                        
+                        // ─── Orders: authenticated users only ──────────────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/orders").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/orders/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/orders").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasAnyRole("VENDOR", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/orders/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/orders/**").hasRole("SUPER_ADMIN")
+                        
+                        // ─── Cart: authenticated users ─────────────────────────────────────
+                        .requestMatchers("/api/cart").authenticated()
+                        .requestMatchers("/api/cart/**").authenticated()
+                        
+                        // ─── Addresses: authenticated users ────────────────────────────────
+                        .requestMatchers("/api/addresses/**").authenticated()
+                        
+                        // ─── Coupons: public read, admin write ─────────────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/coupons/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/coupons").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/coupons/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/coupons/**").hasRole("SUPER_ADMIN")
+                        
+                        // ─── Admin endpoints: SUPER_ADMIN only ─────────────────────────────
+                        .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
+                        
+                        // ─── Default: require authentication ───────────────────────────────
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -57,7 +120,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
+        // DEV: allow all origins for Postman/Thunder Client/curl testing
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setExposedHeaders(List.of("Authorization"));

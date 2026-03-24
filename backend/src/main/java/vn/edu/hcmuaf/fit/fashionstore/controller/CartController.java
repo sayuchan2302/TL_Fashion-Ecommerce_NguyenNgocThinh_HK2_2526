@@ -1,6 +1,5 @@
 package vn.edu.hcmuaf.fit.fashionstore.controller;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.CartItemRequest;
@@ -12,11 +11,15 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/cart")
-@RequiredArgsConstructor
 public class CartController {
 
     private final CartService cartService;
     private final JwtService jwtService;
+
+    public CartController(CartService cartService, JwtService jwtService) {
+        this.cartService = cartService;
+        this.jwtService = jwtService;
+    }
 
     @GetMapping
     public ResponseEntity<Cart> getCart(@RequestHeader("Authorization") String authHeader) {

@@ -7,6 +7,7 @@ import ProductActions from '../../components/ProductActions/ProductActions';
 import ProductDescription from '../../components/ProductDescription/ProductDescription';
 import ProductSection from '../../components/ProductSection/ProductSection';
 import ProductDetailSkeleton from '../../components/ProductDetailSkeleton/ProductDetailSkeleton';
+import StoreInfoCard from '../../components/StoreInfoCard/StoreInfoCard';
 import { productService } from '../../services/productService';
 import { reviewService } from '../../services/reviewService';
 import { CLIENT_TEXT } from '../../utils/texts';
@@ -84,8 +85,7 @@ const ProductDetail = () => {
   const [reviews, setReviews] = useState<ClientReviewItem[]>(() => reviewService.getReviewsByProduct(productId));
 
   const relatedProducts = useMemo(() => {
-    const numericId = Number(productId) || 0;
-    return productService.getRelated(numericId, 4);
+    return productService.getRelated(productId, 4);
   }, [productId]);
 
   const [selectedColor, setSelectedColor] = useState('');
@@ -99,18 +99,29 @@ const ProductDetail = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    let isMounted = true;
+
     const timer = setTimeout(() => {
-      const fetched = productService.getById(productId) || productService.list()[0] || null;
-      setProduct(fetched);
-      if (fetched) {
-        const defaultVariant = fetched.variants?.[0];
-        setSelectedColor(defaultVariant?.color || fetched.colors?.[0] || '');
-        setSelectedSize(defaultVariant?.size || '');
-      }
-      setReviews(reviewService.getReviewsByProduct(productId));
-      setIsLoading(false);
+      void (async () => {
+        const fetched = await productService.getByIdentifier(productId) || productService.list()[0] || null;
+        if (!isMounted) {
+          return;
+        }
+        setProduct(fetched);
+        if (fetched) {
+          const defaultVariant = fetched.variants?.[0];
+          setSelectedColor(defaultVariant?.color || fetched.colors?.[0] || '');
+          setSelectedSize(defaultVariant?.size || '');
+        }
+        setReviews(reviewService.getReviewsByProduct(productId));
+        setIsLoading(false);
+      })();
     }, 300);
-    return () => clearTimeout(timer);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [productId]);
 
   // ── Review submission handler ─────────────────────────────────────────────
@@ -180,6 +191,16 @@ const ProductDetail = () => {
           {/* Left Column: Gallery */}
           <div className="pdp-gallery-col">
             <ProductGallery images={[product.image]} />
+
+            {product.storeId && product.storeName && product.storeSlug && (
+              <StoreInfoCard
+                storeId={product.storeId}
+                storeName={product.storeName}
+                storeSlug={product.storeSlug}
+                storeLogo={product.storeLogo}
+                isOfficialStore={product.isOfficialStore}
+              />
+            )}
           </div>
 
           {/* Right Column: Info & Actions */}
@@ -194,6 +215,7 @@ const ProductDetail = () => {
             <ProductActions
               product={{
                 id: product.sku,
+                backendId: product.backendId,
                 name: product.name,
                 price: product.price,
                 originalPrice: product.originalPrice,
@@ -218,6 +240,7 @@ const ProductDetail = () => {
                 <Link to="/contact" className="pd-size-link">{t.sizeHelp.consult}</Link>
               </div>
             </div>
+
           </div>
         </div>
 

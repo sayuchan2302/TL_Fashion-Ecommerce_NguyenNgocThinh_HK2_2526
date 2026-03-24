@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @SuperBuilder
@@ -45,4 +47,7 @@ public class OrderItem extends BaseEntity {
 
     @Column(name = "total_price", nullable = false)
     private Double totalPrice;
+
+    @Column(name = "store_id")
+    private UUID storeId;
 }

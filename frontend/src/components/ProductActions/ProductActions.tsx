@@ -3,11 +3,13 @@ import { Minus, Plus, ShoppingCart, Check, Heart } from 'lucide-react';
 import { useCartAnimation } from '../../context/CartAnimationContext';
 import { useWishlist } from '../../contexts/WishlistContext';
 import { useCart } from '../../contexts/CartContext';
+import { productService } from '../../services/productService';
 import './ProductActions.css';
 
 interface ProductActionsProps {
   product: {
     id: number | string;
+    backendId?: string;
     name: string;
     price: number;
     originalPrice?: number;
@@ -27,9 +29,15 @@ const ProductActions = ({ product, selectedColor, selectedSize }: ProductActions
   const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const isWished = isInWishlist(String(product.id));
 
-  const handleBuyNow = (e: React.MouseEvent) => {
+  const handleBuyNow = async (e: React.MouseEvent) => {
+    const purchaseReference = product.backendId
+      ? { backendProductId: product.backendId, backendVariantId: undefined }
+      : await productService.resolvePurchaseReference(String(product.id), selectedColor, selectedSize);
+
     addToCart({
       id: product.id,
+      backendProductId: purchaseReference.backendProductId,
+      backendVariantId: purchaseReference.backendVariantId,
       name: product.name,
       price: product.price,
       originalPrice: product.originalPrice,
