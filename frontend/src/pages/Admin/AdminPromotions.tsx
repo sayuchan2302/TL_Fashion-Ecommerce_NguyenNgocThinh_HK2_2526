@@ -9,6 +9,7 @@ import { useAdminListState } from './useAdminListState';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import { useAdminViewState } from './useAdminViewState';
 import { useAdminToast } from './useAdminToast';
+import { PanelTabs } from '../../components/Panel/PanelPrimitives';
 import Drawer from '../../components/Drawer/Drawer';
 import { promotionStore, type Promotion, type PromotionStatus, type DiscountType } from '../../services/promotionStore';
 import { promotionStatusClass, promotionStatusLabel } from './adminStatusMaps';
@@ -219,13 +220,16 @@ const AdminPromotions = () => {
         </div>
       </div>
 
-      <div className="admin-tabs">
-        {['all', 'running', 'paused', 'expired'].map((status) => (
-          <button key={status} className={`admin-tab ${view.status === status ? 'active' : ''}`} onClick={() => view.setStatus(status)}>
-            <span>{status === 'all' ? 'Tất cả' : status === 'running' ? 'Đang chạy' : status === 'paused' ? 'Tạm dừng' : 'Hết hạn'}</span>
-          </button>
-        ))}
-      </div>
+      <PanelTabs
+        items={[
+          { key: 'all', label: 'Tất cả', count: rows.length },
+          { key: 'running', label: 'Đang chạy', count: stats.running },
+          { key: 'paused', label: 'Tạm dừng', count: stats.paused },
+          { key: 'expired', label: 'Hết hạn', count: stats.expired },
+        ]}
+        activeKey={view.status}
+        onChange={(key) => view.setStatus(key)}
+      />
 
       <section className="admin-panels single">
         <div className="admin-panel">

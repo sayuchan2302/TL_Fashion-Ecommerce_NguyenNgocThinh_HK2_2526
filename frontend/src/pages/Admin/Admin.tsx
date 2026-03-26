@@ -83,7 +83,7 @@ const Admin = () => {
         </>
       )}
     >
-      <section className="admin-stats grid-4">
+      <section className="admin-stats grid-6">
         {stats.map((item) => (
           <motion.div
             className="admin-stat-card compact"
@@ -106,7 +106,7 @@ const Admin = () => {
               <path
                 d={`M ${item.spark.map((v, i) => `${(i / (item.spark.length - 1)) * 100} ${30 - (v / Math.max(...item.spark)) * 26}`).join(' L ')}`}
                 fill="none"
-                stroke="#10b981"
+                stroke="#3b82f6"
                 strokeWidth="2"
                 strokeLinecap="round"
               />

@@ -497,7 +497,8 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: var(--co-gray-100);
+  background: #eff6ff;
+  color: #3b82f6;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -551,7 +552,7 @@ body {
 }
 
 .admin-stat-change.up {
-  color: var(--co-admin-success-text);
+  color: #3b82f6;
 }
 
 .admin-stat-change.down {
@@ -672,7 +673,9 @@ body {
   grid-template-columns: repeat(4, 1fr);
 }
 
-.admin-stats.grid-3 {
+.admin-stats.grid-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
   grid-template-columns: repeat(3, 1fr);
 }
 
@@ -766,12 +769,16 @@ body {
   .admin-stats.grid-4 {
     grid-template-columns: repeat(2, 1fr);
   }
+  .admin-stats.grid-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 600px) {
 
   .admin-stats.grid-4,
-  .admin-stats.grid-3 {
+  .admin-stats.grid-3,
+  .admin-stats.grid-6 {
     grid-template-columns: 1fr 1fr;
   }
 }

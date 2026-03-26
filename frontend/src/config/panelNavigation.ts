@@ -1,7 +1,7 @@
 import type { PanelNavItem } from '../pages/Admin/AdminLayout';
 
 export const adminPanelNav: PanelNavItem[] = [
-  { label: 'Tổng quan', to: '/admin', exact: true },
+  { label: 'Tổng quan', to: '/admin/dashboard', exact: true },
   { label: 'Danh mục', to: '/admin/categories' },
   { label: 'Gian hàng', to: '/admin/stores' },
   { label: 'Khách hàng', to: '/admin/users' },

@@ -8,6 +8,7 @@ import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
 import { useAdminViewState } from './useAdminViewState';
 import { useAdminToast } from './useAdminToast';
+import { PanelTabs } from '../../components/Panel/PanelPrimitives';
 import { adminReviewService, type Review, type ReviewStatus } from './adminReviewService';
 import { ADMIN_VIEW_KEYS } from './adminListView';
 import AdminConfirmDialog from './AdminConfirmDialog';
@@ -185,19 +186,16 @@ const AdminReviews = () => {
         </div>
       </div>
 
-      <div className="admin-tabs">
-        {[
-          { key: 'all', label: 'Tất cả' },
-          { key: 'pending', label: 'Chờ duyệt' },
-          { key: 'approved', label: 'Đã duyệt' },
-          { key: 'hidden', label: 'Đã ẩn' },
-        ].map((tab) => (
-          <button key={tab.key} className={`admin-tab ${view.status === tab.key ? 'active' : ''}`} onClick={() => view.setStatus(tab.key)}>
-            <span>{tab.label}</span>
-            <span className="admin-tab-count">{tabCounts[tab.key as keyof typeof tabCounts]}</span>
-          </button>
-        ))}
-      </div>
+      <PanelTabs
+        items={[
+          { key: 'all', label: 'Tất cả', count: tabCounts.all },
+          { key: 'pending', label: 'Chờ duyệt', count: tabCounts.pending },
+          { key: 'approved', label: 'Đã duyệt', count: tabCounts.approved },
+          { key: 'hidden', label: 'Đã ẩn', count: tabCounts.hidden },
+        ]}
+        activeKey={view.status}
+        onChange={(key) => view.setStatus(key)}
+      />
 
       {hasViewContext && (
         <div className="admin-view-summary">
@@ -210,8 +208,8 @@ const AdminReviews = () => {
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
-            <h2>Review moderation queue</h2>
-            <Link to="/admin">Marketplace overview</Link>
+            <h2>Hàng đợi kiểm duyệt</h2>
+            <Link to="/admin/dashboard">Tổng quan marketplace</Link>
           </div>
 
           {filteredItems.length === 0 ? (
@@ -314,7 +312,7 @@ const AdminReviews = () => {
                       {i + 1}
                     </button>
                   ))}
-                  <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiep</button>
+                  <button className="page-btn" onClick={next} disabled={page === totalPages}>Tiếp</button>
                 </div>
               </div>
             </>
@@ -372,19 +370,19 @@ const AdminReviews = () => {
 
             <div className="drawer-body">
               <section className="drawer-section">
-                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Product signal</p>
+                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Thông tin sản phẩm</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <img src={drawerReview.productImage} alt={drawerReview.productName} style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0' }} />
                   <div>
                     <p className="admin-bold" style={{ margin: 0 }}>{drawerReview.productName}</p>
-                    <p className="admin-muted small" style={{ margin: 0 }}>Product ID: {drawerReview.productId}</p>
-                    {drawerReview.orderId && <p className="admin-muted small" style={{ margin: 0 }}>Order ID: #{drawerReview.orderId}</p>}
+                    <p className="admin-muted small" style={{ margin: 0 }}>Mã sản phẩm: {drawerReview.productId}</p>
+                    {drawerReview.orderId && <p className="admin-muted small" style={{ margin: 0 }}>Mã đơn hàng: #{drawerReview.orderId}</p>}
                   </div>
                 </div>
               </section>
 
               <section className="drawer-section">
-                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Customer feedback</p>
+                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Phản hồi khách hàng</p>
                 <div className="admin-card-list">
                   <div className="admin-card-row">
                     <span className="admin-bold">{drawerReview.customerName}</span>
@@ -398,7 +396,7 @@ const AdminReviews = () => {
               </section>
 
               <section className="drawer-section">
-                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Review content</p>
+                <p className="admin-label" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Nội dung đánh giá</p>
                 <div className="admin-note">{drawerReview.content}</div>
               </section>
 
@@ -442,11 +440,11 @@ const AdminReviews = () => {
 
       <AdminConfirmDialog
         open={Boolean(deleteTarget)}
-        title="Xoa review"
-        description="Ban chac chan muon xoa review nay khoi he thong moderation? Hanh dong nay khong the hoan tac."
+        title="Xóa đánh giá"
+        description="Bạn có chắc chắn muốn xóa đánh giá này khỏi hệ thống kiểm duyệt? Hành động này không thể hoàn tác."
         selectedItems={deleteTarget?.names}
         selectedNoun="review"
-        confirmLabel="Xoa review"
+        confirmLabel="Xóa đánh giá"
         danger
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}

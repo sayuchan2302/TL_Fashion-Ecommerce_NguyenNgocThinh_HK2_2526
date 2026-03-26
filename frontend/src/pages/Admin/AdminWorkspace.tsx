@@ -115,7 +115,8 @@ const AdminWorkspace = () => {
           <div className="admin-route-transition">
             <Suspense fallback={<PageFallback />}>
               <Routes>
-                <Route index element={<Admin />} />
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<Admin />} />
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="orders/:id" element={<AdminOrderDetail />} />
                 <Route path="categories" element={<AdminCategories />} />
@@ -130,7 +131,7 @@ const AdminWorkspace = () => {
                 <Route path="products" element={<Navigate to="/admin/categories" replace />} />
                 <Route path="customers" element={<Navigate to="/admin/users" replace />} />
                 <Route path="customer" element={<Navigate to="/admin/users" replace />} />
-                <Route path="*" element={<Navigate to="/admin" replace />} />
+                <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
               </Routes>
             </Suspense>
           </div>
