@@ -20,6 +20,8 @@ public class CategoryRequest {
     private String image;
     private UUID parentId;
     private Integer sortOrder;
+    private Boolean isVisible;
+    private Boolean showOnMenu;
 
     @JsonIgnore
     @Builder.Default

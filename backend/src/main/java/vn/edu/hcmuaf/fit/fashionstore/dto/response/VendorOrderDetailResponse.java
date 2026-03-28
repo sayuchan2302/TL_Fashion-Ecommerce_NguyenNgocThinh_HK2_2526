@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,17 +19,17 @@ public class VendorOrderDetailResponse {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Double subtotal;
-    private Double shippingFee;
-    private Double discount;
-    private Double total;
+    private BigDecimal subtotal;
+    private BigDecimal shippingFee;
+    private BigDecimal discount;
+    private BigDecimal total;
     private String paymentMethod;
     private String paymentStatus;
     private String note;
     private String trackingNumber;
     private String shippingCarrier;
-    private Double commissionFee;
-    private Double vendorPayout;
+    private BigDecimal commissionFee;
+    private BigDecimal vendorPayout;
     private VendorOrderSummaryResponse.Customer customer;
     private ShippingAddress shippingAddress;
     private List<Item> items;
@@ -56,8 +57,8 @@ public class VendorOrderDetailResponse {
         private String sku;
         private String variant;
         private Integer quantity;
-        private Double unitPrice;
-        private Double totalPrice;
+        private BigDecimal unitPrice;
+        private BigDecimal totalPrice;
         private String image;
     }
 }

@@ -2,7 +2,7 @@ import './Admin.css';
 import { Link } from 'react-router-dom';
 import { Filter, Search, Truck, Eye, Printer, Link2, CheckCircle2 } from 'lucide-react';
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
@@ -13,8 +13,6 @@ import {
   transitionAdminOrder,
   type AdminOrderRecord,
 } from './adminOrderService';
-import { ADMIN_VIEW_KEYS } from './adminListView';
-import { useAdminViewState } from './useAdminViewState';
 import { useAdminToast } from './useAdminToast';
 import { ADMIN_DICTIONARY } from './adminDictionary';
 import {
@@ -24,7 +22,7 @@ import {
   type FulfillmentStatus,
   type PaymentStatus,
 } from './orderWorkflow';
-import { PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+import { PanelStatsGrid, PanelTabs } from '../../components/Panel/PanelPrimitives';
 import Portal from '../../components/Portal/Portal';
 
 interface AdminOrderRow {
@@ -69,7 +67,6 @@ const mapOrderRecordToRow = (order: AdminOrderRecord): AdminOrderRow => {
   };
 };
 
-const initialOrders: AdminOrderRow[] = listAdminOrders().map(mapOrderRecordToRow);
 
 const tone = (status: string) => {
   const lower = status.toLowerCase();
@@ -89,37 +86,17 @@ const tabs = [
   { key: 'canceled', label: 'Đã hủy' },
 ];
 
-const validStatusKeys = new Set(tabs.map((tab) => tab.key));
-const validStatusKeysArray = Array.from(validStatusKeys);
-
-const formatDateTime = (value: string) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString('vi-VN', {
-    hour12: false,
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 const AdminOrders = () => {
   const c = ADMIN_DICTIONARY.common;
   const actions = ADMIN_DICTIONARY.actions;
   const actionTitles = ADMIN_DICTIONARY.actionTitles;
   const aria = useMemo(() => c.aria, [c.aria]);
-  const view = useAdminViewState({
-    storageKey: ADMIN_VIEW_KEYS.orders,
-    path: '/admin/orders',
-    validStatusKeys: validStatusKeysArray,
-    defaultStatus: 'all',
-  });
-
-  const activeTab = validStatusKeys.has(view.status) ? view.status : 'all';
+  const [activeTab, setActiveTab] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [rows, setRows] = useState<AdminOrderRow[]>(initialOrders);
+  const [rows, setRows] = useState<AdminOrderRow[]>([]);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
   const { toast, pushToast } = useAdminToast();
 
@@ -138,41 +115,45 @@ const AdminOrders = () => {
   );
 
   const {
-    search,
     isLoading,
     filteredItems: filteredOrders,
     pagedItems: pagedOrders,
-    page,
     totalPages,
     startIndex,
     endIndex,
-    next,
-    prev,
-    setPage,
   } = useAdminListState<AdminOrderRow>({
     items: rows,
     pageSize: 6,
-    searchValue: view.search,
-    onSearchChange: view.setSearch,
-    pageValue: view.page,
-    onPageChange: view.setPage,
+    searchValue: search,
+    onSearchChange: setSearch,
+    pageValue: page,
+    onPageChange: setPage,
     getSearchText,
     filterPredicate,
     loadingDeps: [activeTab],
   });
 
+  const fetchOrders = useCallback(async () => {
+    try {
+      const records = await listAdminOrders();
+      setRows(records.map(mapOrderRecordToRow));
+    } catch (error) {
+      console.error(error);
+      pushToast('Lỗi khi tải danh sách đơn hàng.');
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [pushToast]);
+
   useEffect(() => {
-    const syncOrders = () => {
-      setRows(listAdminOrders().map(mapOrderRecordToRow));
-    };
-    const unsubscribe = subscribeAdminOrders(syncOrders);
-    syncOrders();
+    fetchOrders();
+    const unsubscribe = subscribeAdminOrders(fetchOrders);
     return unsubscribe;
-  }, []);
+  }, [fetchOrders]);
 
   const shareCurrentView = async () => {
     try {
-      await view.shareCurrentView();
+      await navigator.clipboard.writeText(window.location.href);
       pushToast(ADMIN_DICTIONARY.messages.viewCopied);
     } catch {
       pushToast(ADMIN_DICTIONARY.messages.copyFailed);
@@ -181,7 +162,9 @@ const AdminOrders = () => {
 
   const resetCurrentView = () => {
     setSelected(new Set());
-    view.resetCurrentView();
+    setActiveTab('all');
+    setSearch('');
+    setPage(1);
     pushToast('Đã đặt lại danh sách đơn hàng.');
   };
 
@@ -194,12 +177,9 @@ const AdminOrders = () => {
     canceled: rows.filter((row) => row.fulfillment === 'canceled').length,
   } as const;
 
-  const activeTabLabel = tabs.find((tab) => tab.key === activeTab)?.label || 'Tất cả';
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim()) || view.page > 1;
-
   const changeTab = (nextTab: string) => {
     setSelected(new Set());
-    view.setStatus(nextTab);
+    setActiveTab(nextTab);
   };
 
   const toggleAll = (checked: boolean) => {
@@ -220,8 +200,8 @@ const AdminOrders = () => {
     setSelected(nextSelection);
   };
 
-  const handleBulkConfirm = () => {
-    const { updatedCodes, skippedCodes } = bulkTransitionToPacking(Array.from(selected), 'Admin');
+  const handleBulkConfirm = async () => {
+    const { updatedCodes, skippedCodes } = await bulkTransitionToPacking(Array.from(selected), 'Admin');
     if (updatedCodes.length === 0) {
       pushToast('Không có đơn hàng hợp lệ để chuyển sang đóng gói.');
       return;
@@ -232,10 +212,10 @@ const AdminOrders = () => {
 
     if (skippedCodes.length > 0) {
       pushToast(`Đã cập nhật ${updatedCodes.length} đơn, bỏ qua ${skippedCodes.length} đơn.`);
-      return;
+    } else {
+      pushToast(`Đã chuyển ${updatedCodes.length} đơn sang đóng gói.`);
     }
-
-    pushToast(`Đã chuyển ${updatedCodes.length} đơn sang đóng gói.`);
+    fetchOrders();
   };
 
   const handleBulkPrint = () => {
@@ -243,8 +223,8 @@ const AdminOrders = () => {
     pushToast(`Đang chuẩn bị phiếu in cho ${selected.size} đơn hàng.`);
   };
 
-  const handleApproveOrder = (code: string) => {
-    const result = transitionAdminOrder({
+  const handleApproveOrder = async (code: string) => {
+    const result = await transitionAdminOrder({
       code,
       nextFulfillment: 'packing',
       actor: 'Admin',
@@ -257,6 +237,7 @@ const AdminOrders = () => {
     }
 
     pushToast(result.message || 'Đã chuyển đơn hàng sang đóng gói.');
+    fetchOrders();
   };
 
   const selectedCount = selected.size;
@@ -277,7 +258,7 @@ const AdminOrders = () => {
               placeholder="Tìm ORDER ID, khách hàng hoặc sản phẩm"
               aria-label="Tìm ORDER ID, khách hàng hoặc sản phẩm"
               value={search}
-              onChange={(event) => view.setSearch(event.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
             />
           </div>
           <button className="admin-ghost-btn" onClick={() => pushToast(ADMIN_DICTIONARY.messages.advancedFilterComingSoon)}>
@@ -329,23 +310,26 @@ const AdminOrders = () => {
         onChange={changeTab}
       />
 
-      <PanelViewSummary
-        chips={[
-          ...(hasViewContext ? [{ key: 'status', label: <>{c.statusLabel}: {activeTabLabel}</> }] : []),
-          ...(search.trim() ? [{ key: 'search', label: <>{c.keyword}: {search.trim()}</> }] : []),
-        ]}
-        clearLabel={c.clearFilters}
-        onClear={resetCurrentView}
-      />
-
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Danh sách đơn hàng</h2>
-            <Link to="/admin">Tổng quan marketplace</Link>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">{c.selected(selected.size, 'đơn hàng')}</span>
+                <button className="admin-ghost-btn" onClick={() => setShowBulkConfirmModal(true)}>
+                  Chuyển sang đóng gói
+                </button>
+                <button className="admin-ghost-btn" onClick={handleBulkPrint}>
+                  Xuất / In
+                </button>
+              </div>
+            )}
           </div>
 
-          {isLoading ? null : filteredOrders.length === 0 ? (
+          {isInitializing ? (
+            <div className="admin-loading" style={{ padding: '3rem', textAlign: 'center' }}>Đang tải dữ liệu...</div>
+          ) : isLoading ? null : filteredOrders.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
               title={search.trim() ? 'Không tìm thấy đơn hàng phù hợp' : 'Chưa có đơn hàng nào'}
@@ -425,7 +409,7 @@ const AdminOrders = () => {
                       <span className="admin-muted order-ship-method">{order.shipMethod}</span>
                     </div>
                   </div>
-                  <div role="cell" className="admin-muted order-date">{formatDateTime(order.date)}</div>
+                  <div role="cell" className="admin-muted order-date">{new Date(order.date).toLocaleDateString('vi-VN')}</div>
                   <div role="cell" className="admin-actions" onClick={(event) => event.stopPropagation()}>
                     <Link
                       to={`/admin/orders/${order.code}`}
@@ -466,7 +450,7 @@ const AdminOrders = () => {
                 {c.showing(startIndex, endIndex, filteredOrders.length, 'đơn hàng')}
               </span>
               <div className="pagination">
-                <button className="page-btn" onClick={prev} disabled={page === 1}>
+                <button className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
                   {c.previous}
                 </button>
                 {Array.from({ length: totalPages }).map((_, index) => (
@@ -478,7 +462,7 @@ const AdminOrders = () => {
                     {index + 1}
                   </button>
                 ))}
-                <button className="page-btn" onClick={next} disabled={page === totalPages}>
+                <button className="page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
                   {c.next}
                 </button>
               </div>
@@ -486,30 +470,6 @@ const AdminOrders = () => {
           )}
         </div>
       </section>
-
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div
-            className="admin-floating-bar"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 22 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            <div className="admin-floating-content">
-              <span>{c.selected(selected.size, 'đơn hàng')}</span>
-              <div className="admin-actions">
-                <button className="admin-ghost-btn" onClick={() => setShowBulkConfirmModal(true)}>
-                  Chuyển sang đóng gói
-                </button>
-                <button className="admin-ghost-btn" onClick={handleBulkPrint}>
-                  Xuất / In
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {selected.size > 0 && showBulkConfirmModal && (
         <Portal>

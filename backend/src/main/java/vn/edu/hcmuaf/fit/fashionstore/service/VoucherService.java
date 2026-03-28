@@ -1,5 +1,6 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -10,6 +11,7 @@ import vn.edu.hcmuaf.fit.fashionstore.dto.request.VoucherRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.VoucherStatusUpdateRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VoucherListResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VoucherResponse;
+import java.math.BigDecimal;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Voucher;
 import vn.edu.hcmuaf.fit.fashionstore.repository.VoucherRepository;
 
@@ -58,10 +60,6 @@ public class VoucherService {
         validateRequest(request);
         String normalizedCode = normalizeCode(request.getCode());
 
-        voucherRepository.findByStoreIdAndCode(storeId, normalizedCode).ifPresent(existing -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher code already exists in this store");
-        });
-
         Voucher voucher = Voucher.builder()
                 .storeId(storeId)
                 .name(request.getName().trim())
@@ -78,8 +76,12 @@ public class VoucherService {
                 .updatedBy(actor)
                 .build();
 
-        Voucher saved = voucherRepository.save(voucher);
-        return toResponse(saved);
+        try {
+            Voucher saved = voucherRepository.save(voucher);
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher code already exists in this store");
+        }
     }
 
     @Transactional
@@ -87,12 +89,6 @@ public class VoucherService {
         validateRequest(request);
         Voucher voucher = getOwnedVoucher(storeId, voucherId);
         String normalizedCode = normalizeCode(request.getCode());
-
-        voucherRepository.findByStoreIdAndCode(storeId, normalizedCode).ifPresent(existing -> {
-            if (!existing.getId().equals(voucherId)) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher code already exists in this store");
-            }
-        });
 
         if (request.getTotalIssued() < safeUsedCount(voucher.getUsedCount())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Total issued cannot be less than used count");
@@ -112,8 +108,12 @@ public class VoucherService {
         }
         voucher.setUpdatedBy(actor);
 
-        Voucher saved = voucherRepository.save(voucher);
-        return toResponse(saved);
+        try {
+            Voucher saved = voucherRepository.save(voucher);
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher code already exists in this store");
+        }
     }
 
     @Transactional
@@ -142,7 +142,7 @@ public class VoucherService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must be after start date");
         }
 
-        if (request.getDiscountType() == Voucher.DiscountType.PERCENT && request.getDiscountValue() > 100) {
+        if (request.getDiscountType() == Voucher.DiscountType.PERCENT && request.getDiscountValue().compareTo(new BigDecimal("100")) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Percent discount cannot exceed 100");
         }
     }
@@ -171,8 +171,8 @@ public class VoucherService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private double safeMinOrder(Double minOrderValue) {
-        return minOrderValue == null ? 0.0 : Math.max(0.0, minOrderValue);
+    private BigDecimal safeMinOrder(BigDecimal minOrderValue) {
+        return minOrderValue == null ? BigDecimal.ZERO : minOrderValue.max(BigDecimal.ZERO);
     }
 
     private int safeUsedCount(Integer usedCount) {

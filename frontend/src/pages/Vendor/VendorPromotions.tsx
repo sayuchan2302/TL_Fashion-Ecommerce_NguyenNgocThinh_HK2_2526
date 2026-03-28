@@ -13,7 +13,6 @@ import {
   PanelStatsGrid,
   PanelTableFooter,
   PanelTabs,
-  PanelViewSummary,
 } from '../../components/Panel/PanelPrimitives';
 import { AdminStateBlock, AdminTableSkeleton } from '../Admin/AdminStateBlocks';
 import AdminConfirmDialog from '../Admin/AdminConfirmDialog';
@@ -281,27 +280,7 @@ const VendorPromotions = () => {
     [result],
   );
 
-  const summaryChips = useMemo(
-    () => [
-      ...(activeTab !== 'all'
-        ? [
-            {
-              key: 'status',
-              label: `Trạng thái: ${TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}`,
-            },
-          ]
-        : []),
-      ...(keyword
-        ? [
-            {
-              key: 'keyword',
-              label: `Từ khóa: ${keyword}`,
-            },
-          ]
-        : []),
-    ],
-    [activeTab, keyword],
-  );
+
 
   const openCreate = () => {
     setVoucherForm(emptyVoucher());
@@ -503,12 +482,13 @@ const VendorPromotions = () => {
         accentClassName="vendor-active-tab"
       />
 
-      {(activeTab !== 'all' || Boolean(keyword)) && (
-        <PanelViewSummary chips={summaryChips} clearLabel="Xóa bộ lọc" onClear={resetCurrentView} />
-      )}
-
       <section className="admin-panels single">
         <div className="admin-panel">
+          <div className="admin-panel-head">
+            <div>
+              <h2>Danh sách voucher</h2>
+            </div>
+          </div>
           {loading ? (
             <AdminTableSkeleton columns={9} rows={6} />
           ) : loadError ? (

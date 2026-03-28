@@ -17,11 +17,11 @@ import {
   applyVariantMatrix,
   getProductInventoryLedger,
   getProductBySku,
-  getProductVariantMatrix,
   listAdminProducts,
   subscribeAdminProducts,
   updateProductPrice,
   type AdminProductRecord,
+  type InventoryMovement,
 } from './adminProductService';
 import { productStatusTone } from './adminStatusMaps';
 import { ADMIN_DICTIONARY } from './adminDictionary';
@@ -58,21 +58,18 @@ const AdminProducts = () => {
   });
   const activeTab = validProductTabs.has(view.status) ? view.status : 'all';
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [rows, setRows] = useState<AdminProductRecord[]>(() => listAdminProducts());
+  const [rows, setRows] = useState<AdminProductRecord[]>([]);
   const [editingPrice, setEditingPrice] = useState<{ sku: string; value: string } | null>(null);
   const [editingStock, setEditingStock] = useState<{ sku: string; value: string } | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const { toast, pushToast } = useAdminToast(1800);
   const [showVariants, setShowVariants] = useState(false);
   const [pendingStockAdjustment, setPendingStockAdjustment] = useState<PendingStockAdjustment | null>(null);
-  const [variantRows, setVariantRows] = useState<VariantRow[]>(() => getProductVariantMatrix(MANAGED_PRODUCT_SKU));
-  const [inventoryLogs, setInventoryLogs] = useState(() => getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
+  const [variantRows, setVariantRows] = useState<VariantRow[]>([]);
+  const [inventoryLogs, setInventoryLogs] = useState<InventoryMovement[]>([]);
   const [price, setPrice] = useState('359.000');
   const [salePrice, setSalePrice] = useState('329.000');
-  const [stock, setStock] = useState(() => {
-    const managed = listAdminProducts().find((item) => item.sku === MANAGED_PRODUCT_SKU);
-    return String(managed?.stock || 0);
-  });
+  const [stock, setStock] = useState('0');
   const [slug, setSlug] = useState('ao-polo-cotton-khu-mui');
   const [metaTitle, setMetaTitle] = useState('Áo Polo Cotton Khử Mùi - Coolmate');
   const {
@@ -115,20 +112,26 @@ const AdminProducts = () => {
   const variantStockTotal = useMemo(() => variantRows.reduce((sum, r) => sum + (parseInt(r.stock.replace(/\D/g, ''), 10) || 0), 0), [variantRows]);
 
   useEffect(() => {
-    const syncProducts = () => {
-      const latest = listAdminProducts();
+    let mounted = true;
+    const syncProducts = async () => {
+      const latest = await listAdminProducts();
+      if (!mounted) return;
       setRows(latest);
       const managed = latest.find((item) => item.sku === MANAGED_PRODUCT_SKU);
       if (managed) {
-        setVariantRows(managed.variantMatrix);
-        setStock(String(managed.stock));
+        setVariantRows(managed.variantMatrix || []);
+        setStock(String(managed.stock || 0));
       }
-      setInventoryLogs(getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6));
+      const logs = await getProductInventoryLedger(MANAGED_PRODUCT_SKU, 6);
+      if (mounted) setInventoryLogs(logs || []);
     };
 
     const unsubscribe = subscribeAdminProducts(syncProducts);
     syncProducts();
-    return unsubscribe;
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const handleSearchChange = (value: string) => {
@@ -193,12 +196,12 @@ const AdminProducts = () => {
     setSelected(next);
   };
 
-  const savePrice = () => {
+  const savePrice = async () => {
     if (!editingPrice) return;
     const value = parseInt(editingPrice.value.replace(/\D/g, ''), 10) || 0;
-    const result = updateProductPrice(editingPrice.sku, value);
+    const result = await updateProductPrice(editingPrice.sku, value);
     if (!result.ok) {
-      pushToast(result.error);
+      pushToast(result.error || 'Lỗi lưu giá');
     } else {
        pushToast(ADMIN_DICTIONARY.messages.products.priceUpdated(editingPrice.sku));
     }
@@ -229,9 +232,9 @@ const AdminProducts = () => {
     });
   };
 
-  const confirmStockAdjustment = (reason: string) => {
+  const confirmStockAdjustment = async (reason: string) => {
     if (!pendingStockAdjustment) return;
-    const result = adjustProductStock({
+    const result = await adjustProductStock({
       sku: pendingStockAdjustment.sku,
       nextStock: pendingStockAdjustment.after,
       actor: 'Admin',
@@ -239,7 +242,7 @@ const AdminProducts = () => {
       source: 'manual_adjustment',
     });
     if (!result.ok) {
-      pushToast(result.error);
+      pushToast(result.error || 'Lỗi lưu kho');
       return;
     }
     pushToast(

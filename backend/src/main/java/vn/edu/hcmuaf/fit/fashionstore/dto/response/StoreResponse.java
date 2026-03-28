@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
@@ -68,7 +69,7 @@ public class StoreResponse {
 
     private String warehousePhone;
 
-    private Double commissionRate;
+    private BigDecimal commissionRate;
 
     private String status;
 
@@ -80,7 +81,7 @@ public class StoreResponse {
 
     private String approvedBy;
 
-    private Double totalSales;
+    private BigDecimal totalSales;
 
     private Integer totalOrders;
 

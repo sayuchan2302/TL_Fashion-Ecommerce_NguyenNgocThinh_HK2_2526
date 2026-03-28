@@ -7,6 +7,7 @@ import org.springframework.web.server.ResponseStatusException;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.CategoryRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.CategoryOptionResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.CategoryTreeResponse;
+import vn.edu.hcmuaf.fit.fashionstore.dto.response.AdminCategoryResponse;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Category;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CategoryRepository;
 
@@ -38,6 +39,28 @@ public class CategoryService {
     public Category findById(UUID id) {
         return categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category not found"));
+    }
+
+    private AdminCategoryResponse toAdminCategoryResponse(Category cat) {
+        return AdminCategoryResponse.builder()
+                .id(cat.getId())
+                .name(cat.getName())
+                .slug(cat.getSlug())
+                .parentId(extractParentId(cat))
+                .count(cat.getProducts() != null ? cat.getProducts().size() : 0)
+                .status(cat.getIsVisible() != null && !cat.getIsVisible() ? "hidden" : "visible")
+                .order(cat.getSortOrder() != null ? cat.getSortOrder() : 1)
+                .showOnMenu(Boolean.TRUE.equals(cat.getShowOnMenu()))
+                .image(cat.getImage())
+                .description(cat.getDescription())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminCategoryResponse> getAdminCategories() {
+        return getSortedCategories().stream()
+                .map(this::toAdminCategoryResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -110,6 +133,8 @@ public class CategoryService {
         category.setDescription(request.getDescription());
         category.setImage(request.getImage());
         category.setSortOrder(request.getSortOrder());
+        if (request.getIsVisible() != null) category.setIsVisible(request.getIsVisible());
+        if (request.getShowOnMenu() != null) category.setShowOnMenu(request.getShowOnMenu());
 
         if (request.getParentId() != null) {
             Category parent = findById(request.getParentId());
@@ -128,6 +153,8 @@ public class CategoryService {
         if (request.getDescription() != null) category.setDescription(request.getDescription());
         if (request.getImage() != null) category.setImage(request.getImage());
         if (request.getSortOrder() != null) category.setSortOrder(request.getSortOrder());
+        if (request.getIsVisible() != null) category.setIsVisible(request.getIsVisible());
+        if (request.getShowOnMenu() != null) category.setShowOnMenu(request.getShowOnMenu());
 
         if (request.isParentIdProvided()) {
             UUID requestedParentId = request.getParentId();
@@ -148,6 +175,14 @@ public class CategoryService {
         }
 
         return categoryRepository.save(category);
+    }
+
+    @Transactional
+    public AdminCategoryResponse updateAdminStatus(UUID id, boolean isVisible, boolean showOnMenu) {
+        Category category = findById(id);
+        category.setIsVisible(isVisible);
+        category.setShowOnMenu(showOnMenu);
+        return toAdminCategoryResponse(categoryRepository.save(category));
     }
 
     @Transactional

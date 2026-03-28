@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, Link2, MessageSquare, Star } from 'lucide-react';
 import VendorLayout from './VendorLayout';
-import { PanelFloatingBar, PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+import { PanelFloatingBar, PanelStatsGrid, PanelTabs } from '../../components/Panel/PanelPrimitives';
 import {
   PanelDrawerFooter,
   PanelDrawerHeader,
@@ -148,12 +148,7 @@ const VendorReviews = () => {
   ] as const;
 
   const tabItems = TABS.map((tab) => ({ key: tab.key, label: tab.label }));
-  const summaryChips = [
-    ...(activeTab !== 'all'
-      ? [{ key: 'status', label: `Trạng thái: ${TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}` }]
-      : []),
-    ...(query.trim() ? [{ key: 'query', label: `Từ khóa: ${query.trim()}` }] : []),
-  ];
+
 
   return (
     <VendorLayout
@@ -183,12 +178,13 @@ const VendorReviews = () => {
         accentClassName="vendor-active-tab"
       />
 
-      {activeTab !== 'all' || query.trim() ? (
-        <PanelViewSummary chips={summaryChips} clearLabel="Xóa bộ lọc" onClear={resetCurrentView} />
-      ) : null}
-
       <section className="admin-panels single">
         <div className="admin-panel">
+          <div className="admin-panel-head">
+            <div>
+              <h2>Danh sách đánh giá</h2>
+            </div>
+          </div>
           {reviews.length === 0 ? (
             <AdminStateBlock
               type={query.trim() ? 'search-empty' : 'empty'}

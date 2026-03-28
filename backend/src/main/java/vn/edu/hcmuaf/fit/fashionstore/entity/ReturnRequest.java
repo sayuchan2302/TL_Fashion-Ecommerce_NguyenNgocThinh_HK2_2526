@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +34,7 @@ public class ReturnRequest extends BaseEntity {
     @Column(length = 20)
     private ReturnReason reason;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String note;
 
     @Enumerated(EnumType.STRING)
@@ -48,7 +49,7 @@ public class ReturnRequest extends BaseEntity {
     @CollectionTable(name = "return_items", joinColumns = @JoinColumn(name = "return_request_id"))
     private List<ReturnItemSnapshot> items = new ArrayList<>();
 
-    @Column(name = "admin_note", columnDefinition = "TEXT")
+    @Column(name = "admin_note", columnDefinition = "text")
     private String adminNote;
 
     @Column(name = "updated_by")
@@ -88,6 +89,6 @@ public class ReturnRequest extends BaseEntity {
         private Integer quantity;
 
         @Column(name = "unit_price")
-        private Double unitPrice;
+        private BigDecimal unitPrice;
     }
 }

@@ -9,6 +9,7 @@ import lombok.Data;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Voucher;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Data
 public class VoucherRequest {
@@ -27,11 +28,10 @@ public class VoucherRequest {
     @NotNull
     @DecimalMin("0.01")
     @DecimalMax("999999999")
-    private Double discountValue;
+    private BigDecimal discountValue;
 
-    @DecimalMin("0.0")
-    @DecimalMax("999999999")
-    private Double minOrderValue;
+    @Min(value = 0, message = "Minimum order value cannot be negative")
+    private BigDecimal minOrderValue;
 
     @NotNull
     @Min(1)

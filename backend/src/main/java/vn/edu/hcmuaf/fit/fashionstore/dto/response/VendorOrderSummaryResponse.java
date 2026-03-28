@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
@@ -17,9 +18,9 @@ public class VendorOrderSummaryResponse {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Double total;
-    private Double commissionFee;
-    private Double vendorPayout;
+    private BigDecimal total;
+    private BigDecimal commissionFee;
+    private BigDecimal vendorPayout;
     private Integer itemCount;
     private Customer customer;
     private String trackingNumber;

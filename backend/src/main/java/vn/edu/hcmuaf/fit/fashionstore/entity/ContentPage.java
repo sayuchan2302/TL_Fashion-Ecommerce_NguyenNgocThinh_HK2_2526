@@ -19,7 +19,7 @@ public class ContentPage extends BaseEntity {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
+    @Column(columnDefinition = "text", nullable = false)
     private String body;
 
     @Enumerated(EnumType.STRING)

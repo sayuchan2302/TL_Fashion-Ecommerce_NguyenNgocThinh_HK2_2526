@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
+import java.math.BigDecimal;
 
 import java.util.List;
 import java.time.LocalDateTime;
@@ -18,7 +19,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     List<Order> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
-    List<Order> findByUserIdAndSubOrderIdIsNullOrderByCreatedAtDesc(UUID userId);
+    List<Order> findByUserIdAndParentOrderIsNullOrderByCreatedAtDesc(UUID userId);
 
     Page<Order> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
@@ -79,7 +80,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
      * Find sub-orders for a parent order
      */
-    List<Order> findBySubOrderIdOrderByCreatedAtDesc(UUID parentOrderId);
+    List<Order> findByParentOrderOrderByCreatedAtDesc(Order parentOrder);
+
+    List<Order> findByParentOrderIdOrderByCreatedAtDesc(UUID parentOrderId);
 
     /**
      * Count orders by store (for vendor dashboard)
@@ -95,13 +98,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
      * Calculate total revenue for a store
      */
     @Query("SELECT COALESCE(SUM(o.total), 0) FROM Order o WHERE o.storeId = :storeId AND o.status = 'DELIVERED'")
-    Double calculateRevenueByStoreId(@Param("storeId") UUID storeId);
+    BigDecimal calculateRevenueByStoreId(@Param("storeId") UUID storeId);
 
     /**
      * Calculate total vendor payout for a store
      */
     @Query("SELECT COALESCE(SUM(o.vendorPayout), 0) FROM Order o WHERE o.storeId = :storeId AND o.status = 'DELIVERED'")
-    Double calculatePayoutByStoreId(@Param("storeId") UUID storeId);
+    BigDecimal calculatePayoutByStoreId(@Param("storeId") UUID storeId);
 
     /**
      * Calculate total commission collected for a store

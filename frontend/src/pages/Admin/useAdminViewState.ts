@@ -152,6 +152,7 @@ export const useAdminViewState = ({
 
   const setStatus = (nextStatus: string) => {
     const normalized = validStatusSet.has(nextStatus) ? nextStatus : defaultStatus;
+    setPersistedAdminView(storageKey, normalized);
     commitQuery({ status: normalized, search, page: 1, sortKey, sortDirection, extras });
   };
 

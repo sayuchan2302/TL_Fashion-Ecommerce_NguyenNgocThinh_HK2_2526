@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,16 +43,16 @@ public class Order extends BaseEntity {
     private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
 
     @Column(name = "subtotal", nullable = false)
-    private Double subtotal;
+    private BigDecimal subtotal;
 
     @Column(name = "shipping_fee")
-    private Double shippingFee = 0.0;
+    private BigDecimal shippingFee = BigDecimal.ZERO;
 
     @Column(name = "discount")
-    private Double discount = 0.0;
+    private BigDecimal discount = BigDecimal.ZERO;
 
     @Column(name = "total", nullable = false)
-    private Double total;
+    private BigDecimal total;
 
     @Column(name = "coupon_code")
     private String couponCode;
@@ -65,16 +66,20 @@ public class Order extends BaseEntity {
     @Column(name = "store_id")
     private UUID storeId;
 
-    @Column(name = "sub_order_id")
-    private UUID subOrderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_order_id")
+    private Order parentOrder;
+
+    @OneToMany(mappedBy = "parentOrder", cascade = CascadeType.ALL)
+    private List<Order> subOrders = new ArrayList<>();
 
     @Column(name = "commission_fee")
-    private Double commissionFee = 0.0;
+    private BigDecimal commissionFee = BigDecimal.ZERO;
 
     @Column(name = "vendor_payout")
-    private Double vendorPayout = 0.0;
+    private BigDecimal vendorPayout = BigDecimal.ZERO;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String note;
 
     @Column(name = "paid_at")
@@ -82,6 +87,14 @@ public class Order extends BaseEntity {
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
+
+    public boolean isParentOrder() {
+        return parentOrder == null && storeId == null;
+    }
+
+    public boolean isSubOrder() {
+        return parentOrder != null && storeId != null;
+    }
 
     public enum OrderStatus {
         PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
@@ -96,6 +109,9 @@ public class Order extends BaseEntity {
     }
 
     public void calculateTotal() {
-        this.total = subtotal + (shippingFee != null ? shippingFee : 0) - (discount != null ? discount : 0);
+        BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
+        BigDecimal fee = shippingFee != null ? shippingFee : BigDecimal.ZERO;
+        BigDecimal disc = discount != null ? discount : BigDecimal.ZERO;
+        this.total = base.add(fee).subtract(disc);
     }
 }

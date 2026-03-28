@@ -1,221 +1,86 @@
 import './AdminFinancials.css';
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowUpRight, CheckCircle2, Eye, Link2, Search, WalletCards, X } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import AdminConfirmDialog from './AdminConfirmDialog';
 import { AdminStateBlock } from './AdminStateBlocks';
-import { PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+import { PanelStatsGrid, PanelTabs } from '../../components/Panel/PanelPrimitives';
 import { useToast } from '../../contexts/ToastContext';
 import Drawer from '../../components/Drawer/Drawer';
-import { listAdminOrders, subscribeAdminOrders } from './adminOrderService';
-import type { AdminOrderRecord } from './adminOrderService';
+import { apiRequest } from '../../services/apiClient';
 
-type FinancialStatus = 'PENDING_PAYOUT' | 'READY_TO_PAY' | 'PAID' | 'UNDER_REVIEW';
-type FinancialFilter = 'all' | 'pending' | 'ready' | 'paid' | 'review';
-
-interface FinancialRecord {
+interface WalletResponse {
   id: string;
-  period: string;
-  scope: string;
-  gmv: number;
-  commission: number;
-  payout: number;
-  refundAdjustment: number;
-  status: FinancialStatus;
-  note: string;
-  updatedAt: string;
-  orderCodes: string[];
-  orderCount: number;
+  storeId: string;
+  storeName: string;
+  balance: number;
+  lastUpdated: string;
 }
 
 type ConfirmState = {
-  ids: string[];
-  selectedItems: string[];
+  storeIds: string[];
+  storeNames: string[];
 };
-
-const FINANCIAL_TABS: Array<{ key: FinancialFilter; label: string }> = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'pending', label: 'Chờ đối soát' },
-  { key: 'ready', label: 'Sẵn sàng giải ngân' },
-  { key: 'paid', label: 'Đã giải ngân' },
-  { key: 'review', label: 'Cần rà soát' },
-];
-
-const DEFAULT_COMMISSION_RATE = 0.05;
-const PAGE_SIZE = 8;
 
 const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
 
-const formatStatusLabel = (status: FinancialStatus) => {
-  if (status === 'PENDING_PAYOUT') return 'Chờ đối soát';
-  if (status === 'READY_TO_PAY') return 'Sẵn sàng giải ngân';
-  if (status === 'PAID') return 'Đã giải ngân';
-  return 'Cần rà soát';
-};
-
-const formatStatusTone = (status: FinancialStatus) => {
-  if (status === 'READY_TO_PAY') return 'success';
-  if (status === 'PAID') return 'info';
-  if (status === 'UNDER_REVIEW') return 'error';
-  return 'pending';
-};
-
-const mapFilterToStatus = (filter: FinancialFilter) => {
-  if (filter === 'pending') return 'PENDING_PAYOUT';
-  if (filter === 'ready') return 'READY_TO_PAY';
-  if (filter === 'paid') return 'PAID';
-  if (filter === 'review') return 'UNDER_REVIEW';
-  return null;
-};
-
-const getOrderTotal = (order: AdminOrderRecord) =>
-  order.pricing.subtotal + order.pricing.shipping - order.pricing.discount;
-
-const getOrderCommission = (order: AdminOrderRecord) =>
-  Math.round(order.pricing.subtotal * (order.commissionRate ?? DEFAULT_COMMISSION_RATE) * 100) / 100;
-
-const getFinancialStatus = (
-  orders: AdminOrderRecord[],
-  override?: FinancialStatus,
-  refundAdjustment = 0,
-): FinancialStatus => {
-  if (override === 'PAID') return 'PAID';
-  if (refundAdjustment > 0) return 'UNDER_REVIEW';
-  if (orders.some((order) => order.fulfillment === 'done')) return 'READY_TO_PAY';
-  return 'PENDING_PAYOUT';
-};
-
-const buildPeriodLabel = (orders: AdminOrderRecord[]) => {
-  const timestamps = orders
-    .map((order) => new Date(order.date))
-    .filter((date) => !Number.isNaN(date.getTime()))
-    .sort((a, b) => a.getTime() - b.getTime());
-
-  if (timestamps.length === 0) {
-    return 'Chưa xác định kỳ';
-  }
-
-  const start = timestamps[0];
-  const end = timestamps[timestamps.length - 1];
-  return `Kỳ ${start.toLocaleDateString('vi-VN')} - ${end.toLocaleDateString('vi-VN')}`;
-};
-
-const buildFinancialRecords = (
-  orders: AdminOrderRecord[],
-  payoutOverrides: Record<string, FinancialStatus>,
-): FinancialRecord[] => {
-  const grouped = new Map<string, AdminOrderRecord[]>();
-
-  orders.forEach((order) => {
-    const scope = order.storeName?.trim() || 'Marketplace direct';
-    const current = grouped.get(scope) || [];
-    current.push(order);
-    grouped.set(scope, current);
-  });
-
-  return Array.from(grouped.entries())
-    .map(([scope, scopedOrders]) => {
-      const gmv = scopedOrders.reduce((sum, order) => sum + getOrderTotal(order), 0);
-      const completedOrders = scopedOrders.filter((order) => order.fulfillment === 'done');
-      const commission = completedOrders.reduce((sum, order) => sum + getOrderCommission(order), 0);
-      const payout = completedOrders.reduce((sum, order) => sum + (getOrderTotal(order) - getOrderCommission(order)), 0);
-      const refundAdjustment = scopedOrders
-        .filter((order) => order.fulfillment === 'canceled')
-        .reduce((sum, order) => sum + getOrderTotal(order), 0);
-      const updatedAt = scopedOrders.reduce((latest, order) => latest > order.updatedAt ? latest : order.updatedAt, scopedOrders[0]?.updatedAt || new Date().toISOString());
-      const recordId = `financial-${scope.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-      const status = getFinancialStatus(scopedOrders, payoutOverrides[recordId], refundAdjustment);
-
-      return {
-        id: recordId,
-        period: buildPeriodLabel(scopedOrders),
-        scope,
-        gmv,
-        commission,
-        payout,
-        refundAdjustment,
-        status,
-        updatedAt,
-        orderCodes: scopedOrders.map((order) => order.code),
-        orderCount: scopedOrders.length,
-        note:
-          status === 'UNDER_REVIEW'
-            ? 'Có đơn hủy hoặc điều chỉnh cần rà soát trước khi chốt payout.'
-            : status === 'PAID'
-              ? 'Nhóm đơn hàng này đã được operator xác nhận giải ngân.'
-              : status === 'READY_TO_PAY'
-                ? 'Đã có đơn hoàn tất và đủ điều kiện chuyển sang payout.'
-                : 'Đang chờ thêm đơn hoàn tất hoặc chờ operator đối soát.',
-      };
-    })
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-};
-
 const AdminFinancials = () => {
   const { addToast } = useToast();
-  const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
+  const [wallets, setWallets] = useState<WalletResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<FinancialFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [detailRecord, setDetailRecord] = useState<FinancialRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<WalletResponse | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [page, setPage] = useState(1);
-  const [payoutOverrides, setPayoutOverrides] = useState<Record<string, FinancialStatus>>({});
+  const [activeTab, setActiveTab] = useState('all');
+
+  const fetchWallets = async () => {
+    try {
+      setIsLoading(true);
+      const data = await apiRequest<{ content?: WalletResponse[] }>('/api/wallets', {}, { auth: true });
+      setWallets(data.content || []);
+    } catch (e) {
+      console.error(e);
+      addToast('Lỗi khi tải dữ liệu đối soát.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const syncOrders = () => setOrders(listAdminOrders());
-    syncOrders();
-    return subscribeAdminOrders(syncOrders);
+    fetchWallets();
   }, []);
 
-  const records = useMemo(
-    () => buildFinancialRecords(orders, payoutOverrides),
-    [orders, payoutOverrides],
-  );
+  const records = useMemo(() => wallets, [wallets]);
+
 
   const filteredRecords = useMemo(() => {
     let next = records;
-    const targetStatus = mapFilterToStatus(activeTab);
-    if (targetStatus) {
-      next = next.filter((record) => record.status === targetStatus);
-    }
-
     if (search.trim()) {
       const query = search.trim().toLowerCase();
       next = next.filter((record) =>
-        `${record.scope} ${record.period} ${record.note} ${record.orderCodes.join(' ')}`
-          .toLowerCase()
-          .includes(query),
+        record.storeName.toLowerCase().includes(query),
       );
     }
-
     return next;
-  }, [activeTab, records, search]);
-
-  const counts = useMemo(() => ({
-    all: records.length,
-    pending: records.filter((record) => record.status === 'PENDING_PAYOUT').length,
-    ready: records.filter((record) => record.status === 'READY_TO_PAY').length,
-    paid: records.filter((record) => record.status === 'PAID').length,
-    review: records.filter((record) => record.status === 'UNDER_REVIEW').length,
-  }), [records]);
+  }, [records, search]);
 
   const totals = useMemo(() => ({
-    gmv: records.reduce((sum, record) => sum + record.gmv, 0),
-    commission: records.reduce((sum, record) => sum + record.commission, 0),
-    payout: records.reduce((sum, record) => sum + record.payout, 0),
-    review: records.filter((record) => record.status === 'UNDER_REVIEW').length,
+    gmv: 0,
+    commission: 0,
+    payout: records.reduce((sum, record) => sum + record.balance, 0),
+    review: 0,
   }), [records]);
 
+  const PAGE_SIZE = 8;
   const totalPages = Math.max(Math.ceil(filteredRecords.length / PAGE_SIZE), 1);
   const safePage = Math.min(page, totalPages);
   const pagedRecords = useMemo(() => {
     const start = (safePage - 1) * PAGE_SIZE;
     return filteredRecords.slice(start, start + PAGE_SIZE);
   }, [filteredRecords, safePage]);
-
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim());
 
   const resetCurrentView = () => {
     setSearch('');
@@ -229,30 +94,34 @@ const AdminFinancials = () => {
     addToast('Đã sao chép bộ lọc hiện tại của tài chính sàn', 'success');
   };
 
-  const openReleaseConfirm = (ids: string[]) => {
-    const items = records.filter((record) => ids.includes(record.id) && record.status === 'READY_TO_PAY');
+  const openReleaseConfirm = (storeIds: string[]) => {
+    const items = records.filter((record) => storeIds.includes(record.storeId) && record.balance > 0);
     if (items.length === 0) {
-      addToast('Không có bản ghi nào sẵn sàng giải ngân trong lựa chọn hiện tại', 'info');
+      addToast('Không có ví nào có số dư để giải ngân.', 'info');
       return;
     }
 
     setConfirmState({
-      ids: items.map((item) => item.id),
-      selectedItems: items.map((item) => item.scope),
+      storeIds: items.map((item) => item.storeId),
+      storeNames: items.map((item) => item.storeName),
     });
   };
 
-  const applyPayout = () => {
+  const applyPayout = async () => {
     if (!confirmState) return;
-
-    setPayoutOverrides((prev) => ({
-      ...prev,
-      ...Object.fromEntries(confirmState.ids.map((id) => [id, 'PAID' as FinancialStatus])),
-    }));
-
-    setSelected(new Set());
-    setConfirmState(null);
-    addToast('Đã xác nhận giải ngân cho các bản ghi đã chọn', 'success');
+    
+    try {
+      for (const storeId of confirmState.storeIds) {
+        await apiRequest(`/api/wallets/${storeId}/withdraw`, { method: 'POST' }, { auth: true });
+      }
+      setSelected(new Set());
+      setConfirmState(null);
+      addToast('Đã xác nhận giải ngân thành công.', 'success');
+      fetchWallets();
+    } catch (e) {
+      console.error(e);
+      addToast('Lỗi trong quá trình giải ngân.', 'error');
+    }
   };
 
   return (
@@ -290,37 +159,30 @@ const AdminFinancials = () => {
       />
 
       <PanelTabs
-        items={FINANCIAL_TABS.map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          count: counts[tab.key],
-        }))}
+        items={[
+          { key: 'all', label: 'Tất cả ví store', count: records.length }
+        ]}
         activeKey={activeTab}
         onChange={(key) => {
-          setActiveTab(key as FinancialFilter);
+          setActiveTab(key);
           setSelected(new Set());
           setPage(1);
         }}
-      />
-
-      <PanelViewSummary
-        chips={[
-          ...(hasViewContext ? [{ key: 'scope', label: <>Nhóm: {FINANCIAL_TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}</> }] : []),
-          ...(search.trim() ? [{ key: 'search', label: <>Từ khóa: {search.trim()}</> }] : []),
-        ]}
-        clearLabel="Xóa bộ lọc"
-        onClear={resetCurrentView}
       />
 
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Sổ đối soát và commission</h2>
-            <span className="admin-muted">Bảng này được tổng hợp từ nguồn đơn hàng admin hiện có để operator nhìn GMV, commission, payout và các nhóm cần rà soát trước khi giải ngân.</span>
-          </div>
-          <div className="admin-hint">
-            <span className="admin-bold">Trạng thái module</span>
-            <span className="admin-muted">Đây là bản backend-aware theo nguồn đơn hàng hiện tại, nhưng chưa phải ledger tài chính cuối cùng. Khi backend payout hoàn chỉnh, màn này sẽ trở thành source of truth đầy đủ hơn.</span>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">Đã chọn {selected.size} bản ghi</span>
+                <button className="admin-ghost-btn" onClick={() => openReleaseConfirm(Array.from(selected))}>
+                  Xác nhận giải ngân
+                </button>
+                <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
+              </div>
+            )}
           </div>
 
           {filteredRecords.length === 0 ? (
@@ -346,61 +208,53 @@ const AdminFinancials = () => {
                       onChange={(event) => setSelected(event.target.checked ? new Set(filteredRecords.map((item) => item.id)) : new Set())}
                     />
                   </div>
-                  <div role="columnheader">Kỳ đối soát</div>
-                  <div role="columnheader">Phạm vi</div>
-                  <div role="columnheader">GMV</div>
-                  <div role="columnheader">Commission</div>
-                  <div role="columnheader">Payout</div>
-                  <div role="columnheader">Trạng thái</div>
+                  <div role="columnheader">ID Cửa hàng</div>
+                  <div role="columnheader">Tên Cửa hàng</div>
+                  <div role="columnheader">Số dư hiện tại</div>
+                  <div role="columnheader">Cập nhật lần cuối</div>
                   <div role="columnheader">Hành động</div>
                 </div>
 
-                {pagedRecords.map((record) => (
+                {isLoading ? (
+                  <div className="admin-loading" style={{ padding: '3rem', textAlign: 'center' }}>Đang tải dữ liệu ví...</div>
+                ) : pagedRecords.map((record) => (
                   <motion.div
                     key={record.id}
                     className="admin-table-row financials"
+                    style={{ gridTemplateColumns: '40px 1.5fr 2fr 1.5fr 1.5fr 100px' }}
                     role="row"
                     whileHover={{ y: -1 }}
-                    onClick={() => setDetailRecord(record)}
-                    style={{ cursor: 'pointer' }}
                   >
                     <div role="cell" onClick={(event) => event.stopPropagation()}>
                       <input
                         type="checkbox"
-                        checked={selected.has(record.id)}
+                        checked={selected.has(record.storeId)}
                         onChange={(event) => {
                           const next = new Set(selected);
-                          if (event.target.checked) next.add(record.id);
-                          else next.delete(record.id);
+                          if (event.target.checked) next.add(record.storeId);
+                          else next.delete(record.storeId);
                           setSelected(next);
                         }}
                       />
                     </div>
                     <div role="cell">
-                      <div className="admin-bold">{record.period}</div>
-                      <div className="admin-muted small">Cập nhật {new Date(record.updatedAt).toLocaleDateString('vi-VN')}</div>
+                      <div className="admin-bold">{record.storeId}</div>
                     </div>
                     <div role="cell">
-                      <div className="admin-bold">{record.scope}</div>
-                      <div className="admin-muted small">
-                        {record.orderCount} đơn • {record.refundAdjustment > 0 ? `Rà soát ${formatCurrency(record.refundAdjustment)}` : 'Không có điều chỉnh hoàn đơn'}
-                      </div>
+                      <div className="admin-bold">{record.storeName}</div>
                     </div>
-                    <div role="cell" className="admin-bold">{formatCurrency(record.gmv)}</div>
-                    <div role="cell" className="admin-bold">{formatCurrency(record.commission)}</div>
-                    <div role="cell">
-                      <div className="admin-bold">{formatCurrency(record.payout)}</div>
-                      <div className="admin-muted small">Sau khấu trừ commission</div>
+                    <div role="cell" className="admin-bold">
+                      <span className={`admin-pill ${record.balance > 0 ? 'success' : 'neutral'}`}>{formatCurrency(record.balance)}</span>
                     </div>
                     <div role="cell">
-                      <span className={`admin-pill ${formatStatusTone(record.status)}`}>{formatStatusLabel(record.status)}</span>
+                      <div className="admin-muted small">{new Date(record.lastUpdated).toLocaleString('vi-VN')}</div>
                     </div>
-                    <div role="cell" className="admin-actions" onClick={(event) => event.stopPropagation()}>
+                    <div role="cell" className="admin-actions">
                       <button className="admin-icon-btn subtle" title="Xem chi tiết" aria-label="Xem chi tiết" onClick={() => setDetailRecord(record)}>
                         <Eye size={16} />
                       </button>
-                      {record.status === 'READY_TO_PAY' && (
-                        <button className="admin-icon-btn subtle" title="Xác nhận giải ngân" aria-label="Xác nhận giải ngân" onClick={() => openReleaseConfirm([record.id])}>
+                      {record.balance > 0 && (
+                        <button className="admin-icon-btn subtle" title="Giải ngân" aria-label="Giải ngân" onClick={() => openReleaseConfirm([record.storeId])}>
                           <CheckCircle2 size={16} />
                         </button>
                       )}
@@ -409,52 +263,32 @@ const AdminFinancials = () => {
                 ))}
               </div>
 
-              <div className="table-footer">
-                <span className="table-footer-meta">
-                  Hiển thị {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filteredRecords.length)} trên {filteredRecords.length} bản ghi
-                </span>
-                <div className="pagination">
-                  <button className="page-btn" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(current - 1, 1))}>Trước</button>
-                  {Array.from({ length: totalPages }).map((_, index) => (
-                    <button key={index + 1} className={`page-btn ${safePage === index + 1 ? 'active' : ''}`} onClick={() => setPage(index + 1)}>
-                      {index + 1}
-                    </button>
-                  ))}
-                  <button className="page-btn" disabled={safePage === totalPages} onClick={() => setPage((current) => Math.min(current + 1, totalPages))}>Sau</button>
+              {!isLoading && (
+                <div className="table-footer">
+                  <span className="table-footer-meta">
+                    Hiển thị {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filteredRecords.length)} trên {filteredRecords.length} bản ghi
+                  </span>
+                  <div className="pagination">
+                    <button className="page-btn" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(current - 1, 1))}>Trước</button>
+                    {Array.from({ length: totalPages }).map((_, index) => (
+                      <button key={index + 1} className={`page-btn ${safePage === index + 1 ? 'active' : ''}`} onClick={() => setPage(index + 1)}>
+                        {index + 1}
+                      </button>
+                    ))}
+                    <button className="page-btn" disabled={safePage === totalPages} onClick={() => setPage((current) => Math.min(current + 1, totalPages))}>Sau</button>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
       </section>
 
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div
-            className="admin-floating-bar"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 22 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            <div className="admin-floating-content">
-              <span>Đã chọn {selected.size} bản ghi tài chính</span>
-              <div className="admin-actions">
-                <button className="admin-ghost-btn" onClick={() => openReleaseConfirm(Array.from(selected))}>
-                  Xác nhận giải ngân
-                </button>
-                <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <AdminConfirmDialog
         open={Boolean(confirmState)}
         title="Xác nhận giải ngân payout"
-        description="Các bản ghi đã chọn sẽ được đánh dấu là đã giải ngân. Chỉ thực hiện khi operator đã đối soát xong commission và các điều chỉnh hoàn đơn."
-        selectedItems={confirmState?.selectedItems}
+        description="Số dư hiện tại trên ví của các store sẽ bị trừ để ghi nhận đã giải ngân cho nhà bán hàng (qua chuyển khoản ngân hàng ngoài hệ thống)."
+        selectedItems={confirmState?.storeNames}
         selectedNoun="bản ghi tài chính"
         confirmLabel="Xác nhận giải ngân"
         onCancel={() => setConfirmState(null)}
@@ -467,7 +301,7 @@ const AdminFinancials = () => {
             <div className="drawer-header">
               <div>
                 <p className="drawer-eyebrow">Chi tiết tài chính</p>
-                <h3>{detailRecord.scope}</h3>
+                <h3>{detailRecord.storeName}</h3>
               </div>
               <button className="admin-icon-btn" onClick={() => setDetailRecord(null)} aria-label="Đóng chi tiết tài chính">
                 <X size={16} />
@@ -476,61 +310,40 @@ const AdminFinancials = () => {
 
             <div className="drawer-body">
               <section className="drawer-section">
-                <h4>Tổng quan kỳ đối soát</h4>
+                <h4>Tổng quan ví điện tử</h4>
                 <div className="financial-drawer-hero">
                   <div className="financial-avatar">
                     <WalletCards size={22} />
                   </div>
                   <div>
-                    <div className="admin-bold">{detailRecord.period}</div>
-                    <div className="admin-muted">{detailRecord.scope}</div>
+                    <div className="admin-bold">Store ID: {detailRecord.storeId}</div>
+                    <div className="admin-muted">{detailRecord.storeName}</div>
                   </div>
-                  <span className={`admin-pill ${formatStatusTone(detailRecord.status)}`}>{formatStatusLabel(detailRecord.status)}</span>
+                  <span className={`admin-pill ${detailRecord.balance > 0 ? 'success' : 'neutral'}`}>
+                    {detailRecord.balance > 0 ? 'Khả dụng' : 'Trống'}
+                  </span>
                 </div>
               </section>
 
               <section className="drawer-section">
-                <h4>Bảng tóm tắt số liệu</h4>
+                <h4>Bảng tóm tắt ví</h4>
                 <div className="financial-signal-grid">
                   <div className="financial-signal-card">
-                    <span className="admin-muted small">GMV</span>
-                    <strong>{formatCurrency(detailRecord.gmv)}</strong>
+                    <span className="admin-muted small">Số dư hiện tại</span>
+                    <strong>{formatCurrency(detailRecord.balance)}</strong>
                   </div>
                   <div className="financial-signal-card">
-                    <span className="admin-muted small">Commission</span>
-                    <strong>{formatCurrency(detailRecord.commission)}</strong>
-                  </div>
-                  <div className="financial-signal-card">
-                    <span className="admin-muted small">Payout</span>
-                    <strong>{formatCurrency(detailRecord.payout)}</strong>
+                    <span className="admin-muted small">Cập nhật lúc</span>
+                    <strong>{new Date(detailRecord.lastUpdated).toLocaleString('vi-VN')}</strong>
                   </div>
                 </div>
-              </section>
-
-              <section className="drawer-section">
-                <h4>Điều chỉnh và ghi chú</h4>
-                <div className="admin-card-list">
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Hoàn đơn / điều chỉnh</span>
-                    <span className="admin-muted">{formatCurrency(detailRecord.refundAdjustment)}</span>
-                  </div>
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Mã đơn liên quan</span>
-                    <span className="admin-muted">{detailRecord.orderCodes.join(', ')}</span>
-                  </div>
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Cập nhật gần nhất</span>
-                    <span className="admin-muted">{new Date(detailRecord.updatedAt).toLocaleString('vi-VN')}</span>
-                  </div>
-                </div>
-                <p className="admin-muted financial-note">{detailRecord.note}</p>
               </section>
             </div>
 
             <div className="drawer-footer">
               <button className="admin-ghost-btn" onClick={() => setDetailRecord(null)}>Đóng</button>
-              {detailRecord.status === 'READY_TO_PAY' && (
-                <button className="admin-primary-btn" onClick={() => openReleaseConfirm([detailRecord.id])}>
+              {detailRecord.balance > 0 && (
+                <button className="admin-primary-btn" onClick={() => openReleaseConfirm([detailRecord.storeId])}>
                   <ArrowUpRight size={14} />
                   Xác nhận giải ngân
                 </button>

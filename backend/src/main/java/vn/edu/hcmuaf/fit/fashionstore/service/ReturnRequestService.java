@@ -23,10 +23,12 @@ public class ReturnRequestService {
 
     private final ReturnRequestRepository returnRequestRepository;
     private final OrderRepository orderRepository;
+    private final vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository storeRepository;
 
-    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, OrderRepository orderRepository) {
+    public ReturnRequestService(ReturnRequestRepository returnRequestRepository, OrderRepository orderRepository, vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository storeRepository) {
         this.returnRequestRepository = returnRequestRepository;
         this.orderRepository = orderRepository;
+        this.storeRepository = storeRepository;
     }
 
     @Transactional
@@ -133,6 +135,11 @@ public class ReturnRequestService {
                                 .unitPrice(item.getUnitPrice())
                                 .build()
                 ).toList())
+                .storeId(request.getOrder().getStoreId())
+                .storeName(request.getOrder().getStoreId() != null ? 
+                        storeRepository.findById(request.getOrder().getStoreId())
+                                .map(vn.edu.hcmuaf.fit.fashionstore.entity.Store::getName)
+                                .orElse(null) : null)
                 .adminNote(request.getAdminNote())
                 .updatedBy(request.getUpdatedBy())
                 .createdAt(request.getCreatedAt())

@@ -1,0 +1,42 @@
+package vn.edu.hcmuaf.fit.fashionstore.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+@Getter
+@Setter
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "wallet_transactions")
+public class WalletTransaction extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "wallet_id", nullable = false)
+    private VendorWallet wallet;
+
+    @Column(name = "order_id")
+    private UUID orderId;
+
+    @Column(name = "amount", nullable = false)
+    private BigDecimal amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 20)
+    private TransactionType type;
+
+    @Column(name = "description")
+    private String description;
+
+    public enum TransactionType {
+        CREDIT, DEBIT, WITHDRAWAL
+    }
+}

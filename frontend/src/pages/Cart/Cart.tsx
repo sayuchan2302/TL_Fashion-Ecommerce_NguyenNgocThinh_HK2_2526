@@ -6,6 +6,8 @@ import ProductSection from '../../components/ProductSection/ProductSection';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import { mensFashion } from '../../mocks/products';
 import { useCart, type StoreGroup } from '../../contexts/CartContext';
+import { useToast } from '../../contexts/ToastContext';
+import { hasBackendJwt } from '../../services/apiClient';
 import { formatPrice } from '../../utils/formatters';
 import { CLIENT_TEXT } from '../../utils/texts';
 import { MARKETPLACE_DICTIONARY } from '../../utils/clientDictionary';
@@ -39,6 +41,7 @@ const storeGroupTransition = {
 
 const Cart = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const { items, updateQuantity, removeFromCart, groupedByStore } = useCart();
   const [selectedItems, setSelectedItems] = useState<string[]>(items.map(i => i.cartId));
   const [couponCode, setCouponCode] = useState('');
@@ -380,7 +383,14 @@ const Cart = () => {
 
               <button className="btn-checkout"
                 disabled={validSelectedItems.length === 0}
-                onClick={() => navigate('/checkout')}>
+                onClick={() => {
+                  if (!hasBackendJwt()) {
+                    addToast('Vui lòng đăng nhập để thanh toán đơn hàng', 'error');
+                    navigate('/login?redirect=/checkout');
+                    return;
+                  }
+                  navigate('/checkout');
+                }}>
                 {t.proceedCheckout}
               </button>
 

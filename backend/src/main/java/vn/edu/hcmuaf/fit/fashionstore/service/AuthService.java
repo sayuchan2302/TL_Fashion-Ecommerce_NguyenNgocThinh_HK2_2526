@@ -67,7 +67,12 @@ public class AuthService {
         userRepository.save(user);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String token = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
+        String token = jwtService.generateTokenWithUserContext(
+                user.getId().toString(),
+                user.getRole().name(),
+                user.getStoreId() != null ? user.getStoreId().toString() : null,
+                userDetails
+        );
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
         return buildAuthResponse(user, token, refreshToken);
@@ -87,7 +92,12 @@ public class AuthService {
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String token = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
+        String token = jwtService.generateTokenWithUserContext(
+                user.getId().toString(),
+                user.getRole().name(),
+                user.getStoreId() != null ? user.getStoreId().toString() : null,
+                userDetails
+        );
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
         return buildAuthResponse(user, token, refreshToken);
@@ -111,7 +121,12 @@ public class AuthService {
             User user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
-            String newToken = jwtService.generateTokenWithUserId(user.getId().toString(), userDetails);
+            String newToken = jwtService.generateTokenWithUserContext(
+                    user.getId().toString(),
+                    user.getRole().name(),
+                    user.getStoreId() != null ? user.getStoreId().toString() : null,
+                    userDetails
+            );
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
             return buildAuthResponse(user, newToken, newRefreshToken);

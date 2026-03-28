@@ -15,14 +15,18 @@ import vn.edu.hcmuaf.fit.fashionstore.entity.ProductImage;
 import vn.edu.hcmuaf.fit.fashionstore.entity.ProductVariant;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Product.Gender;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Product.ProductStatus;
+import vn.edu.hcmuaf.fit.fashionstore.entity.Store;
 import vn.edu.hcmuaf.fit.fashionstore.exception.ForbiddenException;
 import vn.edu.hcmuaf.fit.fashionstore.exception.ResourceNotFoundException;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CategoryRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.ProductRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.ProductVariantRepository;
+import vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +37,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final StoreRepository storeRepository;
 
     private static final int LOW_STOCK_THRESHOLD = 10;
 
@@ -44,11 +49,13 @@ public class ProductService {
     public ProductService(
             ProductRepository productRepository,
             CategoryRepository categoryRepository,
-            ProductVariantRepository productVariantRepository
+            ProductVariantRepository productVariantRepository,
+            StoreRepository storeRepository
     ) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productVariantRepository = productVariantRepository;
+        this.storeRepository = storeRepository;
     }
 
     // ─── Public Methods (No tenant filtering) ──────────────────────────────────
@@ -86,6 +93,20 @@ public class ProductService {
      */
     public Page<Product> findActiveByStoreId(UUID storeId, Pageable pageable) {
         return productRepository.findActiveByStoreId(storeId, pageable);
+    }
+
+    /**
+     * Find active products by store identifier (UUID or slug)
+     */
+    public Page<Product> findActiveByStoreIdentifier(String identifier, Pageable pageable) {
+        try {
+            UUID storeId = UUID.fromString(identifier);
+            return productRepository.findActiveByStoreId(storeId, pageable);
+        } catch (IllegalArgumentException ex) {
+            Store store = storeRepository.findBySlug(identifier)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+            return productRepository.findActiveByStoreId(store.getId(), pageable);
+        }
     }
 
     /**
@@ -184,10 +205,10 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image URL is required");
         }
 
-        double effectivePrice = request.getSalePrice() != null && request.getSalePrice() > 0
+        BigDecimal effectivePrice = request.getSalePrice() != null && request.getSalePrice().compareTo(BigDecimal.ZERO) > 0
                 ? request.getSalePrice()
-                : (request.getBasePrice() == null ? 0 : request.getBasePrice());
-        if (effectivePrice <= 0) {
+                : (request.getBasePrice() == null ? BigDecimal.ZERO : request.getBasePrice());
+        if (effectivePrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Price must be greater than 0");
         }
 
@@ -355,7 +376,7 @@ public class ProductService {
                     .color("Default")
                     .size("Default")
                     .stockQuantity(Math.max(0, stockQuantity == null ? 0 : stockQuantity))
-                    .priceAdjustment(0.0)
+                    .priceAdjustment(BigDecimal.ZERO)
                     .isActive(true)
                     .build();
             variants.add(newVariant);
@@ -375,7 +396,7 @@ public class ProductService {
             variant.setSize("Default");
         }
         if (variant.getPriceAdjustment() == null) {
-            variant.setPriceAdjustment(0.0);
+            variant.setPriceAdjustment(BigDecimal.ZERO);
         }
         if (variant.getIsActive() == null) {
             variant.setIsActive(true);
@@ -452,11 +473,11 @@ public class ProductService {
     }
 
     private void validateBasicRequest(ProductRequest request) {
-        if (request.getBasePrice() != null && request.getBasePrice() < 0) {
+        if (request.getBasePrice() != null && request.getBasePrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Base price must be greater than or equal to 0");
         }
 
-        if (request.getSalePrice() != null && request.getSalePrice() < 0) {
+        if (request.getSalePrice() != null && request.getSalePrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sale price must be greater than or equal to 0");
         }
 
@@ -482,8 +503,8 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a leaf category before publishing");
         }
 
-        Double effectivePrice = product.getEffectivePrice();
-        if (effectivePrice == null || effectivePrice <= 0) {
+        BigDecimal effectivePrice = product.getEffectivePrice();
+        if (effectivePrice == null || effectivePrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Price must be greater than 0 before publishing");
         }
 

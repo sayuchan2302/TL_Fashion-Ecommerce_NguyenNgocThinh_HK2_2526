@@ -65,6 +65,13 @@ const Checkout = () => {
   const couponScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!hasBackendJwt()) {
+      addToast('Vui lòng đăng nhập để thanh toán đơn hàng', 'error');
+      navigate('/login?redirect=/checkout');
+    }
+  }, [navigate, addToast]);
+
+  useEffect(() => {
     const el = couponScrollRef.current;
     if (!el) return;
     const handleWheel = (e: WheelEvent) => {
@@ -211,39 +218,23 @@ const Checkout = () => {
     setIsLoading(true);
 
     try {
-      const canUseBackendCheckout = hasBackendJwt() && items.every((item) => Boolean(item.backendProductId));
-
-      if (canUseBackendCheckout) {
-        const backendAddress = await findOrCreateBackendAddress();
-        const backendOrder = await orderService.createBackendOrder({
-          addressId: backendAddress.id,
-          paymentMethod: paymentMethod.toUpperCase(),
-          couponCode: appliedCoupon?.code,
-          note: formValues.note.trim() || undefined,
-          items: items.map((item) => ({
-            productId: String(item.backendProductId),
-            variantId: item.backendVariantId,
-            quantity: item.quantity,
-            unitPrice: item.price,
-          })),
-        });
-
-        if (saveAddressToBook && formValues.name && formValues.phone && formValues.address) {
-          addressService.add({
-            fullName: formValues.name,
-            phone: formValues.phone,
-            detail: formValues.address,
-            ward: formValues.ward,
-            district: formValues.district,
-            province: formValues.province,
-            isDefault: false,
-          });
-        }
-
-        clearCart();
-        navigate(`/order-success?id=${backendOrder.id}`);
-        return;
+      if (!hasBackendJwt()) {
+        throw new Error('Vui lòng đăng nhập để thanh toán.');
       }
+
+      const backendAddress = await findOrCreateBackendAddress();
+      const backendOrder = await orderService.createBackendOrder({
+        addressId: backendAddress.id,
+        paymentMethod: paymentMethod.toUpperCase(),
+        couponCode: appliedCoupon?.code,
+        note: formValues.note.trim() || undefined,
+        items: items.map((item) => ({
+          productId: String(item.backendProductId),
+          variantId: item.backendVariantId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+        })),
+      });
 
       if (saveAddressToBook && formValues.name && formValues.phone && formValues.address) {
         addressService.add({
@@ -257,33 +248,8 @@ const Checkout = () => {
         });
       }
 
-      const orderId = Math.floor(Math.random() * 1000000);
-      const { subOrderIds } = orderService.addWithSubOrders({
-        id: `CM${orderId}`,
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        total: subtotal + shippingFee - discount,
-        items: items.map(item => ({
-          id: String(item.id),
-          name: item.name,
-          price: item.price,
-          originalPrice: item.originalPrice,
-          image: item.image,
-          quantity: item.quantity,
-          color: item.color,
-          size: item.size,
-          storeId: item.storeId,
-          storeName: item.storeName,
-        })),
-        addressSummary: `${formValues.name}, ${formValues.phone}, ${formValues.address}, ${formValues.ward}, ${formValues.district}, ${formValues.province}`,
-        paymentMethod: paymentMethod.toUpperCase(),
-      });
-
       clearCart();
-      const navUrl = subOrderIds.length > 0
-        ? `/order-success?id=${orderId}&subOrders=${subOrderIds.length}`
-        : `/order-success?id=${orderId}`;
-      navigate(navUrl);
+      navigate(`/order-success?id=${backendOrder.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Dat hang that bai. Vui long thu lai.';
       addToast(message, 'error');

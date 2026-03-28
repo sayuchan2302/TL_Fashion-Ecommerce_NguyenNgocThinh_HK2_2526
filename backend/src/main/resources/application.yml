@@ -7,15 +7,18 @@ spring:
     username: postgres
     password: 230204
     driver-class-name: org.postgresql.Driver
+    hikari:
+      initialization-fail-timeout: -1
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        globally_quoted_identifiers: true
 
   jackson:
     time-zone: Asia/Ho_Chi_Minh

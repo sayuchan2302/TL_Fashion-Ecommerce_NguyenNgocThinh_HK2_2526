@@ -1,6 +1,6 @@
 import './AdminStores.css';
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Ban, Check, Eye, Link2, RotateCcw, Search, Store, User, X } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import AdminConfirmDialog from './AdminConfirmDialog';
@@ -11,7 +11,6 @@ import {
   PanelDrawerSection,
   PanelStatsGrid,
   PanelTabs,
-  PanelViewSummary,
 } from '../../components/Panel/PanelPrimitives';
 import { useToast } from '../../contexts/ToastContext';
 import { getUiErrorMessage } from '../../utils/errorMessage';
@@ -87,72 +86,6 @@ const mapStore = (store: StoreProfile, index: number): ManagedStore => ({
   warehouseAddress: store.address || 'Chưa cấu hình kho lấy hàng',
 });
 
-const seedGovernanceStores = (): StoreProfile[] => [
-  {
-    id: 'store-001',
-    name: 'Fashion Hub',
-    slug: 'fashion-hub',
-    logo: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop',
-    banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&h=400&fit=crop',
-    description: 'Gian hàng thời trang nam nữ quy mô lớn, đang vận hành ổn định trên sàn.',
-    rating: 4.8,
-    totalOrders: 1250,
-    totalSales: 500000000,
-    isOfficial: true,
-    status: 'ACTIVE',
-    approvalStatus: 'APPROVED',
-    createdAt: '2024-01-15T00:00:00Z',
-    applicantName: 'Fashion Hub Owner',
-    applicantEmail: 'vendor@gmail.com',
-    commissionRate: 2.5,
-    phone: '0901234567',
-    contactEmail: 'contact@fashionhub.vn',
-    address: '123 Nguyễn Huệ, Quận 1, TP.HCM',
-  },
-  {
-    id: 'store-002',
-    name: 'Style Shop',
-    slug: 'style-shop',
-    logo: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200&h=200&fit=crop',
-    banner: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&h=400&fit=crop',
-    description: 'Gian hàng phong cách đường phố, hiện tạm khóa để rà soát vận hành.',
-    rating: 4.5,
-    totalOrders: 800,
-    totalSales: 250000000,
-    isOfficial: false,
-    status: 'SUSPENDED',
-    approvalStatus: 'APPROVED',
-    createdAt: '2024-03-20T00:00:00Z',
-    applicantName: 'Style Shop Owner',
-    applicantEmail: 'style@email.com',
-    commissionRate: 4,
-    phone: '0907654321',
-    contactEmail: 'hello@styleshop.vn',
-    address: '89 Lê Lợi, Quận 3, TP.HCM',
-  },
-  {
-    id: 'store-004',
-    name: 'Urban Layer',
-    slug: 'urban-layer',
-    logo: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&h=200&fit=crop',
-    banner: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1200&h=400&fit=crop',
-    description: 'Hồ sơ đã từng bị từ chối do thiếu giấy tờ xác minh thương hiệu.',
-    rating: 0,
-    totalOrders: 0,
-    totalSales: 0,
-    isOfficial: false,
-    status: 'INACTIVE',
-    approvalStatus: 'REJECTED',
-    createdAt: '2024-04-05T00:00:00Z',
-    applicantName: 'Lê Hoàng Đức',
-    applicantEmail: 'hoangduc@seller.local',
-    commissionRate: 5,
-    phone: '0933881776',
-    contactEmail: 'urbanlayer@shop.vn',
-    address: '12 Pasteur, Quận 3, TP.HCM',
-    rejectionReason: 'Thiếu thông tin xác minh thương hiệu và địa chỉ kho.',
-  },
-];
 
 const StoreApprovals = () => {
   const { addToast } = useToast();
@@ -172,10 +105,8 @@ const StoreApprovals = () => {
     const fetchStores = async () => {
       setLoading(true);
       try {
-        const seededStores = seedGovernanceStores();
         const adminStores = await storeService.getAdminStores();
-        const combined = [...seededStores, ...adminStores.filter((store) => !seededStores.some((seed) => seed.id === store.id))];
-        setStores(combined.map(mapStore));
+        setStores(adminStores.map(mapStore));
       } catch (error: unknown) {
         addToast(getUiErrorMessage(error, 'Không tải được danh sách gian hàng'), 'error');
       } finally {
@@ -227,7 +158,7 @@ const StoreApprovals = () => {
     () => filteredStores.slice((safePage - 1) * pageSize, safePage * pageSize),
     [filteredStores, safePage],
   );
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim());
+
 
   const resetCurrentView = () => {
     setSearch('');
@@ -428,24 +359,26 @@ const StoreApprovals = () => {
         }}
       />
 
-      <PanelViewSummary
-        chips={[
-          ...(hasViewContext
-            ? [{ key: 'scope', label: <>Nhóm: {TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}</> }]
-            : []),
-          ...(search.trim() ? [{ key: 'search', label: <>Từ khóa: {search.trim()}</> }] : []),
-        ]}
-        clearLabel="Đặt lại bộ lọc"
-        onClear={resetCurrentView}
-      />
-
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Danh sách gian hàng</h2>
-            <span className="admin-muted">
-              Theo dõi vòng đời gian hàng: duyệt hồ sơ, tạm khóa vận hành, mở lại hoạt động và rà soát tín hiệu kinh doanh cơ bản.
-            </span>
+            {selected.size > 0 && (() => {
+              const selectedStores = stores.filter((store) => selected.has(store.id));
+              const hasPending = selectedStores.some((store) => store.approvalStatus === 'PENDING');
+              const hasActive = selectedStores.some((store) => store.approvalStatus === 'APPROVED' && store.operatingStatus === 'ACTIVE');
+              const hasSuspended = selectedStores.some((store) => store.approvalStatus === 'APPROVED' && store.operatingStatus === 'SUSPENDED');
+              return (
+                <div className="admin-actions">
+                  <span className="admin-muted">Đã chọn {selected.size} gian hàng</span>
+                  {hasPending && <button className="admin-ghost-btn" onClick={() => openConfirm('approve', Array.from(selected))}>Duyệt đã chọn</button>}
+                  {hasActive && <button className="admin-ghost-btn danger" onClick={() => openConfirm('suspend', Array.from(selected))}>Tạm khóa đã chọn</button>}
+                  {hasSuspended && <button className="admin-ghost-btn" onClick={() => openConfirm('reactivate', Array.from(selected))}>Mở lại đã chọn</button>}
+                  <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
+                </div>
+              );
+            })()}
+           
           </div>
 
           {!loading && filteredStores.length === 0 ? (
@@ -565,37 +498,6 @@ const StoreApprovals = () => {
           ) : null}
         </div>
       </section>
-
-      <AnimatePresence>
-        {selected.size > 0 ? (
-          <motion.div
-            className="admin-floating-bar"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 22 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            {(() => {
-              const selectedStores = stores.filter((store) => selected.has(store.id));
-              const hasPending = selectedStores.some((store) => store.approvalStatus === 'PENDING');
-              const hasActive = selectedStores.some((store) => store.approvalStatus === 'APPROVED' && store.operatingStatus === 'ACTIVE');
-              const hasSuspended = selectedStores.some((store) => store.approvalStatus === 'APPROVED' && store.operatingStatus === 'SUSPENDED');
-
-              return (
-                <div className="admin-floating-content">
-                  <span>Đã chọn {selected.size} gian hàng</span>
-                  <div className="admin-actions">
-                    {hasPending && <button className="admin-ghost-btn" onClick={() => openConfirm('approve', Array.from(selected))}>Duyệt đã chọn</button>}
-                    {hasActive && <button className="admin-ghost-btn danger" onClick={() => openConfirm('suspend', Array.from(selected))}>Tạm khóa đã chọn</button>}
-                    {hasSuspended && <button className="admin-ghost-btn" onClick={() => openConfirm('reactivate', Array.from(selected))}>Mở lại đã chọn</button>}
-                    <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
-                  </div>
-                </div>
-              );
-            })()}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       <AdminConfirmDialog
         open={Boolean(confirmState)}

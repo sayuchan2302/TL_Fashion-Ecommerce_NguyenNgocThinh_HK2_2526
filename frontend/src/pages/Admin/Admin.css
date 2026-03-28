@@ -1498,23 +1498,6 @@ body {
   font-size: 14px;
 }
 
-.admin-hint {
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px solid var(--co-gray-200);
-  border-radius: 12px;
-  background: var(--co-gray-50);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.admin-hint-pills {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .admin-link {
   color: var(--co-blue);
   text-decoration: none;
@@ -2311,7 +2294,7 @@ body {
 .admin-floating-bar {
   position: fixed;
   left: 50%;
-  bottom: 120px;
+  bottom: 60px;
   transform: translateX(-50%);
   z-index: 120;
 }
@@ -3459,7 +3442,7 @@ input:disabled,
 .customer-floating-bar {
   position: fixed;
   left: 50%;
-  bottom: 120px;
+  bottom: 60px;
   transform: translateX(-50%);
   z-index: 120;
 }

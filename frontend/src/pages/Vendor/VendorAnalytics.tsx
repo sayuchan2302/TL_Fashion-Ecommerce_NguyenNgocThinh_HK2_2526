@@ -2,7 +2,7 @@ import './Vendor.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, Download, Link2, Package, Percent, ShoppingCart, TrendingUp } from 'lucide-react';
 import VendorLayout from './VendorLayout';
-import { calculateCommission, formatCurrency } from '../../services/commissionService';
+import { formatCurrency } from '../../services/commissionService';
 import { vendorPortalService } from '../../services/vendorPortalService';
 import { useToast } from '../../contexts/ToastContext';
 import { getUiErrorMessage } from '../../utils/errorMessage';
@@ -15,23 +15,27 @@ interface AnalyticsData {
     Period,
     {
       revenue: number;
+      payout: number;
+      commission: number;
       orders: number;
       avgOrderValue: number;
       conversionRate: number;
       previousRevenue: number;
+      previousPayout: number;
+      previousCommission: number;
       previousOrders: number;
     }
   >;
-  dailyData: Array<{ date: string; revenue: number; orders: number }>;
+  dailyData: Array<{ date: string; revenue: number; payout: number; commission: number; orders: number }>;
   topProducts: Array<{ id: string; name: string; sales: number; revenue: number; img: string }>;
   commissionRate: number;
 }
 
 const emptyAnalytics: AnalyticsData = {
   periods: {
-    today: { revenue: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousOrders: 1 },
-    week: { revenue: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousOrders: 1 },
-    month: { revenue: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousOrders: 1 },
+    today: { revenue: 0, payout: 0, commission: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousPayout: 1, previousCommission: 1, previousOrders: 1 },
+    week: { revenue: 0, payout: 0, commission: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousPayout: 1, previousCommission: 1, previousOrders: 1 },
+    month: { revenue: 0, payout: 0, commission: 0, orders: 0, avgOrderValue: 0, conversionRate: 0, previousRevenue: 1, previousPayout: 1, previousCommission: 1, previousOrders: 1 },
   },
   dailyData: [],
   topProducts: [],
@@ -73,8 +77,8 @@ const VendorAnalytics = () => {
   }, [addToast]);
 
   const periodData = analytics.periods[activePeriod];
-  const commission = calculateCommission(periodData.revenue, analytics.commissionRate);
-  const prevCommission = calculateCommission(periodData.previousRevenue, analytics.commissionRate);
+  const commission = { commission: periodData.commission, payout: periodData.payout };
+  const prevCommission = { commission: periodData.previousCommission, payout: periodData.previousPayout };
   const revenueChange = ((periodData.revenue - periodData.previousRevenue) / Math.max(periodData.previousRevenue, 1)) * 100;
   const ordersChange = ((periodData.orders - periodData.previousOrders) / Math.max(periodData.previousOrders, 1)) * 100;
   const payoutChange = ((commission.payout - prevCommission.payout) / Math.max(prevCommission.payout, 1)) * 100;
@@ -116,9 +120,9 @@ const VendorAnalytics = () => {
     () =>
       analytics.dailyData.map((item) => ({
         ...item,
-        payout: calculateCommission(item.revenue, analytics.commissionRate).payout,
+        payout: item.payout,
       })),
-    [analytics.commissionRate, analytics.dailyData],
+    [analytics.dailyData],
   );
 
   return (
@@ -253,7 +257,7 @@ const VendorAnalytics = () => {
                 ) : (
                   <div className="vendor-top-products-grid">
                     {analytics.topProducts.map((product, index) => {
-                      const payout = calculateCommission(product.revenue, analytics.commissionRate).payout;
+                      const payout = product.revenue * (1 - analytics.commissionRate / 100);
                       return (
                         <div key={product.id} className="vendor-analytics-product">
                           <div className="vendor-analytics-product-rank">#{index + 1}</div>

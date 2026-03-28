@@ -14,8 +14,12 @@ import {
   type FulfillmentStatus,
   type PaymentStatus,
 } from './orderWorkflow';
-import { getAdminOrderByCode, subscribeAdminOrders, transitionAdminOrder } from './adminOrderService';
-import { sharedOrderStore } from '../../services/sharedOrderStore';
+import {
+  getAdminOrderByCode,
+  subscribeAdminOrders,
+  transitionAdminOrder,
+  type AdminOrderRecord,
+} from './adminOrderService';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminToast } from './useAdminToast';
 import { ADMIN_DICTIONARY } from './adminDictionary';
@@ -26,7 +30,8 @@ const formatVND = (n: number) => n.toLocaleString('vi-VN', { style: 'currency', 
 
 const AdminOrderDetailContent = ({ orderCode, routeId }: { orderCode: string; routeId?: string }) => {
   const t = ADMIN_DICTIONARY.orderDetail;
-  const [order, setOrder] = useState(() => getAdminOrderByCode(orderCode));
+  const [order, setOrder] = useState<AdminOrderRecord | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const { toast, pushToast } = useAdminToast();
   const [pendingTransition, setPendingTransition] = useState<FulfillmentStatus | null>(null);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
@@ -50,14 +55,32 @@ const AdminOrderDetailContent = ({ orderCode, routeId }: { orderCode: string; ro
     return paymentStatus;
   }, [pendingTransition, paymentStatus]);
 
+  const fetchOrder = async () => {
+    try {
+      if (orderCode) {
+        const data = await getAdminOrderByCode(orderCode);
+        setOrder(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   useEffect(() => {
-    const syncOrder = () => {
-      setOrder(getAdminOrderByCode(orderCode));
-    };
-    const unsubscribe = subscribeAdminOrders(syncOrder);
-    syncOrder();
+    fetchOrder();
+    const unsubscribe = subscribeAdminOrders(fetchOrder);
     return unsubscribe;
   }, [orderCode]);
+
+  if (isInitializing) {
+    return (
+      <AdminLayout title={t.title}>
+        <div className="admin-loading" style={{ padding: '3rem', textAlign: 'center' }}>Đang tải dữ liệu đơn hàng...</div>
+      </AdminLayout>
+    );
+  }
 
   if (!order) {
     return (
@@ -82,9 +105,9 @@ const AdminOrderDetailContent = ({ orderCode, routeId }: { orderCode: string; ro
     setShowTransitionModal(true);
   };
 
-  const updateFulfillment = (next: FulfillmentStatus) => {
+  const updateFulfillment = async (next: FulfillmentStatus) => {
     if (next === fulfillment) return;
-    const result = transitionAdminOrder({
+    const result = await transitionAdminOrder({
       code: order.code,
       nextFulfillment: next,
       actor: 'Admin',
@@ -101,6 +124,7 @@ const AdminOrderDetailContent = ({ orderCode, routeId }: { orderCode: string; ro
     setPendingTransition(null);
     setShowTransitionModal(false);
     pushToast(result.message || t.messages.transitionSuccess(fulfillmentLabel(next)));
+    fetchOrder();
   };
 
   const exportAuditLog = () => {
@@ -247,10 +271,11 @@ const AdminOrderDetailContent = ({ orderCode, routeId }: { orderCode: string; ro
                       className="admin-icon-btn subtle"
                       aria-label={t.updateTracking}
                       onClick={() => {
-                        sharedOrderStore.updateTracking(order.code, trackingInput.trim());
-                        setOrder(getAdminOrderByCode(orderCode));
+                        // TODO: Implement actual backend tracking update
+                        // sharedOrderStore.updateTracking(order.code, trackingInput.trim());
+                        // setOrder(getAdminOrderByCode(orderCode));
                         setIsEditingTracking(false);
-                        pushToast(t.messages.trackingUpdated);
+                        pushToast('Tính năng cập nhật mã vận đơn qua API đang được xây dựng.');
                       }}
                     >
                       <Save size={14} />

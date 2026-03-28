@@ -5,6 +5,7 @@ import lombok.Getter;
 import vn.edu.hcmuaf.fit.fashionstore.entity.ReturnRequest;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,8 @@ public class ReturnRequestResponse {
     private String note;
     private ReturnRequest.ReturnResolution resolution;
     private ReturnRequest.ReturnStatus status;
+    private UUID storeId;
+    private String storeName;
     private List<ReturnItem> items;
     private String adminNote;
     private String updatedBy;
@@ -35,6 +38,6 @@ public class ReturnRequestResponse {
         private String variantName;
         private String imageUrl;
         private Integer quantity;
-        private Double unitPrice;
+        private BigDecimal unitPrice;
     }
 }

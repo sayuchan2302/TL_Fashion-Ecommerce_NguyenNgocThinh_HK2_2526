@@ -1,5 +1,4 @@
 import { apiRequest } from './apiClient';
-import { calculateCommission } from './commissionService';
 import { storeService, type StoreProfile } from './storeService';
 
 interface BackendPage<T> {
@@ -278,7 +277,6 @@ const mapBackendStatus = (status?: string): VendorOrderLifecycleStatus => {
 
 const mapOrderSummary = (order: BackendVendorOrderSummary): VendorOrderSummary => {
   const total = Number(order.total || 0);
-  const fallbackCommission = calculateCommission(total, 5);
 
   return {
     id: order.id,
@@ -288,8 +286,8 @@ const mapOrderSummary = (order: BackendVendorOrderSummary): VendorOrderSummary =
     status: mapBackendStatus(order.status),
     date: order.createdAt || new Date().toISOString(),
     items: Number(order.itemCount || 0),
-    commissionFee: Number(order.commissionFee ?? fallbackCommission.commission),
-    vendorPayout: Number(order.vendorPayout ?? fallbackCommission.payout),
+    commissionFee: Number(order.commissionFee ?? 0),
+    vendorPayout: Number(order.vendorPayout ?? 0),
     thumb: FALLBACK_IMAGE,
   };
 };
@@ -330,8 +328,8 @@ const mapOrderDetail = (order: BackendVendorOrderDetail): VendorOrderDetailData 
   note: order.note || '',
   trackingNumber: order.trackingNumber || '',
   carrier: order.shippingCarrier || '',
-  commissionFee: Number(order.commissionFee ?? calculateCommission(Number(order.total || 0), 5).commission),
-  vendorPayout: Number(order.vendorPayout ?? calculateCommission(Number(order.total || 0), 5).payout),
+  commissionFee: Number(order.commissionFee ?? 0),
+  vendorPayout: Number(order.vendorPayout ?? 0),
   timeline: [
     {
       status: mapBackendStatus(order.status),
@@ -388,11 +386,15 @@ const summarizeWindow = (orders: VendorOrderSummary[], fromDaysAgo: number, toDa
   });
 
   const revenue = scoped.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const payout = scoped.reduce((sum, order) => sum + Number(order.vendorPayout || 0), 0);
+  const commission = scoped.reduce((sum, order) => sum + Number(order.commissionFee || 0), 0);
   const count = scoped.length;
   const deliveredCount = scoped.filter((order) => order.status === 'delivered').length;
 
   return {
     revenue: Math.round(revenue),
+    payout: Math.round(payout),
+    commission: Math.round(commission),
     orders: count,
     avgOrderValue: count > 0 ? Math.round(revenue / count) : 0,
     conversionRate: count > 0 ? Number(((deliveredCount / count) * 100).toFixed(1)) : 0,
@@ -401,12 +403,12 @@ const summarizeWindow = (orders: VendorOrderSummary[], fromDaysAgo: number, toDa
 
 const buildDailySeries = (orders: VendorOrderSummary[], days = 7) => {
   const now = toStartOfDay(new Date());
-  const buckets = new Map<string, { date: string; revenue: number; orders: number }>();
+  const buckets = new Map<string, { date: string; revenue: number; payout: number; commission: number; orders: number }>();
 
   for (let index = days - 1; index >= 0; index -= 1) {
     const current = new Date(now);
     current.setDate(now.getDate() - index);
-    buckets.set(dateKey(current), { date: dateLabel(current), revenue: 0, orders: 0 });
+    buckets.set(dateKey(current), { date: dateLabel(current), revenue: 0, payout: 0, commission: 0, orders: 0 });
   }
 
   orders.forEach((order) => {
@@ -417,6 +419,8 @@ const buildDailySeries = (orders: VendorOrderSummary[], days = 7) => {
     if (!bucket) return;
     bucket.orders += 1;
     bucket.revenue += Number(order.total || 0);
+    bucket.payout += Number(order.vendorPayout || 0);
+    bucket.commission += Number(order.commissionFee || 0);
   });
 
   return Array.from(buckets.values());
@@ -613,26 +617,38 @@ export const vendorPortalService = {
       periods: {
         today: {
           revenue: todayCurrent.revenue,
+          payout: todayCurrent.payout,
+          commission: todayCurrent.commission,
           orders: todayCurrent.orders,
           avgOrderValue: todayCurrent.avgOrderValue,
           conversionRate: todayCurrent.conversionRate,
           previousRevenue: todayPrevious.revenue,
+          previousPayout: todayPrevious.payout,
+          previousCommission: todayPrevious.commission,
           previousOrders: todayPrevious.orders,
         },
         week: {
           revenue: weekCurrent.revenue,
+          payout: weekCurrent.payout,
+          commission: weekCurrent.commission,
           orders: weekCurrent.orders,
           avgOrderValue: weekCurrent.avgOrderValue,
           conversionRate: weekCurrent.conversionRate,
           previousRevenue: weekPrevious.revenue,
+          previousPayout: weekPrevious.payout,
+          previousCommission: weekPrevious.commission,
           previousOrders: weekPrevious.orders,
         },
         month: {
           revenue: monthCurrent.revenue,
+          payout: monthCurrent.payout,
+          commission: monthCurrent.commission,
           orders: monthCurrent.orders,
           avgOrderValue: monthCurrent.avgOrderValue,
           conversionRate: monthCurrent.conversionRate,
           previousRevenue: monthPrevious.revenue,
+          previousPayout: monthPrevious.payout,
+          previousCommission: monthPrevious.commission,
           previousOrders: monthPrevious.orders,
         },
       },

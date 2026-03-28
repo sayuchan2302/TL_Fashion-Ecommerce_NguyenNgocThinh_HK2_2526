@@ -1,15 +1,10 @@
 import {
-  canTransitionFulfillment,
   fulfillmentLabel,
-  transitionReasonLabel,
-  transitionReasonCatalog,
-  validateTransitionReason,
   type FulfillmentStatus,
   type PaymentStatus,
   type TransitionReasonCode,
 } from './orderWorkflow';
-import { type AdminOrderData, type AdminOrderTimelineEntry } from './adminOrdersData';
-import { sharedOrderStore } from '../../services/sharedOrderStore';
+import { type AdminOrderData } from './adminOrdersData';
 
 type TransitionSource = 'orders_list' | 'order_detail';
 
@@ -54,256 +49,140 @@ interface BulkTransitionResult {
   skippedCodes: string[];
 }
 
-const formatTimelineTime = (iso: string) =>
-  new Date(iso).toLocaleString('vi-VN', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 
-const cloneTimeline = (timeline: AdminOrderTimelineEntry[]) => timeline.map((entry) => ({ ...entry }));
 
-const cloneOrder = (order: AdminOrderRecord): AdminOrderRecord => ({
-  ...order,
-  customerInfo: { ...order.customerInfo },
-  items: order.items.map((item) => ({ ...item })),
-  pricing: { ...order.pricing },
-  timeline: cloneTimeline(order.timeline),
-  auditLog: order.auditLog.map((entry) => ({ ...entry })),
-});
 
-// ── Load from sharedOrderStore (single source of truth) ──────────────────
-const initOrderRecords = (): AdminOrderRecord[] =>
-  sharedOrderStore.getAll().map((order, index) => {
-    const adminData = sharedOrderStore.toAdminOrderData(order);
-    return {
-      ...adminData,
-      version: 1,
-      updatedAt: order.createdAt,
-      auditLog: [
-        {
-          id: `seed-${index + 1}`,
-          at: order.createdAt,
-          actor: 'system',
-          source: 'order_detail' as TransitionSource,
-          orderCode: adminData.code,
-          fromFulfillment: adminData.fulfillment,
-          toFulfillment: adminData.fulfillment,
-          fromPayment: adminData.paymentStatus,
-          toPayment: adminData.paymentStatus,
-        },
-      ],
-    };
-  });
+import { apiRequest } from '../../services/apiClient';
 
-let orderRecords: AdminOrderRecord[] = initOrderRecords();
+// ── Real Backend API Calls ──────────────────
 
-const listeners = new Set<() => void>();
-
-const AUTO_CANCEL_PENDING_MS = 3 * 24 * 60 * 60 * 1000;
-const AUTO_CANCEL_NOTE = 'Tự động hủy sau 3 ngày chờ xác nhận.';
-
-const emitChange = () => {
-  listeners.forEach((listener) => listener());
-};
-
-const applyTransitionOnRecord = (
-  order: AdminOrderRecord,
-  input: TransitionInput,
-  nowIso: string,
-): AdminOrderRecord => {
-  const nextPaymentStatus =
-    input.nextFulfillment === 'done' && order.paymentStatus === 'cod_uncollected' ? 'paid' : order.paymentStatus;
-  const selectedReason = transitionReasonCatalog[input.nextFulfillment].find((item) => item.code === input.reasonCode);
-  const timelineAdditions: AdminOrderTimelineEntry[] = [
-    {
-      time: formatTimelineTime(nowIso),
-      text: `Admin cập nhật trạng thái sang ${fulfillmentLabel(input.nextFulfillment)}.`,
-      tone: input.nextFulfillment === 'done' ? 'success' : input.nextFulfillment === 'canceled' ? 'error' : 'pending',
+const mapBackendToAdmin = (order: any): AdminOrderRecord => {
+  const fulfillmentMap: Record<string, FulfillmentStatus> = {
+    PENDING: 'pending',
+    CONFIRMED: 'packing',
+    PROCESSING: 'packing',
+    SHIPPED: 'shipping',
+    DELIVERED: 'done',
+    CANCELLED: 'canceled',
+  };
+  
+  return {
+    code: order.id,
+    customer: order.shippingAddress?.fullName || 'Khách hàng ẩn danh',
+    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(order.shippingAddress?.fullName || 'Anonymous')}&background=0EA5E9&color=fff`,
+    total: order.total?.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }) || '0 đ',
+    storeName: order.storeName,
+    commissionRate: order.commissionRate,
+    paymentStatus: order.paymentStatus === 'PAID' ? 'paid' : order.paymentMethod === 'COD' ? 'cod_uncollected' : 'unpaid',
+    fulfillment: fulfillmentMap[order.status] || 'pending',
+    shipMethod: order.carrier || 'Chưa rõ',
+    tracking: order.trackingNumber || '',
+    date: order.createdAt,
+    customerInfo: {
+      name: order.shippingAddress?.fullName || '',
+      phone: order.shippingAddress?.phone || '',
+      email: '',
     },
-  ];
-
-  if (input.nextFulfillment === 'done' && order.paymentStatus === 'cod_uncollected') {
-    timelineAdditions.push({
-      time: formatTimelineTime(nowIso),
-      text: 'Hệ thống ghi nhận COD đã thu thành công.',
-      tone: 'success',
-    });
-  }
-
-  if (selectedReason) {
-    timelineAdditions.push({
-      time: formatTimelineTime(nowIso),
-      text: `Lý do cập nhật: ${transitionReasonLabel(selectedReason.code)}${(input.reasonNote || '').trim() ? ` - ${(input.reasonNote || '').trim()}` : ''}`,
-      tone: 'neutral',
-    });
-  }
-
-  const auditEntry: AuditEntry = {
-    id: `${order.code}-${Date.now()}`,
-    at: nowIso,
-    actor: input.actor,
-    source: input.source,
-    orderCode: order.code,
-    fromFulfillment: order.fulfillment,
-    toFulfillment: input.nextFulfillment,
-    fromPayment: order.paymentStatus,
-    toPayment: nextPaymentStatus,
-    reasonCode: input.reasonCode,
-    reasonNote: (input.reasonNote || '').trim() || undefined,
-  };
-
-  return {
-    ...order,
-    fulfillment: input.nextFulfillment,
-    paymentStatus: nextPaymentStatus,
-    timeline: [...timelineAdditions, ...order.timeline],
-    updatedAt: nowIso,
-    version: order.version + 1,
-    auditLog: [auditEntry, ...order.auditLog],
+    address: [order.shippingAddress?.address, order.shippingAddress?.ward, order.shippingAddress?.district, order.shippingAddress?.city].filter(Boolean).join(', '),
+    note: order.note || '',
+    paymentMethod: order.paymentMethod || 'COD',
+    items: ((order.items as any[]) || []).map((item: any) => ({
+      id: item.id,
+      name: item.name || item.productName || 'Sản phẩm',
+      color: '',
+      size: item.variant || '',
+      qty: item.quantity || 1,
+      price: item.price || 0,
+      image: item.image || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=100&h=120&fit=crop',
+    })),
+    pricing: {
+      subtotal: order.subtotal || 0,
+      shipping: order.shippingFee || 0,
+      discount: order.discount || 0,
+      voucher: '',
+    },
+    timeline: [],
+    version: 1,
+    updatedAt: order.updatedAt || order.createdAt,
+    auditLog: []
   };
 };
 
-const enforceAutoCancelPendingOrders = () => {
-  const now = Date.now();
-  const nowIso = new Date(now).toISOString();
-  let hasChanged = false;
-
-  orderRecords = orderRecords.map((order) => {
-    if (order.fulfillment !== 'pending') return order;
-
-    const placedAt = new Date(order.date).getTime();
-    if (Number.isNaN(placedAt)) return order;
-    if (now - placedAt < AUTO_CANCEL_PENDING_MS) return order;
-    if (!canTransitionFulfillment(order.fulfillment, 'canceled', order.paymentStatus)) return order;
-
-    hasChanged = true;
-    return applyTransitionOnRecord(
-      order,
-      {
-        code: order.code,
-        nextFulfillment: 'canceled',
-        actor: 'system',
-        source: 'orders_list',
-        reasonCode: 'payment_timeout',
-        reasonNote: AUTO_CANCEL_NOTE,
-      },
-      nowIso,
-    );
-  });
-
-  if (hasChanged) {
-    emitChange();
+export const listAdminOrders = async (): Promise<AdminOrderRecord[]> => {
+  try {
+    const data = await apiRequest<unknown[]>('/api/orders/admin/all', {}, { auth: true });
+    return (data || []).map(mapBackendToAdmin);
+  } catch (error) {
+    console.error('Failed to fetch admin orders', error);
+    return [];
   }
 };
 
-export const listAdminOrders = () => {
-  enforceAutoCancelPendingOrders();
-  return orderRecords.map(cloneOrder);
+export const getAdminOrderByCode = async (code: string): Promise<AdminOrderRecord | null> => {
+  try {
+    const data = await apiRequest(`/api/orders/${code}`, {}, { auth: true });
+    return mapBackendToAdmin(data);
+  } catch (error) {
+    console.error('Failed to fetch admin order detail', error);
+    return null;
+  }
 };
 
-export const getAdminOrderByCode = (code: string) => {
-  enforceAutoCancelPendingOrders();
-  const found = orderRecords.find((item) => item.code === code);
-  return found ? cloneOrder(found) : null;
-};
-
+// Polling placeholder if needed
 export const subscribeAdminOrders = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  const interval = setInterval(listener, 15000); // Poll every 15s
+  return () => clearInterval(interval);
 };
 
-export const transitionAdminOrder = (input: TransitionInput): TransitionResult => {
-  enforceAutoCancelPendingOrders();
-  const index = orderRecords.findIndex((item) => item.code === input.code);
-  if (index < 0) return { ok: false, error: 'Không tìm thấy đơn hàng.' };
-
-  const current = orderRecords[index];
-  if (current.fulfillment === input.nextFulfillment) {
-    return { ok: false, error: 'Đơn hàng đang ở trạng thái này.' };
+export const transitionAdminOrder = async (input: TransitionInput): Promise<TransitionResult> => {
+  try {
+    const statusMap: Record<FulfillmentStatus, string> = {
+      pending: 'PENDING',
+      packing: 'PROCESSING',
+      shipping: 'SHIPPED',
+      done: 'DELIVERED',
+      canceled: 'CANCELLED',
+    };
+    
+    const requestPayload = {
+      status: statusMap[input.nextFulfillment],
+      reason: input.reasonNote || 'Admin cập nhật'
+    };
+    
+    const data = await apiRequest(`/api/orders/admin/${input.code}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(requestPayload)
+    }, { auth: true });
+    
+    return {
+      ok: true,
+      order: mapBackendToAdmin(data),
+      message: `Đã chuyển sang ${fulfillmentLabel(input.nextFulfillment)}.`,
+    };
+  } catch (error: any) {
+    console.error('Failed to transition order', error);
+    return { ok: false, error: error.message || 'Không thể cập nhật trạng thái đơn hàng.' };
   }
-
-  if (!canTransitionFulfillment(current.fulfillment, input.nextFulfillment, current.paymentStatus)) {
-    return { ok: false, error: 'Không thể chuyển trạng thái theo luồng hiện tại.' };
-  }
-
-  const reasonValidation = validateTransitionReason(input.nextFulfillment, input.reasonCode, input.reasonNote);
-  if (!reasonValidation.ok) {
-    return { ok: false, error: reasonValidation.error };
-  }
-
-  const nowIso = new Date().toISOString();
-  const next = applyTransitionOnRecord(current, input, nowIso);
-  orderRecords = [
-    ...orderRecords.slice(0, index),
-    next,
-    ...orderRecords.slice(index + 1),
-  ];
-
-  // ── Sync back to sharedOrderStore so client order pages stay in sync ────
-  const sharedOrder = sharedOrderStore.getById(input.code);
-  if (sharedOrder) {
-    sharedOrderStore.update({
-      ...sharedOrder,
-      fulfillment: next.fulfillment,
-      paymentStatus: next.paymentStatus,
-      tracking: next.tracking || sharedOrder.tracking,
-      timeline: next.timeline.map((t) => ({
-        time: t.time,
-        text: t.text,
-        tone: t.tone,
-      })),
-    });
-  }
-
-  emitChange();
-
-  return {
-    ok: true,
-    order: cloneOrder(next),
-    message: `Đã chuyển sang ${fulfillmentLabel(input.nextFulfillment)}.`,
-  };
 };
 
-export const bulkTransitionToPacking = (codes: string[], actor: string): BulkTransitionResult => {
-  enforceAutoCancelPendingOrders();
-  const uniqueCodes = Array.from(new Set(codes));
-  if (uniqueCodes.length === 0) return { updatedCodes: [], skippedCodes: [] };
-
-  const codeSet = new Set(uniqueCodes);
+export const bulkTransitionToPacking = async (codes: string[], actor: string): Promise<BulkTransitionResult> => {
   const updatedCodes: string[] = [];
   const skippedCodes: string[] = [];
-  const nowIso = new Date().toISOString();
-
-  orderRecords = orderRecords.map((order) => {
-    if (!codeSet.has(order.code)) return order;
-
-    if (!canTransitionFulfillment(order.fulfillment, 'packing', order.paymentStatus)) {
-      skippedCodes.push(order.code);
-      return order;
+  
+  for (const code of codes) {
+    const result = await transitionAdminOrder({
+      code,
+      nextFulfillment: 'packing',
+      actor,
+      source: 'orders_list'
+    });
+    if (result.ok) {
+      updatedCodes.push(code);
+    } else {
+      skippedCodes.push(code);
     }
-
-    updatedCodes.push(order.code);
-    return applyTransitionOnRecord(
-      order,
-      {
-        code: order.code,
-        nextFulfillment: 'packing',
-        actor,
-        source: 'orders_list',
-      },
-      nowIso,
-    );
-  });
-
-  if (updatedCodes.length > 0) {
-    emitChange();
   }
-
+  
   return { updatedCodes, skippedCodes };
 };
+

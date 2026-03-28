@@ -1,9 +1,8 @@
 import './Admin.css';
 import { Star, CheckCircle, EyeOff, Search, Filter, X, Trash2, Eye } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
-import { useState, useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminListState } from './useAdminListState';
 import { useAdminViewState } from './useAdminViewState';
@@ -45,7 +44,27 @@ const getInitials = (name: string) => {
 
 const AdminReviews = () => {
   const { toast, pushToast } = useAdminToast();
-  const [allReviews, setAllReviews] = useState<Review[]>(() => adminReviewService.getAll());
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const fetchReviews = async () => {
+      setIsLoading(true);
+      try {
+        const res = await adminReviewService.getAll({ size: 1000 });
+        if (active) {
+          setAllReviews(res.content);
+        }
+      } catch (err) {
+        if (active) pushToast('Không tải được đánh giá');
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    fetchReviews();
+    return () => { active = false; };
+  }, [pushToast]);
 
   const view = useAdminViewState({
     storageKey: ADMIN_VIEW_KEYS.reviews,
@@ -106,32 +125,39 @@ const AdminReviews = () => {
     hidden: allReviews.filter((r) => r.status === 'hidden').length,
   }), [allReviews]);
 
-  const applyStatusUpdate = (id: string, status: ReviewStatus) => {
-    const updated = adminReviewService.updateStatus(id, status);
-    if (updated) setAllReviews((prev) => prev.map((r) => (r.id === id ? updated : r)));
-    return updated;
+  const applyStatusUpdate = async (id: string, status: ReviewStatus) => {
+    try {
+      const updated = await adminReviewService.updateStatus(id, status);
+      setAllReviews((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      return updated;
+    } catch {
+      pushToast('Lỗi cập nhật trạng thái');
+      return null;
+    }
   };
 
-  const handleApprove = useCallback((id: string) => {
-    if (applyStatusUpdate(id, 'approved')) pushToast('Đã duyệt đánh giá.');
+  const handleApprove = useCallback(async (id: string) => {
+    if (await applyStatusUpdate(id, 'approved')) pushToast('Đã duyệt đánh giá.');
   }, [pushToast]);
 
-  const handleHide = useCallback((id: string) => {
-    if (applyStatusUpdate(id, 'hidden')) pushToast('Đã ẩn đánh giá.');
+  const handleHide = useCallback(async (id: string) => {
+    if (await applyStatusUpdate(id, 'hidden')) pushToast('Đã ẩn đánh giá.');
   }, [pushToast]);
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
-    deleteTarget.ids.forEach((id) => {
-      if (adminReviewService.delete(id)) {
-        setAllReviews((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await Promise.all(deleteTarget.ids.map((id) => adminReviewService.delete(id)));
+      setAllReviews((prev) => prev.filter((r) => !deleteTarget.ids.includes(r.id)));
+      pushToast('Đã xóa đánh giá.');
+    } catch {
+      pushToast('Lỗi khi xóa đánh giá.');
+    } finally {
+      setSelected(new Set());
+      setDeleteTarget(null);
+      if (drawerReview && deleteTarget.ids.includes(drawerReview.id)) {
+        setDrawerReview(null);
       }
-    });
-    pushToast('Đã xóa đánh giá.');
-    setSelected(new Set());
-    setDeleteTarget(null);
-    if (drawerReview && deleteTarget.ids.includes(drawerReview.id)) {
-      setDrawerReview(null);
     }
   };
 
@@ -140,7 +166,7 @@ const AdminReviews = () => {
     setSelected(new Set());
   };
 
-  const hasViewContext = view.status !== 'all' || view.search.trim().length > 0;
+
 
   return (
     <AdminLayout
@@ -197,22 +223,44 @@ const AdminReviews = () => {
         onChange={(key) => view.setStatus(key)}
       />
 
-      {hasViewContext && (
-        <div className="admin-view-summary">
-          <span className="summary-chip">Trạng thái: {view.status === 'all' ? 'Tất cả' : view.status}</span>
-          {search.trim() && <span className="summary-chip">Từ khóa: {search.trim()}</span>}
-          <button className="summary-clear" onClick={resetCurrentView}>Xóa</button>
-        </div>
-      )}
-
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Hàng đợi kiểm duyệt</h2>
-            <Link to="/admin/dashboard">Tổng quan marketplace</Link>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">{selected.size} đã chọn</span>
+                <button className="admin-ghost-btn" onClick={() => {
+                  deleteTarget?.ids?.forEach(async (id) => await applyStatusUpdate(id, 'approved'));
+                  setSelected(new Set());
+                  pushToast('Đã duyệt đánh giá đã chọn.');
+                }}>
+                  <CheckCircle size={15} />
+                  Duyệt
+                </button>
+                <button className="admin-ghost-btn" onClick={() => {
+                  deleteTarget?.ids?.forEach(async (id) => await applyStatusUpdate(id, 'hidden'));
+                  setSelected(new Set());
+                  pushToast('Đã ẩn đánh giá đã chọn.');
+                }}>
+                  <EyeOff size={15} />
+                  Ẩn
+                </button>
+                <button className="admin-ghost-btn danger" onClick={() => {
+                  const targets = filteredItems.filter((r) => selected.has(r.id));
+                  setDeleteTarget({ ids: targets.map((r) => r.id), names: targets.map((r) => r.productName) });
+                }}>
+                  <Trash2 size={15} />
+                  Xóa
+                </button>
+              </div>
+            )}
+           
           </div>
 
-          {filteredItems.length === 0 ? (
+          {isLoading ? (
+            <AdminStateBlock type="empty" title="Đang tải dữ liệu" description="Hệ thống đang đồng bộ với backend..." />
+          ) : filteredItems.length === 0 ? (
             <AdminStateBlock
               type={search.trim() ? 'search-empty' : 'empty'}
               title={search.trim() ? 'Không tìm thấy đánh giá phù hợp' : 'Chưa có đánh giá trong hàng đợi duyệt'}
@@ -319,41 +367,6 @@ const AdminReviews = () => {
           )}
         </div>
       </section>
-
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div className="admin-floating-bar" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 22 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
-            <div className="admin-floating-content">
-              <span>{selected.size} đánh giá đã chọn</span>
-              <div className="admin-actions">
-                <button className="admin-ghost-btn" onClick={() => {
-                  Array.from(selected).forEach((id) => applyStatusUpdate(id, 'approved'));
-                  setSelected(new Set());
-                  pushToast('Đã duyệt đánh giá đã chọn.');
-                }}>
-                  <CheckCircle size={15} />
-                  Duyệt
-                </button>
-                <button className="admin-ghost-btn" onClick={() => {
-                  Array.from(selected).forEach((id) => applyStatusUpdate(id, 'hidden'));
-                  setSelected(new Set());
-                  pushToast('Đã ẩn đánh giá đã chọn.');
-                }}>
-                  <EyeOff size={15} />
-                  Ẩn
-                </button>
-                <button className="admin-ghost-btn danger" onClick={() => {
-                  const targets = filteredItems.filter((r) => selected.has(r.id));
-                  setDeleteTarget({ ids: targets.map((r) => r.id), names: targets.map((r) => r.productName) });
-                }}>
-                  <Trash2 size={15} />
-                  Xóa
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <Drawer open={Boolean(drawerReview)} onClose={() => setDrawerReview(null)}>
         {drawerReview ? (

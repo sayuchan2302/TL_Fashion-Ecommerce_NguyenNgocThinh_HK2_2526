@@ -9,6 +9,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import lombok.experimental.SuperBuilder;
+
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,11 +35,11 @@ public class Cart extends BaseEntity {
 
     @Column(name = "total_amount")
     @Builder.Default
-    private Double totalAmount = 0.0;
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     public void calculateTotal() {
         this.totalAmount = items.stream()
-                .mapToDouble(CartItem::getTotalPrice)
-                .sum();
+                .map(CartItem::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

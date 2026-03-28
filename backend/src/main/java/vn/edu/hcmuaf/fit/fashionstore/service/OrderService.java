@@ -4,12 +4,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import vn.edu.hcmuaf.fit.fashionstore.security.AuthContext.UserContext;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.OrderRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderDetailResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderPageResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderSummaryResponse;
+import vn.edu.hcmuaf.fit.fashionstore.dto.response.AdminOrderResponse;
 import vn.edu.hcmuaf.fit.fashionstore.entity.*;
 import vn.edu.hcmuaf.fit.fashionstore.exception.ForbiddenException;
 import vn.edu.hcmuaf.fit.fashionstore.exception.ResourceNotFoundException;
@@ -19,6 +22,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -32,21 +36,28 @@ public class OrderService {
     private final AddressRepository addressRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final WalletService walletService;
+    private final StoreRepository storeRepository;
+    private final CouponRepository couponRepository;
 
     public OrderService(OrderRepository orderRepository, UserRepository userRepository,
                         AddressRepository addressRepository, ProductRepository productRepository,
-                        ProductVariantRepository productVariantRepository) {
+                        ProductVariantRepository productVariantRepository, WalletService walletService,
+                        StoreRepository storeRepository, CouponRepository couponRepository) {
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
         this.addressRepository = addressRepository;
         this.productRepository = productRepository;
         this.productVariantRepository = productVariantRepository;
+        this.walletService = walletService;
+        this.storeRepository = storeRepository;
+        this.couponRepository = couponRepository;
     }
 
     // Default commission rate (5%)
-    private static final double DEFAULT_COMMISSION_RATE = 0.05;
-    private static final double DEFAULT_SHIPPING_FEE = 30000.0;
-    private static final double FREE_SHIPPING_THRESHOLD = 500000.0;
+    private static final BigDecimal DEFAULT_COMMISSION_RATE = new BigDecimal("0.05");
+    private static final BigDecimal DEFAULT_SHIPPING_FEE = new BigDecimal("30000.0");
+    private static final BigDecimal FREE_SHIPPING_THRESHOLD = new BigDecimal("500000.0");
     private static final LocalDateTime DEFAULT_FILTER_FROM = LocalDateTime.of(1970, 1, 1, 0, 0);
     private static final LocalDateTime DEFAULT_FILTER_TO = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
     private static final EnumSet<Order.OrderStatus> TRACKING_UPDATABLE_STATUSES =
@@ -56,8 +67,8 @@ public class OrderService {
             Product product,
             ProductVariant variant,
             Integer quantity,
-            Double unitPrice,
-            Double totalPrice,
+            BigDecimal unitPrice,
+            BigDecimal totalPrice,
             UUID storeId,
             String productName,
             String variantName,
@@ -67,13 +78,17 @@ public class OrderService {
     private record StoreOrderGroup(
             UUID storeId,
             List<PreparedOrderItem> items,
-            double subtotal
+            BigDecimal subtotal
     ) {}
 
     // ─── Customer Methods ──────────────────────────────────────────────────────
 
-    public List<Order> findByUserId(UUID userId) {
-        return orderRepository.findByUserIdAndSubOrderIdIsNullOrderByCreatedAtDesc(userId);
+    @Transactional(readOnly = true)
+    public List<AdminOrderResponse> findByUserId(UUID userId) {
+        return orderRepository.findByUserIdAndParentOrderIsNullOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toAdminOrderResponse)
+                .toList();
     }
 
     public Order findById(UUID id) {
@@ -90,6 +105,16 @@ public class OrderService {
             throw new ForbiddenException("You don't have access to this order");
         }
         return order;
+    }
+
+    @Transactional(readOnly = true)
+    public AdminOrderResponse getAdminOrderById(UUID id) {
+        return toAdminOrderResponse(findById(id));
+    }
+
+    @Transactional(readOnly = true)
+    public AdminOrderResponse getCustomerOrderById(UUID orderId, UUID userId) {
+        return toAdminOrderResponse(findByIdForUser(orderId, userId));
     }
 
     // ─── Vendor Methods (Multi-tenant) ─────────────────────────────────────────
@@ -189,27 +214,77 @@ public class OrderService {
     /**
      * Calculate total revenue for a store
      */
-    public Double calculateRevenueByStoreId(UUID storeId) {
+    public BigDecimal calculateRevenueByStoreId(UUID storeId) {
         return orderRepository.calculateRevenueByStoreId(storeId);
     }
 
     /**
      * Calculate total payout for a store
      */
-    public Double calculatePayoutByStoreId(UUID storeId) {
+    public BigDecimal calculatePayoutByStoreId(UUID storeId) {
         return orderRepository.calculatePayoutByStoreId(storeId);
     }
 
     // ─── Admin Methods ─────────────────────────────────────────────────────────
 
-    public List<Order> findAll() {
-        return orderRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<AdminOrderResponse> findAllAdminOrders() {
+        return orderRepository.findAll().stream()
+                .map(this::toAdminOrderResponse)
+                .toList();
+    }
+
+    private AdminOrderResponse toAdminOrderResponse(Order order) {
+        String storeName = order.getStoreId() != null 
+            ? storeRepository.findById(order.getStoreId()).map(Store::getName).orElse("Unknown Store")
+            : "Platform";
+
+        return AdminOrderResponse.builder()
+                .id(order.getId())
+                .storeName(storeName)
+                .status(order.getStatus())
+                .paymentMethod(order.getPaymentMethod())
+                .paymentStatus(order.getPaymentStatus())
+                .subtotal(order.getSubtotal())
+                .shippingFee(order.getShippingFee())
+                .discount(order.getDiscount())
+                .total(order.getTotal())
+                .commissionFee(order.getCommissionFee())
+                .vendorPayout(order.getVendorPayout())
+                .trackingNumber(order.getTrackingNumber())
+                .carrier(order.getShippingCarrier())
+                .note(order.getNote())
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
+                .customer(order.getUser() != null ? AdminOrderResponse.CustomerInfo.builder()
+                        .name(order.getUser().getName())
+                        .email(order.getUser().getEmail())
+                        .phone(order.getUser().getPhone())
+                        .build() : null)
+                .shippingAddress(order.getShippingAddress() != null ? AdminOrderResponse.AddressInfo.builder()
+                        .fullName(order.getShippingAddress().getFullName())
+                        .phone(order.getShippingAddress().getPhone())
+                        .address(order.getShippingAddress().getDetail())
+                        .ward(order.getShippingAddress().getWard())
+                        .district(order.getShippingAddress().getDistrict())
+                        .city(order.getShippingAddress().getProvince())
+                        .build() : null)
+                .items(order.getItems() == null ? List.of() : order.getItems().stream().map(item -> AdminOrderResponse.ItemInfo.builder()
+                        .id(item.getId())
+                        .name(item.getProductName())
+                        .sku(item.getVariant() != null && item.getVariant().getSku() != null ? item.getVariant().getSku() : (item.getId() != null ? item.getId().toString() : ""))
+                        .variant(item.getVariantName())
+                        .price(item.getUnitPrice())
+                        .quantity(item.getQuantity())
+                        .image(item.getProductImage())
+                        .build()).toList())
+                .build();
     }
 
     // ─── Create Order ──────────────────────────────────────────────────────────
 
     @Transactional
-    public Order create(UUID userId, OrderRequest request) {
+    public AdminOrderResponse create(UUID userId, OrderRequest request) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order request is required");
         }
@@ -242,19 +317,39 @@ public class OrderService {
         List<PreparedOrderItem> preparedItems = prepareOrderItems(request.getItems());
         Map<UUID, StoreOrderGroup> groupedByStore = groupItemsByStore(preparedItems);
 
+        Coupon coupon = null;
+        if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
+            coupon = couponRepository.findByCode(request.getCouponCode())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid coupon code"));
+            if (!coupon.isValid()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Coupon is expired or fully used");
+            }
+        }
+
         if (groupedByStore.size() <= 1) {
             StoreOrderGroup onlyGroup = groupedByStore.values().stream().findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Order must contain at least one valid store item"));
-            return createStoreScopedOrder(user, address, request, paymentMethod, onlyGroup, null);
+            
+            Order created = createStoreScopedOrder(user, address, request, paymentMethod, onlyGroup, null, coupon, BigDecimal.ZERO);
+            if (coupon != null) {
+                coupon.setUsedCount(coupon.getUsedCount() + 1);
+                couponRepository.save(coupon);
+            }
+            return toAdminOrderResponse(created);
         }
 
-        return createParentOrderWithSubOrders(user, address, request, paymentMethod, preparedItems, groupedByStore);
+        Order parent = createParentOrderWithSubOrders(user, address, request, paymentMethod, preparedItems, groupedByStore, coupon);
+        if (coupon != null) {
+            coupon.setUsedCount(coupon.getUsedCount() + 1);
+            couponRepository.save(coupon);
+        }
+        return toAdminOrderResponse(parent);
     }
 
     // ─── Cancel Order ──────────────────────────────────────────────────────────
 
     @Transactional
-    public Order cancel(UUID orderId, UUID userId, String reason) {
+    public AdminOrderResponse cancel(UUID orderId, UUID userId, String reason) {
         Order order = findByIdForUser(orderId, userId);
 
         if (order.getStatus() != Order.OrderStatus.PENDING) {
@@ -265,22 +360,23 @@ public class OrderService {
         order.setNote((order.getNote() != null ? order.getNote() : "") + "\nCancellation reason: " + reason);
         Order savedOrder = orderRepository.save(order);
 
-        if (savedOrder.getSubOrderId() == null && savedOrder.getStoreId() == null) {
+        if (savedOrder.isParentOrder()) {
             cascadeCancelToSubOrders(savedOrder, reason);
-            return syncParentOrderStatus(savedOrder.getId());
+            return toAdminOrderResponse(syncParentOrderStatus(savedOrder.getId()));
         }
 
-        if (savedOrder.getSubOrderId() != null) {
-            syncParentOrderStatus(savedOrder.getSubOrderId());
+        if (savedOrder.isSubOrder()) {
+            syncParentOrderStatus(savedOrder.getParentOrder().getId());
         }
 
-        return savedOrder;
+        return toAdminOrderResponse(savedOrder);
     }
 
     // ─── Tracking ──────────────────────────────────────────────────────────────
-
-    public Order getTrackingInfo(UUID orderId, UUID userId) {
-        return findByIdForUser(orderId, userId);
+    @Transactional(readOnly = true)
+    public AdminOrderResponse getTrackingInfo(UUID orderId, UUID userId) {
+        Order order = findByIdForUser(orderId, userId);
+        return toAdminOrderResponse(order);
     }
 
     // ─── Update Status ─────────────────────────────────────────────────────────
@@ -331,19 +427,27 @@ public class OrderService {
             String reason,
             boolean enforceVendorRules
     ) {
-        validateStatusTransition(order.getStatus(), status);
+        validateStatusTransition(order.getStatus(), status, enforceVendorRules);
 
         if (status == Order.OrderStatus.SHIPPED) {
-            String normalizedTracking = resolveRequiredField(
-                    trackingNumber,
-                    order.getTrackingNumber(),
-                    "Tracking number is required before shipping"
-            );
-            String normalizedCarrier = resolveRequiredField(
-                    carrier,
-                    order.getShippingCarrier(),
-                    "Carrier is required before shipping"
-            );
+            String normalizedTracking = "ADMIN_FORCE_SHIPPED";
+            String normalizedCarrier = "SYSTEM_SYNC";
+            
+            if (enforceVendorRules) {
+                normalizedTracking = resolveRequiredField(
+                        trackingNumber,
+                        order.getTrackingNumber(),
+                        "Tracking number is required before shipping"
+                );
+                normalizedCarrier = resolveRequiredField(
+                        carrier,
+                        order.getShippingCarrier(),
+                        "Carrier is required before shipping"
+                );
+            } else if (trackingNumber != null && !trackingNumber.isBlank()) {
+                normalizedTracking = trackingNumber.trim();
+                normalizedCarrier = carrier != null && !carrier.isBlank() ? carrier.trim() : "ADMIN_SYNC";
+            }
             order.setTrackingNumber(normalizedTracking);
             order.setShippingCarrier(normalizedCarrier);
         }
@@ -363,23 +467,51 @@ public class OrderService {
         order.setStatus(status);
 
         if (status == Order.OrderStatus.DELIVERED) {
-            ensureTrackingDataReady(order);
+            if (enforceVendorRules) {
+                ensureTrackingDataReady(order);
+            }
             order.setPaidAt(LocalDateTime.now());
             order.setPaymentStatus(Order.PaymentStatus.PAID);
         }
 
         Order savedOrder = orderRepository.save(order);
 
-        if (savedOrder.getSubOrderId() != null) {
-            syncParentOrderStatus(savedOrder.getSubOrderId());
+        if (savedOrder.isParentOrder()) {
+            cascadeStatusToSubOrders(savedOrder, status, trackingNumber, carrier, reason);
+        }
+
+        if (status == Order.OrderStatus.DELIVERED && savedOrder.isSubOrder()) {
+            walletService.creditVendorForOrder(savedOrder);
+        }
+
+        if (savedOrder.isSubOrder()) {
+            syncParentOrderStatus(savedOrder.getParentOrder().getId());
         }
 
         return savedOrder;
     }
 
-    private void validateStatusTransition(Order.OrderStatus current, Order.OrderStatus next) {
+    private void cascadeStatusToSubOrders(Order parentOrder, Order.OrderStatus status, String trackingNumber, String carrier, String reason) {
+        if (status == Order.OrderStatus.CANCELLED) return; // Handled separately by cascadeCancelToSubOrders
+
+        List<Order> subOrders = orderRepository.findByParentOrderOrderByCreatedAtDesc(parentOrder);
+        for (Order subOrder : subOrders) {
+            if (subOrder.getStatus() == status) continue;
+
+            String subTracking = trackingNumber == null ? "ADMIN_FORCE_" + status.name() : trackingNumber;
+            String subCarrier = carrier == null ? "SYSTEM_SYNC" : carrier;
+            
+            // Recurse without enforcing vendor rules (since Admin forced it)
+            applyStatusUpdate(subOrder, status, subTracking, subCarrier, reason, false);
+        }
+    }
+
+    private void validateStatusTransition(Order.OrderStatus current, Order.OrderStatus next, boolean enforceVendorRules) {
         if (current == next) {
             return;
+        }
+        if (!enforceVendorRules) {
+            return; // Admins can bypass strict state sequence
         }
 
         boolean allowed = switch (current) {
@@ -551,8 +683,8 @@ public class OrderService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be greater than 0");
             }
 
-            Double unitPrice = itemReq.getUnitPrice() != null ? itemReq.getUnitPrice() : resolveUnitPrice(product, variant);
-            Double totalPrice = unitPrice * itemReq.getQuantity();
+            BigDecimal unitPrice = itemReq.getUnitPrice() != null ? itemReq.getUnitPrice() : resolveUnitPrice(product, variant);
+            BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
             preparedItems.add(new PreparedOrderItem(
                     product,
@@ -579,24 +711,28 @@ public class OrderService {
 
         Map<UUID, StoreOrderGroup> result = new LinkedHashMap<>();
         for (Map.Entry<UUID, List<PreparedOrderItem>> entry : grouped.entrySet()) {
-            double subtotal = entry.getValue().stream().mapToDouble(PreparedOrderItem::totalPrice).sum();
+            BigDecimal subtotal = entry.getValue().stream().map(PreparedOrderItem::totalPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
             result.put(entry.getKey(), new StoreOrderGroup(entry.getKey(), entry.getValue(), subtotal));
         }
         return result;
     }
 
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     private Order createParentOrderWithSubOrders(
             User user,
             Address address,
             OrderRequest request,
             Order.PaymentMethod paymentMethod,
             List<PreparedOrderItem> preparedItems,
-            Map<UUID, StoreOrderGroup> groupedByStore
+            Map<UUID, StoreOrderGroup> groupedByStore,
+            Coupon coupon
     ) {
-        double subtotal = preparedItems.stream().mapToDouble(PreparedOrderItem::totalPrice).sum();
-        double shippingFee = groupedByStore.values().stream().mapToDouble(this::calculateShippingFee).sum();
-        double commissionFee = groupedByStore.values().stream().mapToDouble(this::calculateCommissionFee).sum();
-        double vendorPayout = subtotal - commissionFee;
+        BigDecimal subtotal = preparedItems.stream().map(PreparedOrderItem::totalPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal shippingFee = groupedByStore.values().stream().map(this::calculateShippingFee).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal commissionFee = groupedByStore.values().stream().map(this::calculateCommissionFee).reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal discount = coupon != null ? BigDecimal.valueOf(coupon.calculateDiscount(subtotal.doubleValue())) : BigDecimal.ZERO;
+        BigDecimal vendorPayout = subtotal.add(shippingFee).subtract(commissionFee).subtract(discount);
 
         Order parentOrder = Order.builder()
                 .user(user)
@@ -606,22 +742,28 @@ public class OrderService {
                 .paymentStatus(Order.PaymentStatus.UNPAID)
                 .subtotal(subtotal)
                 .shippingFee(shippingFee)
-                .discount(0.0)
+                .discount(discount)
                 .couponCode(request.getCouponCode())
                 .note(buildParentOrderNote(request.getNote(), groupedByStore.size()))
                 .commissionFee(commissionFee)
                 .vendorPayout(vendorPayout)
                 .build();
         parentOrder.calculateTotal();
-        Order savedParent = orderRepository.save(parentOrder);
+
+        Order persistedParent = orderRepository.save(parentOrder);
 
         for (PreparedOrderItem item : preparedItems) {
-            savedParent.getItems().add(buildOrderItem(savedParent, item));
+            persistedParent.getItems().add(buildOrderItem(persistedParent, item));
         }
-        Order persistedParent = orderRepository.save(savedParent);
+        persistedParent = orderRepository.save(persistedParent);
 
         for (StoreOrderGroup group : groupedByStore.values()) {
-            createStoreScopedOrder(user, address, request, paymentMethod, group, persistedParent.getId());
+            // Calculate proportional discount for this specific vendor
+            BigDecimal storeDiscount = BigDecimal.ZERO;
+            if (discount.compareTo(BigDecimal.ZERO) > 0 && subtotal.compareTo(BigDecimal.ZERO) > 0) {
+                storeDiscount = discount.multiply(group.subtotal()).divide(subtotal, 2, java.math.RoundingMode.HALF_UP);
+            }
+            createStoreScopedOrder(user, address, request, paymentMethod, group, persistedParent, coupon, storeDiscount);
         }
 
         return persistedParent;
@@ -633,11 +775,20 @@ public class OrderService {
             OrderRequest request,
             Order.PaymentMethod paymentMethod,
             StoreOrderGroup group,
-            UUID parentOrderId
+            Order parentOrder,
+            Coupon coupon,
+            BigDecimal preCalculatedDiscount
     ) {
-        double shippingFee = calculateShippingFee(group);
-        double commissionFee = calculateCommissionFee(group);
-        double vendorPayout = group.subtotal() - commissionFee;
+        BigDecimal shippingFee = calculateShippingFee(group);
+        BigDecimal commissionFee = calculateCommissionFee(group);
+        
+        BigDecimal discount = preCalculatedDiscount;
+        if (parentOrder == null && coupon != null) {
+            // For single-vendor orders, calculate discount strictly on their subtotal
+            discount = BigDecimal.valueOf(coupon.calculateDiscount(group.subtotal().doubleValue()));
+        }
+        
+        BigDecimal vendorPayout = group.subtotal().add(shippingFee).subtract(commissionFee).subtract(discount);
 
         Order order = Order.builder()
                 .user(user)
@@ -647,11 +798,11 @@ public class OrderService {
                 .paymentStatus(Order.PaymentStatus.UNPAID)
                 .subtotal(group.subtotal())
                 .shippingFee(shippingFee)
-                .discount(0.0)
+                .discount(discount)
                 .couponCode(request.getCouponCode())
                 .note(request.getNote())
                 .storeId(group.storeId())
-                .subOrderId(parentOrderId)
+                .parentOrder(parentOrder)
                 .commissionFee(commissionFee)
                 .vendorPayout(vendorPayout)
                 .build();
@@ -679,15 +830,15 @@ public class OrderService {
                 .build();
     }
 
-    private double calculateShippingFee(StoreOrderGroup group) {
-        return group.subtotal() >= FREE_SHIPPING_THRESHOLD ? 0.0 : DEFAULT_SHIPPING_FEE;
+    private BigDecimal calculateShippingFee(StoreOrderGroup group) {
+        return group.subtotal().compareTo(FREE_SHIPPING_THRESHOLD) >= 0 ? BigDecimal.ZERO : DEFAULT_SHIPPING_FEE;
     }
 
-    private double calculateCommissionFee(StoreOrderGroup group) {
-        return group.subtotal() * DEFAULT_COMMISSION_RATE;
+    private BigDecimal calculateCommissionFee(StoreOrderGroup group) {
+        return group.subtotal().multiply(DEFAULT_COMMISSION_RATE);
     }
 
-    private Double resolveUnitPrice(Product product, ProductVariant variant) {
+    private BigDecimal resolveUnitPrice(Product product, ProductVariant variant) {
         if (variant != null) {
             return variant.getPrice();
         }
@@ -729,7 +880,7 @@ public class OrderService {
     }
 
     private void cascadeCancelToSubOrders(Order parentOrder, String reason) {
-        List<Order> subOrders = orderRepository.findBySubOrderIdOrderByCreatedAtDesc(parentOrder.getId());
+        List<Order> subOrders = orderRepository.findByParentOrderOrderByCreatedAtDesc(parentOrder);
         for (Order subOrder : subOrders) {
             if (subOrder.getStatus() == Order.OrderStatus.PENDING) {
                 subOrder.setStatus(Order.OrderStatus.CANCELLED);
@@ -741,7 +892,7 @@ public class OrderService {
 
     private Order syncParentOrderStatus(UUID parentOrderId) {
         Order parentOrder = findById(parentOrderId);
-        List<Order> subOrders = orderRepository.findBySubOrderIdOrderByCreatedAtDesc(parentOrderId);
+        List<Order> subOrders = orderRepository.findByParentOrderIdOrderByCreatedAtDesc(parentOrderId);
         if (subOrders.isEmpty()) {
             return parentOrder;
         }

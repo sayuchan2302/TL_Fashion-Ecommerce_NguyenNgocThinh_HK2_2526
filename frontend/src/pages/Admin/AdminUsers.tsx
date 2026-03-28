@@ -1,11 +1,11 @@
 import './AdminUsers.css';
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Ban, CheckCircle2, Eye, Link2, Search, Shield, ShieldCheck, UserRound, X } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import AdminConfirmDialog from './AdminConfirmDialog';
 import { AdminStateBlock } from './AdminStateBlocks';
-import { PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+import { PanelStatsGrid, PanelTabs } from '../../components/Panel/PanelPrimitives';
 import { useToast } from '../../contexts/ToastContext';
 import Drawer from '../../components/Drawer/Drawer';
 
@@ -189,7 +189,7 @@ const AdminUsers = () => {
     return filteredUsers.slice(start, start + pageSize);
   }, [filteredUsers, safePage]);
 
-  const hasViewContext = activeTab !== 'all' || Boolean(search.trim());
+
 
   const resetCurrentView = () => {
     setSearch('');
@@ -305,20 +305,37 @@ const AdminUsers = () => {
         }}
       />
 
-      <PanelViewSummary
-        chips={[
-          ...(hasViewContext ? [{ key: 'scope', label: <>Nhóm: {USER_TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}</> }] : []),
-          ...(search.trim() ? [{ key: 'search', label: <>Từ khóa: {search.trim()}</> }] : []),
-        ]}
-        clearLabel="Xóa bộ lọc"
-        onClear={resetCurrentView}
-      />
-
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Danh sách khách hàng</h2>
-            <span className="admin-muted">Theo dõi khách hàng, người bán và tài khoản quản trị trong cùng một hàng đợi vận hành.</span>
+            {selected.size > 0 && (() => {
+              const selectedUsers = users.filter((user) => selected.has(user.id));
+              const hasLocked = selectedUsers.some((user) => user.status === 'LOCKED');
+              const hasActive = selectedUsers.some((user) => user.status !== 'LOCKED');
+              return (
+                <div className="admin-actions">
+                  <span className="admin-muted">Đã chọn {selected.size} tài khoản</span>
+                  {hasActive && (
+                    <button
+                      className="admin-ghost-btn danger"
+                      onClick={() => openConfirm('lock', Array.from(selected).filter((id) => users.find((user) => user.id === id)?.status !== 'LOCKED'))}
+                    >
+                      Khóa đã chọn
+                    </button>
+                  )}
+                  {hasLocked && (
+                    <button
+                      className="admin-ghost-btn"
+                      onClick={() => openConfirm('unlock', Array.from(selected).filter((id) => users.find((user) => user.id === id)?.status === 'LOCKED'))}
+                    >
+                      Mở khóa đã chọn
+                    </button>
+                  )}
+                  <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
+                </div>
+              );
+            })()}
           </div>
 
           {filteredUsers.length === 0 ? (
@@ -455,49 +472,6 @@ const AdminUsers = () => {
           )}
         </div>
       </section>
-
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div
-            className="admin-floating-bar"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 22 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            {(() => {
-              const selectedUsers = users.filter((user) => selected.has(user.id));
-              const hasLocked = selectedUsers.some((user) => user.status === 'LOCKED');
-              const hasActive = selectedUsers.some((user) => user.status !== 'LOCKED');
-
-              return (
-                <div className="admin-floating-content">
-                  <span>Đã chọn {selected.size} tài khoản</span>
-                  <div className="admin-actions">
-                    {hasActive && (
-                      <button
-                        className="admin-ghost-btn danger"
-                        onClick={() => openConfirm('lock', Array.from(selected).filter((id) => users.find((user) => user.id === id)?.status !== 'LOCKED'))}
-                      >
-                        Khóa đã chọn
-                      </button>
-                    )}
-                    {hasLocked && (
-                      <button
-                        className="admin-ghost-btn"
-                        onClick={() => openConfirm('unlock', Array.from(selected).filter((id) => users.find((user) => user.id === id)?.status === 'LOCKED'))}
-                      >
-                        Mở khóa đã chọn
-                      </button>
-                    )}
-                    <button className="admin-ghost-btn" onClick={() => setSelected(new Set())}>Bỏ chọn</button>
-                  </div>
-                </div>
-              );
-            })()}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AdminConfirmDialog
         open={Boolean(confirmState)}

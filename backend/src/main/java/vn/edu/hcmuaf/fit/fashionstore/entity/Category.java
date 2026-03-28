@@ -42,4 +42,10 @@ public class Category extends BaseEntity {
     private List<Product> products = new ArrayList<>();
 
     private Integer sortOrder;
+
+    @Column(columnDefinition = "boolean default true")
+    private Boolean isVisible = true;
+
+    @Column(columnDefinition = "boolean default false")
+    private Boolean showOnMenu = false;
 }

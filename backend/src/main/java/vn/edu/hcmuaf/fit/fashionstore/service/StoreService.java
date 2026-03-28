@@ -10,6 +10,7 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -71,10 +72,10 @@ public class StoreService {
                 .warehouseAddress(request.getWarehouseAddress() != null ? request.getWarehouseAddress() : request.getAddress())
                 .warehouseContact(request.getWarehouseContact())
                 .warehousePhone(request.getWarehousePhone() != null ? request.getWarehousePhone() : request.getPhone())
-                .commissionRate(5.0)
+                .commissionRate(new BigDecimal("5.0"))
                 .status(Store.StoreStatus.INACTIVE)
                 .approvalStatus(Store.ApprovalStatus.PENDING)
-                .totalSales(0.0)
+                .totalSales(BigDecimal.ZERO)
                 .totalOrders(0)
                 .rating(0.0)
                 .build();

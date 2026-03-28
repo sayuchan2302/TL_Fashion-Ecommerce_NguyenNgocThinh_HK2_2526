@@ -211,8 +211,16 @@ const VendorOrderDetail = () => {
               <div className="od-summary">
                 <div className="od-summary-row"><span>Tạm tính</span><strong>{formatCurrency(order.subtotal)}</strong></div>
                 <div className="od-summary-row"><span>Phí vận chuyển</span><strong>{order.shippingFee === 0 ? 'Miễn phí' : formatCurrency(order.shippingFee)}</strong></div>
-                <div className="od-summary-row"><span>Voucher / giảm trừ</span><strong>-{formatCurrency(order.discount)}</strong></div>
-                <div className="od-summary-row od-total"><span>Tổng đơn hàng</span><strong>{formatCurrency(order.total)}</strong></div>
+                {order.discount > 0 && (
+                  <div className="od-summary-row" style={{ alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      Voucher giảm giá
+                      <span style={{ fontSize: 11, color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: 4, marginLeft: 8, fontWeight: 500 }}>Sàn tài trợ</span>
+                    </span>
+                    <strong style={{ color: '#059669' }}>-{formatCurrency(order.discount)}</strong>
+                  </div>
+                )}
+                <div className="od-summary-row od-total"><span>Khách thanh toán</span><strong>{formatCurrency(order.total)}</strong></div>
               </div>
 
               <div className="od-commission-card" style={{
@@ -230,13 +238,19 @@ const VendorOrderDetail = () => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: '#475569' }}>Doanh thu gộp</span>
+                    <span style={{ color: '#475569' }}>Khách thanh toán</span>
                     <strong style={{ color: '#334155' }}>{formatCurrency(order.total)}</strong>
                   </div>
+                  {order.discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#475569' }}>Sàn hoàn lại Voucher</span>
+                      <strong style={{ color: '#16a34a' }}>+{formatCurrency(order.discount)}</strong>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                     <span style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Percent size={12} />
-                      Phí sàn
+                      Phí sàn {order.commissionFee > 0 ? `(${Math.round((order.commissionFee / (order.subtotal + order.shippingFee)) * 100)}%)` : ''}
                     </span>
                     <strong style={{ color: '#d97706' }}>-{formatCurrency(order.commissionFee)}</strong>
                   </div>

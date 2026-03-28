@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -31,12 +32,12 @@ public class ProductVariant extends BaseEntity {
     private Integer stockQuantity = 0;
 
     @Column(name = "price_adjustment")
-    private Double priceAdjustment = 0.0;
+    private BigDecimal priceAdjustment = BigDecimal.ZERO;
 
     private Boolean isActive = true;
 
-    public Double getPrice() {
-        Double basePrice = product.getEffectivePrice();
-        return basePrice + (priceAdjustment != null ? priceAdjustment : 0);
+    public BigDecimal getPrice() {
+        BigDecimal basePrice = product.getEffectivePrice();
+        return basePrice.add(priceAdjustment != null ? priceAdjustment : BigDecimal.ZERO);
     }
 }

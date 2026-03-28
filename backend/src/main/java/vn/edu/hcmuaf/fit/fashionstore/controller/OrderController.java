@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.OrderRequest;
+import vn.edu.hcmuaf.fit.fashionstore.dto.response.AdminOrderResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderDetailResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderPageResponse;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
@@ -40,7 +41,7 @@ public class OrderController {
      * Get current user's orders
      */
     @GetMapping
-    public ResponseEntity<List<Order>> getOrders(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<List<AdminOrderResponse>> getOrders(@RequestHeader("Authorization") String authHeader) {
         UserContext ctx = authContext.fromAuthHeader(authHeader);
         return ResponseEntity.ok(orderService.findByUserId(ctx.getUserId()));
     }
@@ -50,23 +51,23 @@ public class OrderController {
      * FIX: Now actually uses userId for ownership validation
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Order> getOrderById(
+    public ResponseEntity<AdminOrderResponse> getOrderById(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id) {
         UserContext ctx = authContext.fromAuthHeader(authHeader);
         
         // Admin can view any order, customers can only view their own
         if (ctx.isAdmin()) {
-            return ResponseEntity.ok(orderService.findById(id));
+            return ResponseEntity.ok(orderService.getAdminOrderById(id));
         }
-        return ResponseEntity.ok(orderService.findByIdForUser(id, ctx.getUserId()));
+        return ResponseEntity.ok(orderService.getCustomerOrderById(id, ctx.getUserId()));
     }
 
     /**
      * Create order for current user
      */
     @PostMapping
-    public ResponseEntity<Order> create(
+    public ResponseEntity<AdminOrderResponse> create(
             @RequestHeader("Authorization") String authHeader,
             @RequestBody OrderRequest request) {
         UserContext ctx = authContext.fromAuthHeader(authHeader);
@@ -77,7 +78,7 @@ public class OrderController {
      * Cancel order - validates user ownership
      */
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<Order> cancel(
+    public ResponseEntity<AdminOrderResponse> cancel(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id,
             @RequestBody CancelRequest request) {
@@ -89,7 +90,7 @@ public class OrderController {
      * Track order - validates user ownership
      */
     @GetMapping("/{id}/track")
-    public ResponseEntity<Order> track(
+    public ResponseEntity<AdminOrderResponse> track(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id) {
         UserContext ctx = authContext.fromAuthHeader(authHeader);
@@ -102,6 +103,7 @@ public class OrderController {
      * Get orders for vendor's store
      */
     @GetMapping("/my-store")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
     public ResponseEntity<VendorOrderPageResponse> getMyStoreOrders(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "0") int page,
@@ -133,6 +135,7 @@ public class OrderController {
      * Get specific order for vendor's store
      */
     @GetMapping("/my-store/{id}")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
     public ResponseEntity<VendorOrderDetailResponse> getMyStoreOrderById(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id) {
@@ -144,6 +147,7 @@ public class OrderController {
      * Update order status - vendor can only update their own store's orders
      */
     @PatchMapping("/my-store/{id}/status")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
     public ResponseEntity<VendorOrderDetailResponse> updateStoreOrderStatus(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id,
@@ -173,6 +177,7 @@ public class OrderController {
      * Update tracking number for vendor's order
      */
     @PatchMapping("/my-store/{id}/tracking")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
     public ResponseEntity<VendorOrderDetailResponse> updateStoreOrderTracking(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID id,
@@ -185,6 +190,7 @@ public class OrderController {
      * Get store order statistics (dashboard)
      */
     @GetMapping("/my-store/stats")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
     public ResponseEntity<Map<String, Object>> getMyStoreStats(
             @RequestHeader("Authorization") String authHeader) {
         UserContext ctx = authContext.requireVendor(authHeader);
@@ -210,8 +216,8 @@ public class OrderController {
      */
     @GetMapping("/admin/all")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<List<Order>> getAllOrders() {
-        return ResponseEntity.ok(orderService.findAll());
+    public ResponseEntity<List<AdminOrderResponse>> getAllOrders() {
+        return ResponseEntity.ok(orderService.findAllAdminOrders());
     }
 
     /**
@@ -219,14 +225,19 @@ public class OrderController {
      */
     @PatchMapping("/admin/{id}/status")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Order> updateOrderStatus(
+    public ResponseEntity<AdminOrderResponse> updateOrderStatus(
             @PathVariable UUID id,
             @RequestBody StatusUpdateRequest request) {
         Order.OrderStatus status = parseOrderStatus(request.getStatus());
         if (status == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
         }
-        return ResponseEntity.ok(orderService.updateStatus(id, status));
+        orderService.updateStatus(id, status);
+        // fetch again to return the correctly mapped DTO
+        return ResponseEntity.ok(orderService.findAllAdminOrders().stream()
+                .filter(o -> o.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")));
     }
 
     private Order.OrderStatus parseOrderStatus(String rawStatus) {

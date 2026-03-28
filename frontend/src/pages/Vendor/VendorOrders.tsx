@@ -5,11 +5,9 @@ import { Eye, Link2, ShieldCheck, Truck, XCircle, PackageCheck } from 'lucide-re
 import { Link, useSearchParams } from 'react-router-dom';
 import VendorLayout from './VendorLayout';
 import {
-  PanelFloatingBar,
   PanelStatsGrid,
   PanelTableFooter,
   PanelTabs,
-  PanelViewSummary,
 } from '../../components/Panel/PanelPrimitives';
 import {
   formatVendorOrderDate,
@@ -431,14 +429,7 @@ const VendorOrders = () => {
     count: tabCounts[tab.key],
   }));
 
-  const summaryChips = [
-    ...(activeTab !== 'all'
-      ? [{ key: 'status', label: `Trạng thái: ${TABS.find((tab) => tab.key === activeTab)?.label || 'Tất cả'}` }]
-      : []),
-    ...(keyword ? [{ key: 'query', label: `Từ khóa: ${keyword}` }] : []),
-    ...(dateFrom ? [{ key: 'from', label: `Từ ngày: ${dateFrom}` }] : []),
-    ...(dateTo ? [{ key: 'to', label: `Đến ngày: ${dateTo}` }] : []),
-  ];
+
 
   const allSelected = paginatedOrders.length > 0 && selected.size === paginatedOrders.length;
 
@@ -460,16 +451,48 @@ const VendorOrders = () => {
       </div>
 
       <div className="admin-panels single">
-        <div className="admin-panel">
-
-          <div className="admin-toolbar">
+         <div className="admin-toolbar">
             <PanelTabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} accentClassName="vendor-active-tab" />
           </div>
-
-          {hasViewContext && (
-            <PanelViewSummary chips={summaryChips} clearLabel="Xóa bộ lọc" onClear={resetCurrentView} />
-          )}
-
+        <div className="admin-panel">
+          
+         
+          <div className="admin-panel-head">
+            <h2>Danh sách đơn hàng</h2>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">Đã chọn {selected.size} đơn</span>
+                <button
+                  className="admin-primary-btn"
+                  disabled={actionablePendingIds.length === 0 || updating}
+                  onClick={() => askStatusUpdate(actionablePendingIds, 'CONFIRMED')}
+                >
+                  <ShieldCheck size={16} /> Xác nhận
+                </button>
+                <button
+                  className="admin-ghost-btn"
+                  disabled={actionableConfirmedIds.length === 0 || updating}
+                  onClick={() => askStatusUpdate(actionableConfirmedIds, 'PROCESSING')}
+                >
+                  <PackageCheck size={16} /> Xử lý
+                </button>
+                <button
+                  className="admin-ghost-btn"
+                  disabled={actionableProcessingIds.length === 0 || updating}
+                  onClick={() => askStatusUpdate(actionableProcessingIds, 'SHIPPED')}
+                >
+                  <Truck size={16} /> Bàn giao VC
+                </button>
+                <button
+                  className="admin-ghost-btn danger"
+                  disabled={actionableCancelableIds.length === 0 || updating}
+                  onClick={() => askStatusUpdate(actionableCancelableIds, 'CANCELLED')}
+                >
+                  <XCircle size={16} /> Hủy đơn
+                </button>
+              </div>
+            )}
+          </div>
           {loading ? (
             <AdminTableSkeleton columns={8} rows={6} />
           ) : paginatedOrders.length === 0 ? (
@@ -599,42 +622,6 @@ const VendorOrders = () => {
                   );
                 })}
               </div>
-
-              <PanelFloatingBar show={selected.size > 0} className="vendor-floating-bar">
-                <div className="admin-floating-content">
-                  <span>Đã chọn {selected.size} đơn</span>
-                  <div className="admin-actions">
-                    <button
-                      className="admin-primary-btn"
-                      disabled={actionablePendingIds.length === 0 || updating}
-                      onClick={() => askStatusUpdate(actionablePendingIds, 'CONFIRMED')}
-                    >
-                      <ShieldCheck size={16} /> Xác nhận
-                    </button>
-                    <button
-                      className="admin-ghost-btn"
-                      disabled={actionableConfirmedIds.length === 0 || updating}
-                      onClick={() => askStatusUpdate(actionableConfirmedIds, 'PROCESSING')}
-                    >
-                      <PackageCheck size={16} /> Xử lý
-                    </button>
-                    <button
-                      className="admin-ghost-btn"
-                      disabled={actionableProcessingIds.length === 0 || updating}
-                      onClick={() => askStatusUpdate(actionableProcessingIds, 'SHIPPED')}
-                    >
-                      <Truck size={16} /> Bàn giao VC
-                    </button>
-                    <button
-                      className="admin-ghost-btn danger"
-                      disabled={actionableCancelableIds.length === 0 || updating}
-                      onClick={() => askStatusUpdate(actionableCancelableIds, 'CANCELLED')}
-                    >
-                      <XCircle size={16} /> Hủy đơn
-                    </button>
-                  </div>
-                </div>
-              </PanelFloatingBar>
 
               <PanelTableFooter
                 page={ordersPage.page}

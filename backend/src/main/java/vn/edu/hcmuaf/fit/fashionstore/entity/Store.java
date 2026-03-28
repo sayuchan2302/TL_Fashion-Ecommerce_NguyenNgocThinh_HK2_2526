@@ -2,11 +2,13 @@ package vn.edu.hcmuaf.fit.fashionstore.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -28,7 +30,7 @@ public class Store extends BaseEntity {
     @Column(unique = true)
     private String slug;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String description;
 
     private String logo;
@@ -88,7 +90,8 @@ public class Store extends BaseEntity {
     private String warehousePhone;
 
     @Column(name = "commission_rate")
-    private Double commissionRate = 5.0;
+    @Builder.Default
+    private BigDecimal commissionRate = new BigDecimal("5.0");
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -98,7 +101,7 @@ public class Store extends BaseEntity {
     @Column(length = 50)
     private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
 
-    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    @Column(name = "rejection_reason", columnDefinition = "text")
     private String rejectionReason;
 
     @Column(name = "approved_at")
@@ -108,7 +111,8 @@ public class Store extends BaseEntity {
     private String approvedBy;
 
     @Column(name = "total_sales")
-    private Double totalSales = 0.0;
+    @Builder.Default
+    private BigDecimal totalSales = BigDecimal.ZERO;
 
     @Column(name = "total_orders")
     private Integer totalOrders = 0;

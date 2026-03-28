@@ -1,6 +1,6 @@
 import './Admin.css';
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Search, Plus, Pencil, Pause, Play, X, Tag, Trash2 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock } from './AdminStateBlocks';
@@ -235,7 +235,21 @@ const AdminPromotions = () => {
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Kho voucher</h2>
-            <span className="admin-muted">{filteredItems.length} chiến dịch hiển thị</span>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">{selected.size} đã chọn</span>
+                <button className="admin-ghost-btn" onClick={() => {
+                  const idSet = new Set(selected);
+                  const nextRows = rows.map((item) => (idSet.has(item.id) ? { ...item, status: 'paused' as PromotionStatus } : item));
+                  setRows(nextRows);
+                  nextRows.filter((item) => idSet.has(item.id)).forEach((item) => promotionStore.update(item));
+                  setSelected(new Set());
+                  pushToast('Đã tạm dừng chiến dịch đã chọn.');
+                }}>Tạm dừng</button>
+                <button className="admin-ghost-btn danger" onClick={() => setDeleteIds(Array.from(selected))}>Xóa</button>
+              </div>
+            )}
+           
           </div>
           {isLoading ? null : filteredItems.length === 0 ? (
             <AdminStateBlock
@@ -324,27 +338,6 @@ const AdminPromotions = () => {
           )}
         </div>
       </section>
-
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div className="admin-floating-bar" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 22 }} transition={{ duration: 0.22, ease: 'easeOut' }}>
-            <div className="admin-floating-content">
-              <span>{selected.size} chiến dịch đã chọn</span>
-              <div className="admin-actions">
-                <button className="admin-ghost-btn" onClick={() => {
-                  const idSet = new Set(selected);
-                  const nextRows = rows.map((item) => (idSet.has(item.id) ? { ...item, status: 'paused' as PromotionStatus } : item));
-                  setRows(nextRows);
-                  nextRows.filter((item) => idSet.has(item.id)).forEach((item) => promotionStore.update(item));
-                  setSelected(new Set());
-                  pushToast('Đã tạm dừng chiến dịch đã chọn.');
-                }}>Tạm dừng</button>
-                <button className="admin-ghost-btn danger" onClick={() => setDeleteIds(Array.from(selected))}>Xóa</button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AdminConfirmDialog
         open={Boolean(deleteIds?.length)}

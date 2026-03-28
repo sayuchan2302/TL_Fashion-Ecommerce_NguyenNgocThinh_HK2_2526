@@ -71,6 +71,11 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         
+                        // ─── Commission Tiers: public read, admin write ──────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/commission-tiers").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/commission-tiers/default").permitAll()
+                        .requestMatchers("/api/commission-tiers/**").hasRole("SUPER_ADMIN")
+                        
                         // ─── Content pages ────────────────────────────────────────────────
                         .requestMatchers("/api/admin/content/**").hasRole("SUPER_ADMIN")
 

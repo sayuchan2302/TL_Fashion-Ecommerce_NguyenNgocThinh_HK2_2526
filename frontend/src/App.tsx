@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import './App.css';
 
 // Lazy loaded pages
@@ -118,12 +118,7 @@ function App() {
                         {/* Admin routes - SUPER_ADMIN only */}
                         <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} animation="none"><AdminWorkspace /></ProtectedRoute>} />
 
-                        {/* Legacy admin routes redirected into marketplace operator IA */}
-                        <Route path="/admin/products" element={<Navigate to="/admin/categories" replace />} />
-                        <Route path="/admin/customers" element={<Navigate to="/admin/users" replace />} />
-                        <Route path="/admin/customer" element={<Navigate to="/admin/users" replace />} />
-                        <Route path="/admin/returns" element={<Navigate to="/admin/orders" replace />} />
-                        <Route path="/admin/content" element={<Navigate to="/admin/bot-ai" replace />} />
+
 
                         {/* Vendor Portal routes - VENDOR only */}
                         <Route path="/vendor/*" element={<ProtectedRoute allowedRoles={['VENDOR']} requireVendorApproval animation="none"><VendorWorkspace /></ProtectedRoute>} />

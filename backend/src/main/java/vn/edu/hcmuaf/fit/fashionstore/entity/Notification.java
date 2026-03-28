@@ -25,7 +25,7 @@ public class Notification extends BaseEntity {
     @Column(nullable = false)
     private String title;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String message;
 
     private String image;

@@ -33,6 +33,14 @@ public class JwtService {
         return extractClaim(token, claims -> claims.get("userId", String.class));
     }
 
+    public String extractStoreId(String token) {
+        return extractClaim(token, claims -> claims.get("storeId", String.class));
+    }
+
+    public String extractRole(String token) {
+        return extractClaim(token, claims -> claims.get("role", String.class));
+    }
+
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
@@ -45,6 +53,16 @@ public class JwtService {
     public String generateTokenWithUserId(String userId, UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
+        return generateToken(claims, userDetails);
+    }
+
+    public String generateTokenWithUserContext(String userId, String role, String storeId, UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("role", role);
+        if (storeId != null) {
+            claims.put("storeId", storeId);
+        }
         return generateToken(claims, userDetails);
     }
 

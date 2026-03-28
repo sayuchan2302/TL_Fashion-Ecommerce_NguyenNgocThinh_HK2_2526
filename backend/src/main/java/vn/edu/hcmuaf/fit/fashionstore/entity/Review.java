@@ -41,7 +41,7 @@ public class Review extends BaseEntity {
 
     private String title;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
+    @Column(columnDefinition = "text", nullable = false)
     private String content;
 
     @ElementCollection
@@ -51,7 +51,7 @@ public class Review extends BaseEntity {
 
     private Integer helpful = 0;
 
-    @Column(name = "shop_reply", columnDefinition = "TEXT")
+    @Column(name = "shop_reply", columnDefinition = "text")
     private String shopReply;
 
     @Column(name = "shop_reply_at")
@@ -64,6 +64,6 @@ public class Review extends BaseEntity {
     private Integer version = 0;
 
     public enum ReviewStatus {
-        PENDING, APPROVED, REJECTED
+        PENDING, APPROVED, REJECTED, HIDDEN
     }
 }

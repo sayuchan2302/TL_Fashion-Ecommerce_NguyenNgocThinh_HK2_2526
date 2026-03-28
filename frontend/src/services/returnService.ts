@@ -25,6 +25,8 @@ export interface ReturnRequest {
   resolution: ReturnResolution;
   status: ReturnStatus;
   items: ReturnItem[];
+  storeId?: string;
+  storeName?: string;
   adminNote?: string;
   updatedBy?: string;
   createdAt?: string;

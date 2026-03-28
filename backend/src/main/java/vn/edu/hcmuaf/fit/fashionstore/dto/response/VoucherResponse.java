@@ -5,6 +5,7 @@ import lombok.Data;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Voucher;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -16,8 +17,8 @@ public class VoucherResponse {
     private String code;
     private String description;
     private Voucher.DiscountType discountType;
-    private Double discountValue;
-    private Double minOrderValue;
+    private BigDecimal discountValue;
+    private BigDecimal minOrderValue;
     private Integer totalIssued;
     private Integer usedCount;
     private Voucher.VoucherStatus status;

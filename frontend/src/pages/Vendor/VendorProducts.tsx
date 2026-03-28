@@ -8,7 +8,6 @@ import { formatCurrency } from '../../services/commissionService';
 import { AdminStateBlock, AdminTableSkeleton, AdminToast } from '../Admin/AdminStateBlocks';
 import AdminConfirmDialog from '../Admin/AdminConfirmDialog';
 import {
-  PanelFloatingBar,
   PanelStatsGrid,
   PanelTableFooter,
   PanelTabs,
@@ -538,6 +537,19 @@ const VendorProducts = () => {
 
       <section className="admin-panels single">
         <div className="admin-panel">
+        <div className="admin-panel-head">
+            <div>
+              <h2>Danh sách sản phẩm</h2>
+            </div>
+            {selected.size > 0 && (
+              <div className="admin-actions">
+                <span className="admin-muted">{selected.size} đã chọn</span>
+                <button className="admin-ghost-btn" onClick={() => void applyVisibility(Array.from(selected), false)} disabled={working}>Ẩn</button>
+                <button className="admin-ghost-btn" onClick={() => void applyVisibility(Array.from(selected), true)} disabled={working}>Hiện</button>
+                <button className="admin-ghost-btn danger" onClick={() => requestDelete(Array.from(selected))} disabled={working}>Xóa</button>
+              </div>
+            )}
+          </div>
           {loading ? (
             <AdminTableSkeleton columns={8} rows={6} />
           ) : loadError ? (
@@ -632,17 +644,6 @@ const VendorProducts = () => {
           )}
         </div>
       </section>
-
-      <PanelFloatingBar show={selected.size > 0} className="vendor-floating-bar">
-        <div className="admin-floating-content">
-          <span>Đã chọn {selected.size} sản phẩm</span>
-          <div className="admin-actions">
-            <button className="admin-ghost-btn" onClick={() => void applyVisibility(Array.from(selected), false)} disabled={working}>Ẩn sản phẩm</button>
-            <button className="admin-ghost-btn" onClick={() => void applyVisibility(Array.from(selected), true)} disabled={working}>Mở hiển thị</button>
-            <button className="admin-ghost-btn danger" onClick={() => requestDelete(Array.from(selected))} disabled={working}>Xóa đã chọn</button>
-          </div>
-        </div>
-      </PanelFloatingBar>
 
       <AdminConfirmDialog
         open={Boolean(deleteConfirm)}

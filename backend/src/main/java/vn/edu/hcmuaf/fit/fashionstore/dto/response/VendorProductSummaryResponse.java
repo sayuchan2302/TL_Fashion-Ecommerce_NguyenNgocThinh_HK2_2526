@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
@@ -21,9 +22,9 @@ public class VendorProductSummaryResponse {
     private Boolean visible;
     private UUID categoryId;
     private String categoryName;
-    private Double basePrice;
-    private Double salePrice;
-    private Double effectivePrice;
+    private BigDecimal basePrice;
+    private BigDecimal salePrice;
+    private BigDecimal effectivePrice;
     private Integer totalStock;
     private String primarySku;
     private String primaryImage;

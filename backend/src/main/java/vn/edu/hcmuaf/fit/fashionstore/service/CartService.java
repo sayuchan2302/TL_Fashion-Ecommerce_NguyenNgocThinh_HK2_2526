@@ -14,6 +14,7 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.ProductRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.ProductVariantRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -43,7 +44,7 @@ public class CartService {
         
         Cart cart = Cart.builder()
                 .user(user)
-                .totalAmount(0.0)
+                .totalAmount(BigDecimal.ZERO)
                 .build();
         
         return cartRepository.save(cart);
@@ -128,7 +129,7 @@ public class CartService {
     public void clearCart(UUID userId) {
         Cart cart = getCartByUserId(userId);
         cart.getItems().clear();
-        cart.setTotalAmount(0.0);
+        cart.setTotalAmount(BigDecimal.ZERO);
         cartRepository.save(cart);
     }
 }

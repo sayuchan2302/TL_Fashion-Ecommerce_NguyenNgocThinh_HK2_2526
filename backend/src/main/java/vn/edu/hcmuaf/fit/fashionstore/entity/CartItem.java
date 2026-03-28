@@ -7,7 +7,10 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -37,9 +40,9 @@ public class CartItem extends BaseEntity {
     private Integer quantity = 1;
 
     @Column(name = "unit_price", nullable = false)
-    private Double unitPrice;
+    private BigDecimal unitPrice;
 
-    public Double getTotalPrice() {
-        return unitPrice * quantity;
+    public BigDecimal getTotalPrice() {
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 }

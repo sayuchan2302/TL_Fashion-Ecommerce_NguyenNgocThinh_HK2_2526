@@ -73,22 +73,20 @@ public class AuthContext {
         }
 
         String token = authHeader.substring(7);
-        String userIdStr = jwtService.extractUserId(token);
-        
-        if (userIdStr == null) {
-            throw new ForbiddenException("Invalid token: missing user ID");
+        String email = jwtService.extractUsername(token);
+        if (email == null) {
+            throw new ForbiddenException("Invalid token: missing subject (email)");
         }
-
-        UUID userId = UUID.fromString(userIdStr);
-        User user = userRepository.findById(userId)
+        
+        // Always load latest user from DB via email to prevent stale UUID issues in dev
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                
+        // Extract storeId and role from DB directly as source of truth
+        UUID storeId = user.getStoreId();
+        User.Role role = user.getRole();
 
-        return new UserContext(
-                user.getId(),
-                user.getStoreId(),
-                user.getRole(),
-                user.getEmail()
-        );
+        return new UserContext(user.getId(), storeId, role, user.getEmail());
     }
 
     /**

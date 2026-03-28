@@ -3,7 +3,8 @@ package vn.edu.hcmuaf.fit.fashionstore.Seeder;
 import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -40,11 +41,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @Component
-@org.springframework.core.annotation.Order(20)
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class MarketplaceSeeder implements CommandLineRunner {
+public class MarketplaceSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(MarketplaceSeeder.class);
     private static final String TEST_PASSWORD = "Test@123";
@@ -92,7 +93,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
 
     @Override
     @Transactional
-    public void run(String... args) {
+    public void run(ApplicationArguments args) {
+        log.info("Dang khoi tao du lieu mau...");
         User customer = upsertUser("customer@test.local", "Khach hang mau", "0900000001", User.Role.CUSTOMER, null);
         User vendor = upsertUser("vendor@test.local", "Nha ban hang mau", "0900000002", User.Role.VENDOR, null);
         User admin = upsertUser("admin@test.local", "Quan tri vien", "0900000003", User.Role.SUPER_ADMIN, null);
@@ -125,8 +127,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "ao-thun-cotton-basic",
                 vendorStore.getId(),
                 tshirt,
-                199_000d,
-                159_000d,
+                new BigDecimal("199000"),
+                new BigDecimal("159000"),
                 Product.Gender.UNISEX,
                 Product.ProductStatus.ACTIVE,
                 true,
@@ -135,16 +137,16 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "Mau ao thun basic ban chay."
         );
         ensurePrimaryImage(tshirtProduct, "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab", "Ao thun basic");
-        ProductVariant tshirtM = upsertVariant(tshirtProduct, "TEE-BASIC-BLACK-M", "Den", "M", 120, 0d, true);
-        upsertVariant(tshirtProduct, "TEE-BASIC-WHITE-L", "Trang", "L", 80, 10_000d, true);
+        ProductVariant tshirtM = upsertVariant(tshirtProduct, "TEE-BASIC-BLACK-M", "Den", "M", 120, new BigDecimal("0"), true);
+        upsertVariant(tshirtProduct, "TEE-BASIC-WHITE-L", "Trang", "L", 80, new BigDecimal("10000"), true);
 
         Product jeansProduct = upsertProduct(
                 "Quan jeans slim fit",
                 "quan-jeans-slim-fit",
                 vendorStore.getId(),
                 jeans,
-                399_000d,
-                329_000d,
+                new BigDecimal("399000"),
+                new BigDecimal("329000"),
                 Product.Gender.MALE,
                 Product.ProductStatus.ACTIVE,
                 false,
@@ -153,16 +155,16 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "Mau quan jeans slim fit cho shop vendor."
         );
         ensurePrimaryImage(jeansProduct, "https://images.unsplash.com/photo-1542272604-787c3835535d", "Quan jeans slim fit");
-        ProductVariant jeans32 = upsertVariant(jeansProduct, "JEAN-SLIM-BLUE-32", "Xanh", "32", 45, 0d, true);
-        upsertVariant(jeansProduct, "JEAN-SLIM-BLUE-34", "Xanh", "34", 22, 0d, true);
+        ProductVariant jeans32 = upsertVariant(jeansProduct, "JEAN-SLIM-BLUE-32", "Xanh", "32", 45, new BigDecimal("0"), true);
+        upsertVariant(jeansProduct, "JEAN-SLIM-BLUE-34", "Xanh", "34", 22, new BigDecimal("0"), true);
 
         Product dressProduct = upsertProduct(
                 "Dam midi du tiec",
                 "dam-midi-du-tiec",
                 vendorStore.getId(),
                 dress,
-                499_000d,
-                449_000d,
+                new BigDecimal("499000"),
+                new BigDecimal("449000"),
                 Product.Gender.FEMALE,
                 Product.ProductStatus.DRAFT,
                 false,
@@ -171,7 +173,7 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "Mau dam dang soan va chua mo ban."
         );
         ensurePrimaryImage(dressProduct, "https://images.unsplash.com/photo-1496747611176-843222e1e57c", "Dam midi du tiec");
-        upsertVariant(dressProduct, "DRESS-MIDI-BEIGE-S", "Be", "S", 18, 0d, true);
+        upsertVariant(dressProduct, "DRESS-MIDI-BEIGE-S", "Be", "S", 18, new BigDecimal("0"), true);
 
         Address customerAddress = ensureDefaultAddress(customer);
 
@@ -185,15 +187,15 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "SEED_ORDER_DELIVERED",
                 "GHN000123456",
                 "GHN",
-                20_000d,
-                15_000d
+                new BigDecimal("20000"),
+                new BigDecimal("15000")
         );
         OrderItem deliveredItem = ensureOrderItem(
                 deliveredOrder,
                 tshirtProduct,
                 tshirtM,
                 2,
-                159_000d,
+                new BigDecimal("159000"),
                 "Ao thun cotton basic",
                 "Den / M",
                 "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
@@ -210,15 +212,15 @@ public class MarketplaceSeeder implements CommandLineRunner {
                 "SEED_ORDER_PROCESSING",
                 null,
                 null,
-                25_000d,
-                0d
+                new BigDecimal("25000"),
+                new BigDecimal("0")
         );
         ensureOrderItem(
                 processingOrder,
                 jeansProduct,
                 jeans32,
                 1,
-                329_000d,
+                new BigDecimal("329000"),
                 "Quan jeans slim fit",
                 "Xanh / 32",
                 "https://images.unsplash.com/photo-1542272604-787c3835535d",
@@ -227,8 +229,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
 
         upsertReturnRequest(deliveredOrder, customer, deliveredItem);
 
-        upsertVoucher(vendorStore.getId(), "WELCOME10", "Voucher chao mung", Voucher.DiscountType.PERCENT, 10d, 299_000d, 500, 120, Voucher.VoucherStatus.RUNNING);
-        upsertVoucher(vendorStore.getId(), "FREESHIP50", "Voucher giam truc tiep", Voucher.DiscountType.FIXED, 50_000d, 599_000d, 250, 64, Voucher.VoucherStatus.PAUSED);
+        upsertVoucher(vendorStore.getId(), "WELCOME10", "Voucher chao mung", Voucher.DiscountType.PERCENT, new BigDecimal("10"), new BigDecimal("299000"), 500, 120, Voucher.VoucherStatus.RUNNING);
+        upsertVoucher(vendorStore.getId(), "FREESHIP50", "Voucher giam truc tiep", Voucher.DiscountType.FIXED, new BigDecimal("50000"), new BigDecimal("599000"), 250, 64, Voucher.VoucherStatus.PAUSED);
 
         upsertContent(
                 ContentPage.ContentType.FAQ,
@@ -269,7 +271,7 @@ public class MarketplaceSeeder implements CommandLineRunner {
         }, () -> {
             Cart cart = new Cart();
             cart.setUser(user);
-            cart.setTotalAmount(0d);
+            cart.setTotalAmount(new BigDecimal("0"));
             cartRepository.save(cart);
         });
     }
@@ -303,13 +305,13 @@ public class MarketplaceSeeder implements CommandLineRunner {
         store.setWarehouseAddress("123 Nguyen Hue, Quan 1, TP.HCM");
         store.setWarehouseContact("Nguyen Van A");
         store.setWarehousePhone("0901234567");
-        store.setCommissionRate(5d);
+        store.setCommissionRate(new BigDecimal("5"));
         store.setStatus(Store.StoreStatus.ACTIVE);
         store.setApprovalStatus(Store.ApprovalStatus.APPROVED);
         store.setApprovedAt(LocalDateTime.now().minusDays(7));
         store.setApprovedBy("seed-system");
         store.setRejectionReason(null);
-        store.setTotalSales(3_400_000d);
+        store.setTotalSales(new BigDecimal("3400000"));
         store.setTotalOrders(24);
         store.setRating(4.7);
 
@@ -334,8 +336,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
             String slug,
             UUID storeId,
             Category category,
-            Double basePrice,
-            Double salePrice,
+            BigDecimal basePrice,
+            BigDecimal salePrice,
             Product.Gender gender,
             Product.ProductStatus status,
             boolean featured,
@@ -387,7 +389,7 @@ public class MarketplaceSeeder implements CommandLineRunner {
             String color,
             String size,
             int stockQuantity,
-            double priceAdjustment,
+            BigDecimal priceAdjustment,
             boolean isActive
     ) {
         ProductVariant variant = productVariantRepository.findBySku(sku).orElseGet(ProductVariant::new);
@@ -435,8 +437,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
             String seedTag,
             String trackingNumber,
             String shippingCarrier,
-            double shippingFee,
-            double discount
+            BigDecimal shippingFee,
+            BigDecimal discount
     ) {
         Order order = orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
                 .filter(existing -> seedTag.equals(existing.getNote()))
@@ -453,17 +455,17 @@ public class MarketplaceSeeder implements CommandLineRunner {
         order.setDiscount(discount);
         order.setTrackingNumber(trackingNumber);
         order.setShippingCarrier(shippingCarrier);
-        order.setSubOrderId(null);
+        order.setParentOrder(null);
         order.setNote(seedTag);
         if (status == Order.OrderStatus.DELIVERED && order.getPaidAt() == null) {
             order.setPaidAt(LocalDateTime.now().minusDays(2));
         }
         if (order.getSubtotal() == null) {
-            order.setSubtotal(0d);
+            order.setSubtotal(new BigDecimal("0"));
         }
         order.calculateTotal();
         if (order.getCommissionFee() == null) {
-            order.setCommissionFee(0d);
+            order.setCommissionFee(new BigDecimal("0"));
         }
         if (order.getVendorPayout() == null) {
             order.setVendorPayout(order.getTotal());
@@ -476,7 +478,7 @@ public class MarketplaceSeeder implements CommandLineRunner {
             Product product,
             ProductVariant variant,
             int quantity,
-            double unitPrice,
+            BigDecimal unitPrice,
             String productName,
             String variantName,
             String image,
@@ -503,19 +505,18 @@ public class MarketplaceSeeder implements CommandLineRunner {
         item.setProductImage(image);
         item.setQuantity(quantity);
         item.setUnitPrice(unitPrice);
-        item.setTotalPrice(unitPrice * quantity);
+        item.setTotalPrice(unitPrice.multiply(BigDecimal.valueOf(quantity)));
         item.setStoreId(storeId);
 
-        double subtotal = order.getItems().stream()
+        BigDecimal subtotal = order.getItems().stream()
                 .map(OrderItem::getTotalPrice)
                 .filter(Objects::nonNull)
-                .mapToDouble(Double::doubleValue)
-                .sum();
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setSubtotal(subtotal);
         order.calculateTotal();
-        double commission = Math.round(order.getTotal() * 0.05 * 100.0) / 100.0;
+        BigDecimal commission = order.getTotal().multiply(new BigDecimal("0.05"));
         order.setCommissionFee(commission);
-        order.setVendorPayout(order.getTotal() - commission);
+        order.setVendorPayout(order.getTotal().subtract(commission));
         orderRepository.save(order);
         return item;
     }
@@ -552,8 +553,8 @@ public class MarketplaceSeeder implements CommandLineRunner {
             String code,
             String name,
             Voucher.DiscountType discountType,
-            double discountValue,
-            double minOrderValue,
+            BigDecimal discountValue,
+            BigDecimal minOrderValue,
             int totalIssued,
             int usedCount,
             Voucher.VoucherStatus status

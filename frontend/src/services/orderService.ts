@@ -8,29 +8,7 @@ import { sharedOrderStore, fulfillmentToClientStatus, clientStatusToFulfillment,
 import { apiRequest } from './apiClient';
 import type { Order, OrderStatus, OrderItem, OrderStatusStep } from '../types';
 
-interface OrderItemInput {
-  id: string;
-  name: string;
-  price: number;
-  originalPrice?: number;
-  image: string;
-  quantity: number;
-  color?: string;
-  size?: string;
-  // Multi-vendor fields
-  storeId?: string;
-  storeName?: string;
-}
 
-interface OrderInput {
-  id: string;
-  createdAt?: string;
-  status: OrderStatus;
-  total: number;
-  items: OrderItemInput[];
-  addressSummary: string;
-  paymentMethod: string;
-}
 
 interface BackendOrderRequestItem {
   productId: string;
@@ -77,17 +55,8 @@ interface BackendOrderResponse {
   shippingAddress?: BackendAddressSummary;
 }
 
-// Multi-vendor: Store group for sub-order splitting
-interface StoreOrderGroup {
-  storeId: string;
-  storeName: string;
-  items: OrderItemInput[];
-  subtotal: number;
-  shippingFee: number;
-}
 
-const DEFAULT_SHIPPING_FEE = 30000;
-const FREE_SHIPPING_THRESHOLD = 500000;
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const backendStatusToClientStatus = (status?: string): ClientOrderStatus => {
@@ -197,35 +166,6 @@ const toClientOrder = (o: SharedOrder): Order => ({
   storeName: o.storeName,
 });
 
-/**
- * Group items by store for sub-order creation
- */
-const groupItemsByStore = (items: OrderItemInput[]): StoreOrderGroup[] => {
-  const groups = items.reduce((acc, item) => {
-    const storeId = item.storeId || 'platform';
-    const storeName = item.storeName || 'Nền tảng';
-    
-    if (!acc[storeId]) {
-      acc[storeId] = {
-        storeId,
-        storeName,
-        items: [],
-        subtotal: 0,
-        shippingFee: DEFAULT_SHIPPING_FEE,
-      };
-    }
-    acc[storeId].items.push(item);
-    acc[storeId].subtotal += item.price * item.quantity;
-    return acc;
-  }, {} as Record<string, StoreOrderGroup>);
-
-  // Calculate shipping fee per store
-  Object.values(groups).forEach(group => {
-    group.shippingFee = group.subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
-  });
-
-  return Object.values(groups);
-};
 
 export const orderService = {
   isBackendReadyItemId(id: string): boolean {
@@ -274,147 +214,6 @@ export const orderService = {
     return order ? toClientOrder(order) : null;
   },
 
-  /**
-   * Add a single order (legacy behavior for single-vendor)
-   */
-  add(order: OrderInput) {
-    const now = new Date().toISOString();
-    const shared: SharedOrder = {
-      id: order.id,
-      createdAt: order.createdAt || now,
-      customerName: order.addressSummary.split(',')[0]?.trim() || 'Khách hàng',
-      customerEmail: '',
-      customerPhone: order.addressSummary.split(',')[1]?.trim() || '',
-      customerAvatar: `https://ui-avatars.com/api/?name=KH&background=3B82F6&color=fff`,
-      address: order.addressSummary.split(',').slice(2).join(',').trim() || order.addressSummary,
-      shipMethod: 'GHN - Giao tiêu chuẩn',
-      tracking: '',
-      note: '',
-      paymentMethod: order.paymentMethod,
-      paymentStatus: order.paymentMethod === 'COD' ? 'cod_uncollected' : 'paid',
-      fulfillment: clientStatusToFulfillment(order.status as ClientOrderStatus),
-      items: order.items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        originalPrice: item.originalPrice,
-        image: item.image,
-        quantity: item.quantity,
-        color: item.color,
-        size: item.size,
-        storeId: item.storeId,
-        storeName: item.storeName,
-      })),
-      subtotal: order.items.reduce((s, i) => s + i.price * i.quantity, 0),
-      shippingFee: 0,
-      discount: 0,
-      total: order.total,
-      timeline: [
-        { time: new Date().toLocaleString('vi-VN'), text: 'Đặt hàng thành công.', tone: 'success' },
-      ],
-    };
-    sharedOrderStore.add(shared);
-  },
-
-  /**
-   * Multi-vendor: Create parent order + sub-orders split by store
-   * Returns the parent order ID and array of sub-order IDs
-   */
-  addWithSubOrders(order: OrderInput): { parentId: string; subOrderIds: string[] } {
-    const now = new Date().toISOString();
-    const storeGroups = groupItemsByStore(order.items);
-    
-    // If only one store, just create a single order (no sub-orders needed)
-    if (storeGroups.length === 1) {
-      this.add(order);
-      return { parentId: order.id, subOrderIds: [] };
-    }
-
-    // Create parent order (aggregated)
-    const parentShared: SharedOrder = {
-      id: order.id,
-      createdAt: order.createdAt || now,
-      customerName: order.addressSummary.split(',')[0]?.trim() || 'Khách hàng',
-      customerEmail: '',
-      customerPhone: order.addressSummary.split(',')[1]?.trim() || '',
-      customerAvatar: `https://ui-avatars.com/api/?name=KH&background=3B82F6&color=fff`,
-      address: order.addressSummary.split(',').slice(2).join(',').trim() || order.addressSummary,
-      shipMethod: 'GHN - Giao tiêu chuẩn',
-      tracking: '',
-      note: `Đơn hàng gồm ${storeGroups.length} đơn con từ các cửa hàng khác nhau.`,
-      paymentMethod: order.paymentMethod,
-      paymentStatus: order.paymentMethod === 'COD' ? 'cod_uncollected' : 'paid',
-      fulfillment: clientStatusToFulfillment(order.status as ClientOrderStatus),
-      items: order.items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        originalPrice: item.originalPrice,
-        image: item.image,
-        quantity: item.quantity,
-        color: item.color,
-        size: item.size,
-        storeId: item.storeId,
-        storeName: item.storeName,
-      })),
-      subtotal: order.items.reduce((s, i) => s + i.price * i.quantity, 0),
-      shippingFee: storeGroups.reduce((sum, g) => sum + g.shippingFee, 0),
-      discount: 0,
-      total: order.total,
-      timeline: [
-        { time: new Date().toLocaleString('vi-VN'), text: `Đặt hàng thành công. Đơn được chia thành ${storeGroups.length} đơn con.`, tone: 'success' },
-      ],
-    };
-    sharedOrderStore.add(parentShared);
-
-    // Create sub-orders for each store
-    const subOrderIds: string[] = [];
-    storeGroups.forEach((group, index) => {
-      const subOrderId = `${order.id}-S${index + 1}`;
-      subOrderIds.push(subOrderId);
-
-      const subShared: SharedOrder = {
-        id: subOrderId,
-        parentOrderId: order.id,
-        storeId: group.storeId,
-        storeName: group.storeName,
-        createdAt: order.createdAt || now,
-        customerName: order.addressSummary.split(',')[0]?.trim() || 'Khách hàng',
-        customerEmail: '',
-        customerPhone: order.addressSummary.split(',')[1]?.trim() || '',
-        customerAvatar: `https://ui-avatars.com/api/?name=KH&background=3B82F6&color=fff`,
-        address: order.addressSummary.split(',').slice(2).join(',').trim() || order.addressSummary,
-        shipMethod: 'GHN - Giao tiêu chuẩn',
-        tracking: '',
-        note: '',
-        paymentMethod: order.paymentMethod,
-        paymentStatus: order.paymentMethod === 'COD' ? 'cod_uncollected' : 'paid',
-        fulfillment: clientStatusToFulfillment(order.status as ClientOrderStatus),
-        items: group.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          originalPrice: item.originalPrice,
-          image: item.image,
-          quantity: item.quantity,
-          color: item.color,
-          size: item.size,
-          storeId: item.storeId,
-          storeName: item.storeName,
-        })),
-        subtotal: group.subtotal,
-        shippingFee: group.shippingFee,
-        discount: 0,
-        total: group.subtotal + group.shippingFee,
-        timeline: [
-          { time: new Date().toLocaleString('vi-VN'), text: `Đơn hàng con từ ${group.storeName} đã được tạo.`, tone: 'success' },
-        ],
-      };
-      sharedOrderStore.add(subShared);
-    });
-
-    return { parentId: order.id, subOrderIds };
-  },
 
   cancel(id: string, reason: string): boolean {
     return sharedOrderStore.cancel(id, reason);

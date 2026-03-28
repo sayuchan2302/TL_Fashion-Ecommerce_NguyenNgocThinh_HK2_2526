@@ -1,36 +1,24 @@
-﻿import './Admin.css';
-import { useCallback, useMemo, useState } from 'react';
+import './Admin.css';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Eye, EyeOff, FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import AdminLayout from './AdminLayout';
 import AdminConfirmDialog from './AdminConfirmDialog';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { useAdminToast } from './useAdminToast';
-import { PanelStatsGrid, PanelTabs, PanelViewSummary } from '../../components/Panel/PanelPrimitives';
+import { PanelStatsGrid, PanelTabs } from '../../components/Panel/PanelPrimitives';
 
-type CategoryStatus = 'visible' | 'hidden';
+import { adminCategoryService, type Category } from './adminCategoryService';
+
 type CategoryFilter = 'all' | 'visible' | 'hidden' | 'leaf';
-
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  parentId: string;
-  count: number;
-  status: CategoryStatus;
-  order: number;
-  showOnMenu: boolean;
-  image: string;
-  description: string;
-}
 
 interface CategoryDraft {
   id: string;
   name: string;
   slug: string;
-  parentId: string;
+  parentId: string | null;
   order: number;
-  status: CategoryStatus;
+  status: 'visible' | 'hidden';
   showOnMenu: boolean;
   image: string;
   description: string;
@@ -38,25 +26,11 @@ interface CategoryDraft {
 
 type DraftMode = 'view' | 'edit' | 'create-root' | 'create-child';
 
-const initialCategories: Category[] = [
-  { id: 'cat-nam', name: 'Nam', slug: 'nam', parentId: '', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dành cho thời trang nam.' },
-  { id: 'cat-nam-ao', name: 'Áo', slug: 'nam-ao', parentId: 'cat-nam', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80', description: 'Danh mục áo dành cho nam.' },
-  { id: 'cat-nam-ao-thun', name: 'Áo thun', slug: 'nam-ao-thun', parentId: 'cat-nam-ao', count: 84, status: 'visible', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho áo thun nam.' },
-  { id: 'cat-nam-ao-polo', name: 'Áo polo', slug: 'nam-ao-polo', parentId: 'cat-nam-ao', count: 42, status: 'visible', order: 2, showOnMenu: false, image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho áo polo nam.' },
-  { id: 'cat-nu', name: 'Nữ', slug: 'nu', parentId: '', count: 0, status: 'visible', order: 2, showOnMenu: true, image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dành cho thời trang nữ.' },
-  { id: 'cat-nu-vay', name: 'Váy', slug: 'nu-vay', parentId: 'cat-nu', count: 0, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=600&q=80', description: 'Danh mục váy dành cho nữ.' },
-  { id: 'cat-nu-vay-lien', name: 'Váy liền', slug: 'nu-vay-lien', parentId: 'cat-nu-vay', count: 39, status: 'visible', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dành cho váy liền nữ.' },
-  { id: 'cat-unisex', name: 'Unisex', slug: 'unisex', parentId: '', count: 0, status: 'visible', order: 3, showOnMenu: true, image: 'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng dùng chung cho cả nam và nữ.' },
-  { id: 'cat-unisex-hoodie', name: 'Hoodie', slug: 'unisex-hoodie', parentId: 'cat-unisex', count: 27, status: 'hidden', order: 1, showOnMenu: false, image: 'https://images.unsplash.com/photo-1556821840-3a9fbc3e9b12?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá dùng cho hoodie unisex.' },
-  { id: 'cat-phu-kien', name: 'Phụ kiện', slug: 'phu-kien', parentId: '', count: 0, status: 'visible', order: 4, showOnMenu: true, image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?auto=format&fit=crop&w=600&q=80', description: 'Nhóm ngành hàng phụ kiện thời trang.' },
-  { id: 'cat-phu-kien-tui', name: 'Túi xách', slug: 'phu-kien-tui-xach', parentId: 'cat-phu-kien', count: 18, status: 'visible', order: 1, showOnMenu: true, image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80', description: 'Danh mục lá cho túi xách và túi đeo.' },
-];
-
 const emptyDraft: CategoryDraft = {
   id: '',
   name: '',
   slug: '',
-  parentId: '',
+  parentId: null,
   order: 1,
   status: 'visible',
   showOnMenu: false,
@@ -80,13 +54,34 @@ const toSlug = (value: string) =>
 
 const AdminCategories = () => {
   const { pushToast, toast } = useAdminToast();
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const loadCategories = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await adminCategoryService.getAll();
+      setCategories(data);
+      // Auto-expand root categories
+      setExpandedIds(new Set(data.filter((item) => !item.parentId).map((item) => item.id)));
+      if (data.length > 0 && !selectedId && draftMode === 'view') {
+        setSelectedId(data[0].id);
+      }
+    } catch {
+      pushToast('Lỗi tải danh sách danh mục');
+    } finally {
+        setIsLoading(false);
+    }
+  }, [pushToast]); // omitting selectedId, draftMode to prevent loop
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all');
   const [search, setSearch] = useState('');
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(initialCategories.filter((item) => item.parentId === '').map((item) => item.id)),
-  );
-  const [selectedId, setSelectedId] = useState<string>(initialCategories[0]?.id || '');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string>('');
   const [draftMode, setDraftMode] = useState<DraftMode>('view');
   const [draft, setDraft] = useState<CategoryDraft>(emptyDraft);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -182,15 +177,7 @@ const AdminCategories = () => {
       });
   }, [byId, categories, passesFilter, searchMatches]);
 
-  const hasViewContext = activeFilter !== 'all' || Boolean(query);
-  const currentFilterLabel =
-    activeFilter === 'all'
-      ? 'Tất cả'
-      : activeFilter === 'visible'
-        ? 'Đang hiện'
-        : activeFilter === 'hidden'
-          ? 'Đã ẩn'
-          : 'Danh mục lá';
+
 
   const resetView = () => {
     setActiveFilter('all');
@@ -231,7 +218,7 @@ const AdminCategories = () => {
     setExpandedIds((prev) => new Set(prev).add(parentId));
   };
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     if (!draft.name.trim()) {
       pushToast('Tên danh mục không được để trống.');
       return;
@@ -249,41 +236,50 @@ const AdminCategories = () => {
       return;
     }
 
-    const nextCategory: Category = {
-      id: draft.id || `cat-${Date.now()}`,
-      name: draft.name.trim(),
-      slug: normalizedSlug,
-      parentId: draft.parentId,
-      count: draft.id ? byId.get(draft.id)?.count || 0 : 0,
-      status: draft.status,
-      order: Math.max(1, draft.order),
-      showOnMenu: draft.status === 'hidden' ? false : draft.showOnMenu,
-      image: draft.image || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80',
-      description: draft.description.trim(),
-    };
-
-    if (!draft.id) {
-      setCategories((prev) => [...prev, nextCategory]);
-      setSelectedId(nextCategory.id);
-      pushToast('Đã tạo danh mục mới.');
-    } else {
-      setCategories((prev) => prev.map((item) => (item.id === nextCategory.id ? nextCategory : item)));
-      setSelectedId(nextCategory.id);
-      pushToast('Đã cập nhật danh mục.');
+    try {
+        if (!draft.id) {
+            const added = await adminCategoryService.create({
+              name: draft.name.trim(),
+              slug: normalizedSlug,
+              parentId: draft.parentId || null,
+              order: Math.max(1, draft.order),
+              status: draft.status,
+              showOnMenu: draft.status === 'hidden' ? false : draft.showOnMenu,
+              image: draft.image || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80',
+              description: draft.description.trim(),
+            });
+            setCategories((prev) => [...prev, added]);
+            setSelectedId(added.id);
+            pushToast('Đã tạo danh mục mới.');
+            if (added.parentId) setExpandedIds((prev) => new Set(prev).add(added.parentId as string));
+        } else {
+            const updated = await adminCategoryService.update(draft.id, {
+              name: draft.name.trim(),
+              slug: normalizedSlug,
+              parentId: draft.parentId || null,
+              order: Math.max(1, draft.order),
+              status: draft.status,
+              showOnMenu: draft.status === 'hidden' ? false : draft.showOnMenu,
+              image: draft.image || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=600&q=80',
+              description: draft.description.trim(),
+            });
+            setCategories((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+            setSelectedId(updated.id);
+            pushToast('Đã cập nhật danh mục.');
+            if (updated.parentId) setExpandedIds((prev) => new Set(prev).add(updated.parentId as string));
+        }
+        setDraftMode('view');
+        setDraft(emptyDraft);
+    } catch {
+        pushToast('Lỗi lưu danh mục.');
     }
-
-    if (nextCategory.parentId) {
-      setExpandedIds((prev) => new Set(prev).add(nextCategory.parentId));
-    }
-    setDraftMode('view');
-    setDraft(emptyDraft);
   };
 
   const requestDelete = (categoryId: string) => {
     setDeleteId(categoryId);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteId) return;
     const target = byId.get(deleteId);
     if (!target) {
@@ -302,49 +298,65 @@ const AdminCategories = () => {
       return;
     }
 
-    setCategories((prev) => prev.filter((item) => item.id !== deleteId));
-    if (selectedId === deleteId) {
-      setSelectedId('');
-      setDraftMode('view');
-      setDraft(emptyDraft);
+    try {
+        await adminCategoryService.delete(deleteId);
+        setCategories((prev) => prev.filter((item) => item.id !== deleteId));
+        if (selectedId === deleteId) {
+          setSelectedId('');
+          setDraftMode('view');
+          setDraft(emptyDraft);
+        }
+        pushToast('Đã xóa danh mục.');
+    } catch {
+        pushToast('Lỗi khi xóa danh mục.');
+    } finally {
+        setDeleteId(null);
     }
-    setDeleteId(null);
-    pushToast('Đã xóa danh mục.');
   };
 
-  const toggleVisibility = (categoryId: string) => {
-    setCategories((prev) =>
-      prev.map((item) =>
-        item.id === categoryId
-          ? {
-              ...item,
-              status: item.status === 'visible' ? 'hidden' : 'visible',
-              showOnMenu: item.status === 'visible' ? false : item.showOnMenu,
-            }
-          : item,
-      ),
-    );
-    pushToast('Đã cập nhật trạng thái danh mục.');
+  const toggleVisibility = async (categoryId: string) => {
+    const item = byId.get(categoryId);
+    if (!item) return;
+
+    try {
+        const newStatus = item.status === 'visible' ? 'hidden' : 'visible';
+        const newShowOnMenu = newStatus === 'visible' ? item.showOnMenu : false;
+        
+        const updated = await adminCategoryService.updateStatus(categoryId, newStatus, newShowOnMenu);
+        
+        setCategories((prev) => prev.map((c) => (c.id === categoryId ? updated : c)));
+        pushToast('Đã cập nhật trạng thái danh mục.');
+    } catch {
+        pushToast('Lỗi cập nhật trạng thái.');
+    }
   };
 
-  const duplicateCategory = (categoryId: string) => {
+  const duplicateCategory = async (categoryId: string) => {
     const source = byId.get(categoryId);
     if (!source) return;
     const siblings = childMap.get(source.parentId || '__root__') || [];
-    const clone: Category = {
-      ...source,
-      id: `cat-${Date.now()}`,
-      name: `${source.name} bản sao`,
-      slug: `${source.slug}-${Date.now().toString().slice(-4)}`,
-      count: 0,
-      order: siblings.length + 1,
-    };
-    setCategories((prev) => [...prev, clone]);
-    setSelectedId(clone.id);
-    if (clone.parentId) {
-      setExpandedIds((prev) => new Set(prev).add(clone.parentId));
+    
+    try {
+        const clone = await adminCategoryService.create({
+            name: `${source.name} bản sao`,
+            slug: `${source.slug}-${Date.now().toString().slice(-4)}`,
+            parentId: source.parentId,
+            order: siblings.length + 1,
+            status: source.status,
+            showOnMenu: source.status === 'hidden' ? false : source.showOnMenu,
+            image: source.image,
+            description: source.description,
+        });
+
+        setCategories((prev) => [...prev, clone]);
+        setSelectedId(clone.id);
+        if (clone.parentId) {
+          setExpandedIds((prev) => new Set(prev).add(clone.parentId as string));
+        }
+        pushToast('Đã nhân bản danh mục.');
+    } catch {
+        pushToast('Lỗi nhân bản danh mục.');
     }
-    pushToast('Đã nhân bản danh mục.');
   };
 
   const toggleExpand = (id: string) => {
@@ -441,21 +453,11 @@ const AdminCategories = () => {
         onChange={(key) => setActiveFilter((validFilters.has(key as CategoryFilter) ? key : 'all') as CategoryFilter)}
       />
 
-      <PanelViewSummary
-        chips={[
-          ...(hasViewContext ? [{ key: 'status', label: <>Nhóm: {currentFilterLabel}</> }] : []),
-          ...(query ? [{ key: 'search', label: <>Từ khóa: {search.trim()}</> }] : []),
-        ]}
-        clearLabel="Xóa bộ lọc"
-        onClear={resetView}
-      />
-
       <section className="admin-panels category-manager-layout">
         <div className="admin-panel category-tree-panel">
           <div className="admin-panel-head">
             <div>
               <h2>Cây danh mục</h2>
-              <span className="admin-muted">Quản trị viên quản lý danh mục theo cây; nhà bán hàng chỉ chọn danh mục lá.</span>
             </div>
           </div>
           <div className="admin-search category-search">
@@ -466,7 +468,9 @@ const AdminCategories = () => {
               aria-label="Tìm theo tên, slug hoặc đường dẫn"
             />
           </div>
-          {visibleTreeIds.size === 0 ? (
+          {isLoading ? (
+            <AdminStateBlock type="empty" title="Đang tải dữ liệu" description="Hệ thống đang tải cây danh mục..." />
+          ) : visibleTreeIds.size === 0 ? (
             <AdminStateBlock
               type={query ? 'search-empty' : 'empty'}
               title={query ? 'Không tìm thấy danh mục phù hợp' : 'Chưa có danh mục nào'}
@@ -528,9 +532,9 @@ const AdminCategories = () => {
               <div className="form-grid">
                 <label className="form-field"><span>Tên danh mục</span><input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value, slug: prev.slug ? prev.slug : toSlug(event.target.value) }))} /></label>
                 <label className="form-field"><span>Slug</span><input value={draft.slug} onChange={(event) => setDraft((prev) => ({ ...prev, slug: toSlug(event.target.value) }))} /></label>
-                <label className="form-field"><span>Danh mục cha</span><select value={draft.parentId} onChange={(event) => setDraft((prev) => ({ ...prev, parentId: event.target.value }))}><option value="">Danh mục gốc</option>{categories.filter((item) => item.id !== draft.id).map((item) => <option key={item.id} value={item.id}>{buildPath(item.id, byId).join(' > ')}</option>)}</select></label>
+                <label className="form-field"><span>Danh mục cha</span><select value={draft.parentId || ''} onChange={(event) => setDraft((prev) => ({ ...prev, parentId: event.target.value || null }))}><option value="">Danh mục gốc</option>{categories.filter((item) => item.id !== draft.id).map((item) => <option key={item.id} value={item.id}>{buildPath(item.id, byId).join(' > ')}</option>)}</select></label>
                 <label className="form-field"><span>Thứ tự hiển thị</span><input type="number" min={1} value={draft.order} onChange={(event) => setDraft((prev) => ({ ...prev, order: Math.max(1, Number(event.target.value) || 1) }))} /></label>
-                <label className="form-field"><span>Trạng thái</span><select value={draft.status} onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as CategoryStatus }))}><option value="visible">Đang hiện</option><option value="hidden">Đã ẩn</option></select></label>
+                <label className="form-field"><span>Trạng thái</span><select value={draft.status} onChange={(event) => setDraft((prev) => ({ ...prev, status: event.target.value as 'visible' | 'hidden' }))}><option value="visible">Đang hiện</option><option value="hidden">Đã ẩn</option></select></label>
                 <label className="form-field"><span>Ảnh đại diện</span><input value={draft.image} onChange={(event) => setDraft((prev) => ({ ...prev, image: event.target.value }))} placeholder="https://..." /></label>
                 <label className="form-field full"><span>Mô tả ngắn</span><textarea rows={4} value={draft.description} onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))} /></label>
               </div>
@@ -565,7 +569,6 @@ const AdminCategories = () => {
           <div className="admin-panel-head">
             <div>
               <h2>Danh sách rà soát danh mục</h2>
-              <span className="admin-muted">Bảng phẳng để quản trị viên rà nhanh cấp, đường dẫn, số sản phẩm và thao tác quản lý.</span>
             </div>
           </div>
           {flatFilteredCategories.length === 0 ? (

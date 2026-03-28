@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -38,7 +39,7 @@ public class Voucher extends BaseEntity {
     @Column(nullable = false)
     private String code;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String description;
 
     @Enumerated(EnumType.STRING)
@@ -46,10 +47,10 @@ public class Voucher extends BaseEntity {
     private DiscountType discountType;
 
     @Column(name = "discount_value", nullable = false)
-    private Double discountValue;
+    private BigDecimal discountValue;
 
     @Column(name = "min_order_value")
-    private Double minOrderValue = 0.0;
+    private BigDecimal minOrderValue = BigDecimal.ZERO;
 
     @Column(name = "total_issued")
     private Integer totalIssued = 0;

@@ -49,11 +49,11 @@ public class ProductController {
 
     @GetMapping("/store/{storeId}")
     public ResponseEntity<Page<Product>> getByStore(
-            @PathVariable UUID storeId,
+            @PathVariable String storeId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(productService.findActiveByStoreId(storeId, pageable));
+        return ResponseEntity.ok(productService.findActiveByStoreIdentifier(storeId, pageable));
     }
 
     @GetMapping("/my-store")
