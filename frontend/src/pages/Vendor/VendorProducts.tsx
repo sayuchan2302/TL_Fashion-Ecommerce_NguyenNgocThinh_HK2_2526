@@ -1,7 +1,7 @@
 import './Vendor.css';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Eye, EyeOff, FolderTree, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, FolderTree, Link2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import VendorLayout from './VendorLayout';
 import { formatCurrency } from '../../services/commissionService';
@@ -38,6 +38,7 @@ interface DeleteConfirmState {
 interface ProductFormState {
   id?: string;
   slug?: string;
+  parentCategoryId: string;
   name: string;
   sku: string;
   categoryId: string;
@@ -48,13 +49,31 @@ interface ProductFormState {
   visible: boolean;
 }
 
+interface VariantRowFormState {
+  key: string;
+  axis1: string;
+  axis2: string;
+  sku: string;
+  stockQuantity: number;
+  priceAdjustment: number;
+  isActive: boolean;
+}
+
+const createVariantRow = (): VariantRowFormState => ({
+  key: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  axis1: '',
+  axis2: '',
+  sku: '',
+  stockQuantity: 0,
+  priceAdjustment: 0,
+  isActive: true,
+});
+
 type ProductFormErrors = {
   name?: string;
-  sku?: string;
   categoryId?: string;
-  price?: string;
-  stock?: string;
   image?: string;
+  variants?: string;
 };
 
 const PAGE_SIZE = 8;
@@ -93,7 +112,42 @@ const getStatusTone = (status: VendorProductStatus) => {
   return map[status];
 };
 
+const stripDiacritics = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/Ä'/g, 'd')
+    .replace(/Đ/g, 'D');
+
+const toSkuToken = (value: string, fallback: string, maxLength = 10) => {
+  const normalized = stripDiacritics(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.slice(0, maxLength);
+};
+
+const normalizeVariantAxis = (value: string) => {
+  const normalized = (value || '').trim();
+  return normalized || 'Default';
+};
+
+const normalizeVariantText = (value: string) => (value || '').trim();
+
+const buildVariantKey = (axis1: string, axis2: string) =>
+  `${normalizeVariantAxis(axis1)}__${normalizeVariantAxis(axis2)}`.toLowerCase();
+
+const formPriceFromVariant = (basePrice: number, adjustment: number) =>
+  Math.max(0, Number(basePrice || 0) + Number(adjustment || 0));
+
 const emptyForm = (): ProductFormState => ({
+  parentCategoryId: '',
   name: '',
   sku: '',
   categoryId: '',
@@ -119,6 +173,7 @@ const VendorProducts = () => {
   const [showDrawer, setShowDrawer] = useState(false);
   const [productForm, setProductForm] = useState<ProductFormState>(emptyForm());
   const [formErrors, setFormErrors] = useState<ProductFormErrors>({});
+  const [variantRows, setVariantRows] = useState<VariantRowFormState[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
@@ -134,6 +189,81 @@ const VendorProducts = () => {
     outOfStock: 0,
     lowStock: 0,
   });
+
+  const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
+
+  const leafCategories = useMemo(
+    () => categories.filter((category) => category.leaf),
+    [categories],
+  );
+
+  const resolveRootCategoryId = useCallback((categoryId: string) => {
+    let current = categoryById.get(categoryId);
+    if (!current) {
+      return '';
+    }
+
+    const visited = new Set<string>();
+    while (current.parentId && !visited.has(current.parentId)) {
+      visited.add(current.parentId);
+      const parent = categoryById.get(current.parentId);
+      if (!parent) {
+        break;
+      }
+      current = parent;
+    }
+
+    return current.id;
+  }, [categoryById]);
+
+  const parentCategories = useMemo(() => {
+    const rootIds = new Set(
+      leafCategories
+        .map((category) => resolveRootCategoryId(category.id))
+        .filter((id) => Boolean(id)),
+    );
+
+    return categories
+      .filter((category) => !category.parentId && rootIds.has(category.id))
+      .sort((left, right) => left.name.localeCompare(right.name, 'vi'));
+  }, [categories, leafCategories, resolveRootCategoryId]);
+
+  const childCategories = useMemo(() => {
+    if (!productForm.parentCategoryId) {
+      return [];
+    }
+
+    return leafCategories
+      .filter((category) => resolveRootCategoryId(category.id) === productForm.parentCategoryId)
+      .sort((left, right) => left.label.localeCompare(right.label, 'vi'));
+  }, [leafCategories, productForm.parentCategoryId, resolveRootCategoryId]);
+
+  const selectedLeafCategory = useMemo(
+    () => leafCategories.find((category) => category.id === productForm.categoryId) || null,
+    [leafCategories, productForm.categoryId],
+  );
+
+  const autoGeneratedSku = useMemo(() => {
+    const categoryToken = toSkuToken(selectedLeafCategory?.name || 'SP', 'SP', 8);
+    const productToken = toSkuToken(productForm.name, 'ITEM', 12);
+    const firstVariant = variantRows[0];
+    const attributeTokens = [
+      toSkuToken(firstVariant?.axis1 || '', '', 8),
+      toSkuToken(firstVariant?.axis2 || '', '', 8),
+    ].filter((token) => Boolean(token));
+
+    const segments = [categoryToken, productToken, ...attributeTokens].filter((segment) => Boolean(segment));
+    if (segments.length === 0) {
+      return '';
+    }
+
+    return segments.join('-').slice(0, 50);
+  }, [productForm.name, selectedLeafCategory?.name, variantRows]);
+
+  const variantStockTotal = useMemo(
+    () => variantRows.reduce((sum, row) => sum + Math.max(0, Number(row.stockQuantity || 0)), 0),
+    [variantRows],
+  );
 
   const toastTimerRef = useRef<number | null>(null);
 
@@ -198,6 +328,50 @@ const VendorProducts = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!showDrawer || !productForm.categoryId || productForm.parentCategoryId) {
+      return;
+    }
+
+    const resolvedParentId = resolveRootCategoryId(productForm.categoryId);
+    if (!resolvedParentId) {
+      return;
+    }
+
+    setProductForm((current) => {
+      if (!current.categoryId || current.parentCategoryId) {
+        return current;
+      }
+      return { ...current, parentCategoryId: resolvedParentId };
+    });
+  }, [productForm.categoryId, productForm.parentCategoryId, resolveRootCategoryId, showDrawer]);
+
+  useEffect(() => {
+    if (!showDrawer || !autoGeneratedSku) {
+      return;
+    }
+
+    setProductForm((current) => {
+      if (current.id && current.sku) {
+        return current;
+      }
+      if (current.sku === autoGeneratedSku) {
+        return current;
+      }
+      return { ...current, sku: autoGeneratedSku };
+    });
+  }, [autoGeneratedSku, showDrawer]);
+
+  useEffect(() => {
+    if (!showDrawer || variantRows.length === 0) {
+      return;
+    }
+
+    setProductForm((current) => (current.stock === variantStockTotal
+      ? current
+      : { ...current, stock: variantStockTotal }));
+  }, [showDrawer, variantRows.length, variantStockTotal]);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -304,10 +478,58 @@ const VendorProducts = () => {
   };
 
   const openCreateDrawer = () => {
-    setProductForm(emptyForm());
+    const nextParentId = parentCategories.length === 1 ? parentCategories[0].id : '';
+    setProductForm({
+      ...emptyForm(),
+      parentCategoryId: nextParentId,
+    });
+    setVariantRows([createVariantRow()]);
     setFormErrors({});
     setShowDrawer(true);
   };
+
+  const handleOpenCreateProductDrawer = () => {
+    openCreateDrawer();
+  };
+
+  const buildVariantSku = (axis1: string, axis2: string) => {
+    const categoryToken = toSkuToken(selectedLeafCategory?.name || 'SP', 'SP', 8);
+    const productToken = toSkuToken(productForm.name, 'ITEM', 12);
+    const axis1Token = toSkuToken(axis1, 'DEFAULT', 8);
+    const axis2Token = toSkuToken(axis2, 'DEFAULT', 8);
+    return [categoryToken, productToken, axis1Token, axis2Token].join('-').slice(0, 50);
+  };
+
+  const addVariantRow = () => {
+    setVariantRows((current) => [...current, createVariantRow()]);
+    setFormErrors((current) => {
+      if (!current.variants) {
+        return current;
+      }
+      const { variants, ...next } = current;
+      return next;
+    });
+  };
+
+  const updateVariantRow = (key: string, mutate: (current: VariantRowFormState) => VariantRowFormState) => {
+    setVariantRows((current) => current.map((row) => (row.key === key ? mutate(row) : row)));
+  };
+
+  const removeVariantRow = (key: string) => {
+    setVariantRows((current) => {
+      const next = current.filter((row) => row.key !== key);
+      return next.length > 0 ? next : [createVariantRow()];
+    });
+  };
+
+  const normalizeVariantRowsForSave = (rows: VariantRowFormState[]) => rows.map((row) => ({
+    sku: buildVariantSku(row.axis1, row.axis2),
+    color: normalizeVariantText(row.axis1),
+    size: normalizeVariantText(row.axis2),
+    stockQuantity: Math.max(0, Number(row.stockQuantity || 0)),
+    priceAdjustment: Number(row.priceAdjustment || 0),
+    isActive: row.isActive !== false,
+  }));
 
   const openEditDrawer = (id: string) => {
     const current = products.find((product) => product.id === id);
@@ -316,6 +538,7 @@ const VendorProducts = () => {
     setProductForm({
       id: current.id,
       slug: current.slug,
+      parentCategoryId: current.categoryId ? resolveRootCategoryId(current.categoryId) : '',
       name: current.name,
       sku: current.sku,
       categoryId: current.categoryId || '',
@@ -325,31 +548,100 @@ const VendorProducts = () => {
       description: current.description,
       visible: current.visible,
     });
+    const usedKeys = new Set<string>();
+    const rows = (current.variants || []).map((variant, index) => {
+      const axis1 = normalizeVariantAxis(variant.color);
+      const axis2 = normalizeVariantAxis(variant.size);
+      const baseKey = buildVariantKey(axis1, axis2);
+      let key = baseKey;
+      while (usedKeys.has(key)) {
+        key = `${baseKey}__${index}`;
+      }
+      usedKeys.add(key);
+      return {
+        key,
+        axis1,
+        axis2,
+        sku: (variant.sku || '').toUpperCase(),
+        stockQuantity: Math.max(0, Number(variant.stockQuantity || 0)),
+        priceAdjustment: Number(variant.priceAdjustment || 0),
+        isActive: variant.isActive !== false,
+      } satisfies VariantRowFormState;
+    });
+    setVariantRows(rows.length > 0 ? rows : [createVariantRow()]);
     setFormErrors({});
     setShowDrawer(true);
   };
 
-  const validateForm = (form: ProductFormState) => {
+  const validateForm = (
+    form: ProductFormState,
+    normalizedVariants: ReturnType<typeof normalizeVariantRowsForSave>,
+  ) => {
     const errors: ProductFormErrors = {};
     if (!form.name.trim()) errors.name = 'Tên sản phẩm không được để trống.';
-    if (!form.sku.trim()) errors.sku = 'SKU là bắt buộc để đối soát tồn kho.';
     if (!form.categoryId) errors.categoryId = 'Vui lòng chọn danh mục sản phẩm.';
-    if (form.price <= 0) errors.price = 'Giá bán phải lớn hơn 0.';
-    if (form.stock < 0) errors.stock = 'Tồn kho không được âm.';
     if (!form.image.trim()) errors.image = 'Vui lòng nhập ảnh đại diện sản phẩm.';
+    if (normalizedVariants.length === 0) {
+      errors.variants = 'Vui lòng nhập Màu sắc/Kích cỡ để tạo ít nhất một biến thể.';
+    }
+
+    if (normalizedVariants.length > 0) {
+      const seen = new Set<string>();
+      for (const variant of normalizedVariants) {
+        if (!variant.color || !variant.size) {
+          errors.variants = 'Vui lòng nhập đủ Màu sắc và Kích cỡ cho từng biến thể.';
+          break;
+        }
+        if (!variant.sku) {
+          errors.variants = 'Mỗi biến thể phải có SKU.';
+          break;
+        }
+        if (seen.has(variant.sku)) {
+          errors.variants = `SKU trùng: ${variant.sku}`;
+          break;
+        }
+        seen.add(variant.sku);
+        if (variant.stockQuantity < 0) {
+          errors.variants = 'Tồn kho biến thể không được âm.';
+          break;
+        }
+      }
+    }
+
     return errors;
   };
-
   const saveProduct = async () => {
+    let normalizedVariants = normalizeVariantRowsForSave(variantRows).filter((variant) => (
+      variant.color || variant.size || variant.stockQuantity > 0 || variant.priceAdjustment !== 0
+    ));
+    const normalizedVariantPrices = normalizedVariants.map((variant) => formPriceFromVariant(productForm.price, variant.priceAdjustment));
+    const variantDrivenSku = normalizedVariants[0]?.sku || '';
+    const variantDrivenStock = normalizedVariants.reduce(
+      (sum, variant) => sum + Math.max(0, Number(variant.stockQuantity || 0)),
+      0,
+    );
+    const variantDrivenBasePrice = normalizedVariantPrices.length > 0
+      ? Math.max(0, normalizedVariantPrices[0])
+      : productForm.price;
+
+    if (normalizedVariants.length > 0) {
+      normalizedVariants = normalizedVariants.map((variant, index) => ({
+        ...variant,
+        priceAdjustment: Math.max(0, normalizedVariantPrices[index]) - variantDrivenBasePrice,
+      }));
+    }
+
     const normalizedForm: ProductFormState = {
       ...productForm,
       name: productForm.name.trim(),
-      sku: productForm.sku.trim().toUpperCase(),
+      sku: (variantDrivenSku || productForm.sku || autoGeneratedSku || 'SP-ITEM').trim().toUpperCase(),
       description: productForm.description.trim(),
       image: productForm.image.trim(),
+      price: variantDrivenBasePrice,
+      stock: normalizedVariants.length > 0 ? variantDrivenStock : productForm.stock,
     };
 
-    const errors = validateForm(normalizedForm);
+    const errors = validateForm(normalizedForm, normalizedVariants);
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) {
       return;
@@ -368,6 +660,7 @@ const VendorProducts = () => {
           image: normalizedForm.image,
           description: normalizedForm.description,
           visible: normalizedForm.visible,
+          variants: normalizedVariants.length > 0 ? normalizedVariants : undefined,
         });
         pushToast('Đã cập nhật sản phẩm thành công');
       } else {
@@ -380,6 +673,7 @@ const VendorProducts = () => {
           image: normalizedForm.image,
           description: normalizedForm.description,
           visible: normalizedForm.visible,
+          variants: normalizedVariants.length > 0 ? normalizedVariants : undefined,
         });
         pushToast('Đã tạo sản phẩm mới cho gian hàng');
       }
@@ -392,35 +686,6 @@ const VendorProducts = () => {
       setSaving(false);
     }
   };
-
-  const handleDuplicate = async (id: string) => {
-    const current = products.find((product) => product.id === id);
-    if (!current) return;
-
-    const duplicateSku = `${current.sku}-COPY-${Date.now().toString(36).slice(-4)}`.slice(0, 50);
-
-    setWorking(true);
-    try {
-      await vendorProductService.createProduct({
-        name: `${current.name} bản sao`,
-        sku: duplicateSku,
-        categoryId: current.categoryId,
-        price: current.price,
-        stock: current.stock,
-        image: current.image,
-        description: current.description,
-        visible: false,
-      });
-
-      pushToast(`Đã nhân bản SKU ${current.sku}`);
-      await loadProducts();
-    } catch (error: unknown) {
-      addToast(getUiErrorMessage(error, 'Không thể nhân bản sản phẩm'), 'error');
-    } finally {
-      setWorking(false);
-    }
-  };
-
   const applyVisibility = async (ids: string[], visible: boolean) => {
     setWorking(true);
     try {
@@ -501,7 +766,11 @@ const VendorProducts = () => {
             Chia sẻ bộ lọc
           </button>
           <button className="admin-ghost-btn" onClick={resetCurrentView}>Đặt lại</button>
-          <button className="admin-primary-btn vendor-admin-primary" onClick={openCreateDrawer}>
+          <button
+            type="button"
+            className="admin-primary-btn vendor-admin-primary"
+            onClick={handleOpenCreateProductDrawer}
+          >
             <Plus size={14} />
             Thêm sản phẩm
           </button>
@@ -556,7 +825,7 @@ const VendorProducts = () => {
               title={keyword ? 'Không tìm thấy SKU phù hợp' : 'Chưa có sản phẩm nào'}
               description={keyword ? 'Thử đổi từ khóa tìm kiếm hoặc đặt lại bộ lọc.' : 'Khi shop tạo sản phẩm mới, danh sách sẽ xuất hiện tại đây.'}
               actionLabel={keyword ? 'Đặt lại bộ lọc' : 'Thêm sản phẩm'}
-              onAction={keyword ? resetCurrentView : openCreateDrawer}
+              onAction={keyword ? resetCurrentView : handleOpenCreateProductDrawer}
             />
           ) : (
             <>
@@ -614,9 +883,6 @@ const VendorProducts = () => {
                       <button className="admin-icon-btn subtle" title="Chỉnh sửa sản phẩm" onClick={() => openEditDrawer(product.id)}>
                         <Pencil size={16} />
                       </button>
-                      <button className="admin-icon-btn subtle" title="Nhân bản SKU" onClick={() => void handleDuplicate(product.id)} disabled={working}>
-                        <Copy size={16} />
-                      </button>
                       <button className="admin-icon-btn subtle" title={product.visible ? 'Ẩn sản phẩm' : 'Hiển thị sản phẩm'} onClick={() => void applyVisibility([product.id], !product.visible)} disabled={working}>
                         {product.visible ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -654,9 +920,9 @@ const VendorProducts = () => {
       />
 
       <Drawer open={showDrawer} onClose={() => setShowDrawer(false)}>
-        <div className="drawer-header">
+        <div className="drawer-header vendor-product-drawer-header">
           <div>
-            <p className="drawer-eyebrow">{productForm.id ? 'Chỉnh sửa SKU' : 'Tạo SKU mới'}</p>
+            <p className="drawer-eyebrow">{productForm.id ? 'Chỉnh sửa sản phẩm' : 'Tạo sản phẩm mới'}</p>
             <h3>{productForm.name || 'Sản phẩm mới'}</h3>
           </div>
           <button className="admin-icon-btn" onClick={() => setShowDrawer(false)} aria-label="Đóng biểu mẫu sản phẩm">
@@ -666,77 +932,183 @@ const VendorProducts = () => {
 
         <div className="drawer-body">
           <section className="drawer-section">
-            <h4>Ảnh đại diện sản phẩm</h4>
-            <div className="form-grid">
-              <label className="form-field full">
-                <span>URL ảnh</span>
-                <input value={productForm.image} onChange={(event) => setProductForm((current) => ({ ...current, image: event.target.value }))} placeholder="https://..." />
-                {formErrors.image && <small className="form-field-error">{formErrors.image}</small>}
-              </label>
-            </div>
-          </section>
-
-          <section className="drawer-section">
             <h4>Thông tin sản phẩm</h4>
             <div className="form-grid">
-              <label className="form-field">
+              <label className="form-field full">
                 <span>Tên sản phẩm</span>
                 <input value={productForm.name} onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))} />
                 {formErrors.name && <small className="form-field-error">{formErrors.name}</small>}
               </label>
-              <label className="form-field">
-                <span>SKU</span>
-                <input value={productForm.sku} onChange={(event) => setProductForm((current) => ({ ...current, sku: event.target.value }))} />
-                {formErrors.sku && <small className="form-field-error">{formErrors.sku}</small>}
-              </label>
 
-              <label className="form-field full">
+              <div className="form-field full vendor-product-category-block">
                 <span>Danh mục sản phẩm</span>
-                <select
-                  value={productForm.categoryId}
-                  onChange={(event) => setProductForm((current) => ({ ...current, categoryId: event.target.value }))}
-                >
-                  <option value="">Chọn danh mục</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.label}</option>
-                  ))}
-                </select>
-                {categories.length === 0 && (
+                <div className="vendor-product-category-grid">
+                  <label className="form-field">
+                    <span>Danh mục cha</span>
+                    <select
+                      value={productForm.parentCategoryId}
+                      onChange={(event) => setProductForm((current) => ({
+                        ...current,
+                        parentCategoryId: event.target.value,
+                        categoryId: '',
+                      }))}
+                    >
+                      <option value="">Chọn danh mục cha</option>
+                      {parentCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-field">
+                    <span>Danh mục con</span>
+                    <select
+                      value={productForm.categoryId}
+                      onChange={(event) => setProductForm((current) => ({ ...current, categoryId: event.target.value }))}
+                      disabled={!productForm.parentCategoryId}
+                    >
+                      <option value="">{productForm.parentCategoryId ? 'Chọn danh mục con' : 'Chọn danh mục cha trước'}</option>
+                      {childCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {leafCategories.length === 0 && (
                   <small className="admin-muted">Chưa có danh mục. Vui lòng nhờ admin tạo danh mục trước khi đăng sản phẩm.</small>
                 )}
                 {formErrors.categoryId && <small className="form-field-error">{formErrors.categoryId}</small>}
-              </label>
+              </div>
 
               <label className="form-field">
-                <span>Giá bán</span>
-                <input type="number" min={0} value={productForm.price} onChange={(event) => setProductForm((current) => ({ ...current, price: Number(event.target.value || 0) }))} />
-                {formErrors.price && <small className="form-field-error">{formErrors.price}</small>}
+                <span>Ảnh sản phẩm (URL)</span>
+                <input value={productForm.image} onChange={(event) => setProductForm((current) => ({ ...current, image: event.target.value }))} placeholder="https://..." />
+                {formErrors.image && <small className="form-field-error">{formErrors.image}</small>}
               </label>
-              <label className="form-field">
-                <span>Tồn kho</span>
-                <input type="number" min={0} value={productForm.stock} onChange={(event) => setProductForm((current) => ({ ...current, stock: Number(event.target.value || 0) }))} />
-                {formErrors.stock && <small className="form-field-error">{formErrors.stock}</small>}
-              </label>
-              <label className="form-field full">
-                <span>Mô tả nhanh cho đội vận hành</span>
-                <textarea rows={4} value={productForm.description} onChange={(event) => setProductForm((current) => ({ ...current, description: event.target.value }))} placeholder="Điểm khác biệt, chất liệu, lưu ý fulfillment..." />
-              </label>
+
+              <div className="form-field vendor-product-image-preview">
+                <span>Xem trước ảnh</span>
+                <div className="vendor-product-image-preview-card">
+                  {productForm.image.trim() ? (
+                    <img src={productForm.image} alt={productForm.name || 'Ảnh sản phẩm'} />
+                  ) : (
+                    <p className="admin-muted small">Thêm URL ảnh để xem trước.</p>
+                  )}
+                </div>
+              </div>
+
             </div>
           </section>
 
           <section className="drawer-section">
-            <h4>Trạng thái hiển thị</h4>
-            <div className="switch-row">
+            <div className="vendor-variant-builder-head">
               <div>
-                <p className="admin-bold">Hiển thị trên storefront</p>
-                <p className="admin-muted small">Nếu tắt, SKU sẽ chuyển về trạng thái ẩn / nháp trong kênh người bán.</p>
+                <h4>Danh sách biến thể</h4>
               </div>
-              <label className="switch">
-                <input type="checkbox" checked={productForm.visible} onChange={(event) => setProductForm((current) => ({ ...current, visible: event.target.checked }))} />
-                <span className="switch-slider" />
-              </label>
+              <button type="button" className="admin-ghost-btn small" onClick={addVariantRow}>
+                Thêm biến thể
+              </button>
             </div>
+
+            {formErrors.variants && <small className="form-field-error">{formErrors.variants}</small>}
+            <div className="vendor-variant-table">
+              <div className="vendor-variant-row vendor-variant-row-head">
+                <div>Màu sắc</div>
+                <div>Kích cỡ</div>
+                <div>Số lượng</div>
+                <div>Giá bán</div>
+                <div>Hiển thị</div>
+                <div />
+              </div>
+
+              {variantRows.map((row) => (
+                <div key={row.key} className="vendor-variant-row">
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: Đen"
+                      value={row.axis1}
+                      onChange={(event) => updateVariantRow(row.key, (current) => ({
+                        ...current,
+                        axis1: event.target.value,
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: M"
+                      value={row.axis2}
+                      onChange={(event) => updateVariantRow(row.key, (current) => ({
+                        ...current,
+                        axis2: event.target.value,
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={row.stockQuantity}
+                      onChange={(event) => updateVariantRow(row.key, (current) => ({
+                        ...current,
+                        stockQuantity: Math.max(0, Number(event.target.value || 0)),
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={Math.max(0, productForm.price + row.priceAdjustment)}
+                      onChange={(event) => updateVariantRow(row.key, (current) => ({
+                        ...current,
+                        priceAdjustment: Math.max(0, Number(event.target.value || 0)) - productForm.price,
+                      }))}
+                    />
+                  </div>
+                  <div className="vendor-variant-active">
+                    <input
+                      type="checkbox"
+                      checked={row.isActive}
+                      onChange={(event) => updateVariantRow(row.key, (current) => ({
+                        ...current,
+                        isActive: event.target.checked,
+                      }))}
+                    />
+                  </div>
+                  <div className="vendor-variant-actions">
+                    <button
+                      type="button"
+                      className="admin-icon-btn subtle danger-icon"
+                      title="Xóa dòng biến thể"
+                      onClick={() => removeVariantRow(row.key)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="admin-muted small vendor-variant-total">
+              Tổng kho: {variantStockTotal}
+            </p>
           </section>
+
+          <section className="drawer-section">
+            <h4>Mô tả sản phẩm</h4>
+            <label className="form-field full">
+              <span>Mô tả chi tiết</span>
+              <textarea
+                rows={5}
+                value={productForm.description}
+                onChange={(event) => setProductForm((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Mô tả chất liệu, form dáng, điểm nổi bật và lưu ý sử dụng để khách dễ quyết định mua hàng."
+              />
+            </label>
+          </section>
+
         </div>
 
         <div className="drawer-footer">
@@ -744,7 +1116,7 @@ const VendorProducts = () => {
           <button
             className="admin-primary-btn vendor-admin-primary"
             onClick={() => void saveProduct()}
-            disabled={saving || categories.length === 0}
+            disabled={saving || leafCategories.length === 0}
           >
             {saving ? 'Đang lưu...' : productForm.id ? 'Lưu cập nhật' : 'Tạo sản phẩm'}
           </button>

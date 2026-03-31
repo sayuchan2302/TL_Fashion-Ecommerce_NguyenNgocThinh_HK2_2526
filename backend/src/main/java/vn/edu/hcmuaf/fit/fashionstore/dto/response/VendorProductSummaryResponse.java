@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -30,6 +31,21 @@ public class VendorProductSummaryResponse {
     private BigDecimal grossRevenue;
     private String primarySku;
     private String primaryImage;
+    private List<VariantRow> variants;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VariantRow {
+        private UUID id;
+        private String sku;
+        private String color;
+        private String size;
+        private Integer stockQuantity;
+        private BigDecimal priceAdjustment;
+        private Boolean isActive;
+    }
 }

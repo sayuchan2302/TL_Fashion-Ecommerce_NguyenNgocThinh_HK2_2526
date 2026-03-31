@@ -573,7 +573,7 @@ const VendorOrders = () => {
                       </div>
                       <div className="admin-muted small">{order.items} SP</div>
                       <div className="admin-muted small">{formatVendorOrderDate(order.date)}</div>
-                      <div className="admin-actions">
+                      <div className="admin-actions vendor-order-actions">
                         {order.status === 'pending' && (
                           <button
                             className="admin-icon-btn subtle"
@@ -614,7 +614,13 @@ const VendorOrders = () => {
                             <PackageCheck size={16} />
                           </button>
                         )}
-                        {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'processing') && (
+                        {order.status !== 'pending'
+                          && order.status !== 'confirmed'
+                          && order.status !== 'processing'
+                          && order.status !== 'shipped' && (
+                          <span className="vendor-order-action-slot" aria-hidden="true" />
+                        )}
+                        {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'processing') ? (
                           <button
                             className="admin-icon-btn subtle danger-icon"
                             title="Hủy đơn"
@@ -623,6 +629,8 @@ const VendorOrders = () => {
                           >
                             <XCircle size={16} />
                           </button>
+                        ) : (
+                          <span className="vendor-order-action-slot" aria-hidden="true" />
                         )}
                         <Link to={`/vendor/orders/${resolveDetailRouteKey(order.code, order.id)}`} className="admin-icon-btn subtle" title="Chi tiết đơn hàng">
                           <Eye size={16} />

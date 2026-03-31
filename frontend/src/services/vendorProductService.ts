@@ -4,7 +4,9 @@ interface BackendCategoryOption {
   id?: string;
   name?: string;
   label?: string;
+  parentId?: string | null;
   leaf?: boolean;
+  depth?: number;
 }
 
 interface BackendVendorProduct {
@@ -24,6 +26,17 @@ interface BackendVendorProduct {
   grossRevenue?: number;
   primarySku?: string;
   primaryImage?: string;
+  variants?: BackendVendorVariant[];
+}
+
+interface BackendVendorVariant {
+  id?: string;
+  sku?: string;
+  color?: string;
+  size?: string;
+  stockQuantity?: number;
+  priceAdjustment?: number;
+  isActive?: boolean;
 }
 
 interface BackendVendorProductPage {
@@ -52,6 +65,14 @@ interface BackendProductRequest {
   sku?: string;
   stockQuantity?: number;
   imageUrl?: string;
+  variants?: Array<{
+    sku: string;
+    color: string;
+    size: string;
+    stockQuantity: number;
+    priceAdjustment: number;
+    isActive: boolean;
+  }>;
 }
 
 export type VendorProductStatus = 'active' | 'low' | 'out' | 'draft';
@@ -71,12 +92,16 @@ export interface VendorProductRecord {
   visible: boolean;
   image: string;
   description: string;
+  variants: VendorProductVariant[];
 }
 
 export interface VendorProductCategory {
   id: string;
   name: string;
   label: string;
+  parentId: string | null;
+  leaf: boolean;
+  depth: number;
 }
 
 export interface VendorProductUpsertInput {
@@ -89,6 +114,26 @@ export interface VendorProductUpsertInput {
   image?: string;
   visible: boolean;
   slug?: string;
+  variants?: VendorProductVariantInput[];
+}
+
+export interface VendorProductVariant {
+  id?: string;
+  sku: string;
+  color: string;
+  size: string;
+  stockQuantity: number;
+  priceAdjustment: number;
+  isActive: boolean;
+}
+
+export interface VendorProductVariantInput {
+  sku: string;
+  color: string;
+  size: string;
+  stockQuantity: number;
+  priceAdjustment?: number;
+  isActive?: boolean;
 }
 
 export interface VendorProductPageResult {
@@ -149,6 +194,34 @@ const mapBackendProduct = (product: BackendVendorProduct): VendorProductRecord =
   const stock = Math.max(0, Number(product.totalStock || 0));
   const status = toVendorStatus(product.status, stock);
   const fallbackSku = normalizeText(product.slug) || product.id;
+  const variants = (product.variants || [])
+    .map((variant): VendorProductVariant | null => {
+      const sku = normalizeText(variant.sku);
+      if (!sku) {
+        return null;
+      }
+      return {
+        id: variant.id,
+        sku,
+        color: normalizeText(variant.color) || 'Default',
+        size: normalizeText(variant.size) || 'Default',
+        stockQuantity: Math.max(0, Number(variant.stockQuantity || 0)),
+        priceAdjustment: Number(variant.priceAdjustment || 0),
+        isActive: variant.isActive !== false,
+      };
+    })
+    .filter((variant): variant is VendorProductVariant => Boolean(variant));
+
+  const normalizedVariants = variants.length > 0
+    ? variants
+    : [{
+      sku: normalizeText(product.primarySku) || fallbackSku,
+      color: 'Default',
+      size: 'Default',
+      stockQuantity: stock,
+      priceAdjustment: 0,
+      isActive: true,
+    }];
 
   return {
     id: product.id,
@@ -165,18 +238,22 @@ const mapBackendProduct = (product: BackendVendorProduct): VendorProductRecord =
     visible: Boolean(product.visible),
     image: normalizeText(product.primaryImage) || FALLBACK_IMAGE,
     description: normalizeText(product.description),
+    variants: normalizedVariants,
   };
 };
 
 const mapCategories = (rows: BackendCategoryOption[]): VendorProductCategory[] => {
   return rows
-    .filter((row) => row.id && normalizeText(row.name) && (row.leaf ?? true))
+    .filter((row) => row.id && normalizeText(row.name))
     .map((row) => ({
       id: String(row.id),
       name: normalizeText(row.name),
       label: normalizeText(row.label) || normalizeText(row.name),
+      parentId: row.parentId ? String(row.parentId) : null,
+      leaf: row.leaf ?? true,
+      depth: Number(row.depth ?? 0),
     }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'vi'));
+    .sort((left, right) => left.depth - right.depth || left.label.localeCompare(right.label, 'vi'));
 };
 
 const toRequestPayload = (
@@ -200,6 +277,16 @@ const toRequestPayload = (
     sku: normalizedSku || undefined,
     stockQuantity: Math.max(0, Number(input.stock || 0)),
     imageUrl: normalizedImage || undefined,
+    variants: (input.variants || [])
+      .map((variant) => ({
+        sku: normalizeText(variant.sku).toUpperCase(),
+        color: normalizeText(variant.color) || 'Default',
+        size: normalizeText(variant.size) || 'Default',
+        stockQuantity: Math.max(0, Number(variant.stockQuantity || 0)),
+        priceAdjustment: Number(variant.priceAdjustment || 0),
+        isActive: variant.isActive !== false,
+      }))
+      .filter((variant) => variant.sku),
   };
 };
 
@@ -218,7 +305,7 @@ const inventoryToBackend = (status?: VendorProductQuery['status']) => {
 export const vendorProductService = {
   async getCategories(): Promise<VendorProductCategory[]> {
     const categories = await apiRequest<BackendCategoryOption[]>(
-      '/api/categories/options?leafOnly=true',
+      '/api/categories/options',
       {},
       { auth: true },
     ).catch(() => []);

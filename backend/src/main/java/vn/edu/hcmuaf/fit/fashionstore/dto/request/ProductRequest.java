@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -26,4 +27,18 @@ public class ProductRequest {
     private String sku;
     private Integer stockQuantity;
     private String imageUrl;
+    private List<VariantRequest> variants;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VariantRequest {
+        private String sku;
+        private String color;
+        private String size;
+        private Integer stockQuantity;
+        private BigDecimal priceAdjustment;
+        private Boolean isActive;
+    }
 }

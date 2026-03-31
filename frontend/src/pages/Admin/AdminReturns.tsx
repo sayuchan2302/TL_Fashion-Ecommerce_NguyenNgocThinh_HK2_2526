@@ -175,38 +175,43 @@ const AdminReturns = () => {
           ) : (
             <>
               <div className="admin-table" role="table" aria-label="Bảng yêu cầu hoàn trả">
-                <div className="admin-table-row admin-table-head" role="row">
+                <div className="admin-table-row admin-table-head returns-row" role="row">
                   <div role="columnheader">
                     <input type="checkbox" checked={selected.size === pagedItems.length && pagedItems.length > 0} onChange={(e) => toggleAll(e.target.checked)} />
                   </div>
                   <div role="columnheader">Mã yêu cầu</div>
                   <div role="columnheader">Sản phẩm</div>
-                  <div role="columnheader">Khách hàng / Gian hàng</div>
+                  <div role="columnheader">Khách hàng</div>
+                  <div role="columnheader">Gian hàng</div>
                   <div role="columnheader">Lý do</div>
                   <div role="columnheader">Trạng thái</div>
                   <div role="columnheader">Hành động</div>
                 </div>
 
                 {pagedItems.map((item) => (
-                  <div key={item.id} className="admin-table-row" role="row" onClick={() => setDrawerItem(item)} style={{ cursor: 'pointer' }}>
+                  <div key={item.id} className="admin-table-row returns-row" role="row" onClick={() => setDrawerItem(item)} style={{ cursor: 'pointer' }}>
                     <div role="cell" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selected.has(item.id)} onChange={(e) => toggleOne(item.id, e.target.checked)} />
                     </div>
-                    <div role="cell">
-                      <span className="admin-bold">{toDisplayReturnCode(item.code)}</span>
+                    <div role="cell" title={toDisplayReturnCode(item.code)}>
+                      <span className="admin-bold returns-ellipsis">{toDisplayReturnCode(item.code)}</span>
                     </div>
-                    <div role="cell">
-                      <div className="admin-line-clamp" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={item.items.map(i => i.productName).join(', ')}>
+                    <div role="cell" title={item.items.map(i => i.productName).join(', ')}>
+                      <div className="returns-ellipsis">
                         {item.items.map(i => `${i.productName} (x${i.quantity})`).join(', ')}
                       </div>
                     </div>
-                    <div role="cell">
-                      <div className="admin-bold">{item.customerName}</div>
-                      <div className="admin-muted small">Shop: {item.storeName || 'Chưa xác định'}</div>
+                    <div role="cell" title={item.customerName}>
+                      <div className="admin-bold returns-ellipsis">{item.customerName}</div>
                     </div>
-                    <div role="cell"><span className="admin-muted">{item.reason}</span></div>
+                    <div role="cell" title={item.storeName || 'Chưa xác định'}>
+                      <span className="admin-muted returns-ellipsis">{item.storeName || 'Chưa xác định'}</span>
+                    </div>
+                    <div role="cell" title={item.reason}>
+                      <span className="admin-muted returns-ellipsis">{item.reason}</span>
+                    </div>
                     <div role="cell"><span className={statusConfig[item.status].pillClass}>{statusConfig[item.status].label}</span></div>
-                    <div role="cell" className="admin-actions" onClick={(e) => e.stopPropagation()}>
+                    <div role="cell" className="admin-actions returns-actions" onClick={(e) => e.stopPropagation()}>
                       <button className="admin-icon-btn subtle" title="Xem chi tiết" onClick={() => setDrawerItem(item)}><Eye size={16} /></button>
                       {item.status === 'PENDING' && (
                         <>

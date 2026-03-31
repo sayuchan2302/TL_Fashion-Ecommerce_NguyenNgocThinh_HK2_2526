@@ -105,6 +105,44 @@ const AdminCategories = () => {
     return set;
   }, [categories, childMap]);
 
+  const totalProductCountByCategory = useMemo(() => {
+    const memo = new Map<string, number>();
+
+    const resolveTotal = (id: string, lineage: Set<string>): number => {
+      if (memo.has(id)) {
+        return memo.get(id) || 0;
+      }
+      if (lineage.has(id)) {
+        return 0;
+      }
+
+      const current = byId.get(id);
+      if (!current) {
+        return 0;
+      }
+
+      const nextLineage = new Set(lineage);
+      nextLineage.add(id);
+
+      const children = childMap.get(id) || [];
+      const childrenTotal = children.reduce((sum, child) => sum + resolveTotal(child.id, nextLineage), 0);
+      const total = Math.max(0, Number(current.count || 0)) + childrenTotal;
+      memo.set(id, total);
+      return total;
+    };
+
+    categories.forEach((item) => {
+      resolveTotal(item.id, new Set());
+    });
+
+    return memo;
+  }, [byId, categories, childMap]);
+
+  const getCategoryProductTotal = useCallback(
+    (id: string) => totalProductCountByCategory.get(id) || 0,
+    [totalProductCountByCategory],
+  );
+
   const rootCategories = childMap.get('__root__') || [];
   const selectedCategory = selectedId ? byId.get(selectedId) || null : null;
 
@@ -405,7 +443,7 @@ const AdminCategories = () => {
               </button>
               <div className="category-tree-trailing">
                 <span className={`admin-pill ${item.status === 'visible' ? 'success' : 'neutral'}`}>{item.status === 'visible' ? 'Đang hiện' : 'Đã ẩn'}</span>
-                <span className="category-tree-count">{item.count} SP</span>
+                <span className="category-tree-count">{getCategoryProductTotal(item.id)} SP</span>
                 <div className="admin-actions">
                   <button type="button" className="admin-icon-btn subtle" title="Thêm danh mục con" aria-label="Thêm danh mục con" onClick={() => openCreateChild(item.id)}>
                     <FolderPlus size={15} />
@@ -505,7 +543,7 @@ const AdminCategories = () => {
 
               <div className="category-signal-grid">
                 <div className="category-signal-card"><span className="admin-muted small">Cấp</span><strong>Cấp {getLevel(selectedCategory.id, byId)}</strong></div>
-                <div className="category-signal-card"><span className="admin-muted small">Sản phẩm</span><strong>{selectedCategory.count}</strong></div>
+                <div className="category-signal-card"><span className="admin-muted small">Sản phẩm</span><strong>{getCategoryProductTotal(selectedCategory.id)}</strong></div>
                 <div className="category-signal-card"><span className="admin-muted small">Điều hướng</span><strong>{selectedCategory.showOnMenu ? 'Hiện menu' : 'Ẩn menu'}</strong></div>
                 <div className="category-signal-card"><span className="admin-muted small">Loại danh mục</span><strong>{isLeaf.has(selectedCategory.id) ? 'Danh mục lá' : 'Nhóm cha'}</strong></div>
               </div>
@@ -592,7 +630,7 @@ const AdminCategories = () => {
                   <div role="cell"><div className="admin-bold">{item.name}</div><div className="admin-muted small">{item.slug}</div></div>
                   <div role="cell" className="admin-muted">{buildPath(item.id, byId).join(' > ')}</div>
                   <div role="cell"><span className="badge gray">Cấp {getLevel(item.id, byId)}</span></div>
-                  <div role="cell"><span className="badge blue">{item.count} SP</span></div>
+                  <div role="cell"><span className="badge blue">{getCategoryProductTotal(item.id)} SP</span></div>
                   <div role="cell"><span className={`admin-pill ${item.status === 'visible' ? 'success' : 'neutral'}`}>{item.status === 'visible' ? 'Đang hiện' : 'Đã ẩn'}</span></div>
                   <div role="cell" className="admin-actions">
                     <button className="admin-icon-btn subtle" title="Xem chi tiết" aria-label="Xem chi tiết" onClick={() => setSelectedId(item.id)}><ChevronRight size={16} /></button>

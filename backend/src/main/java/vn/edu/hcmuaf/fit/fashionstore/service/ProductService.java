@@ -25,12 +25,15 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.ProductVariantRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -258,7 +261,7 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product name is required");
         }
 
-        if (request.getSku() == null || request.getSku().isBlank()) {
+        if (!hasVariantPayload(request) && (request.getSku() == null || request.getSku().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SKU is required");
         }
 
@@ -297,10 +300,10 @@ public class ProductService {
         product.setCategory(category);
 
         syncPrimaryImage(product, request.getImageUrl());
-        syncPrimaryVariant(product, request.getSku(), request.getStockQuantity());
+        syncVariants(product, request);
         validatePublishRules(product, status);
         validateSlugUniquenessForCreate(product.getSlug());
-        validateSkuUniqueness(product, request.getSku(), null);
+        validateSkuUniqueness(product, null);
 
         return productRepository.save(product);
     }
@@ -364,10 +367,10 @@ public class ProductService {
             product.setCategory(category);
         }
         syncPrimaryImage(product, request.getImageUrl());
-        syncPrimaryVariant(product, request.getSku(), request.getStockQuantity());
+        syncVariants(product, request);
         validatePublishRules(product, product.getStatus());
         validateSlugUniquenessForUpdate(product.getSlug(), product.getId());
-        validateSkuUniqueness(product, request.getSku(), product.getId());
+        validateSkuUniqueness(product, product.getId());
 
         return productRepository.save(product);
     }
@@ -417,6 +420,53 @@ public class ProductService {
         if (image.getIsPrimary() == null) {
             image.setIsPrimary(true);
         }
+    }
+
+    private boolean hasVariantPayload(ProductRequest request) {
+        return request.getVariants() != null && !request.getVariants().isEmpty();
+    }
+
+    private void syncVariants(Product product, ProductRequest request) {
+        if (!hasVariantPayload(request)) {
+            syncPrimaryVariant(product, request.getSku(), request.getStockQuantity());
+            return;
+        }
+
+        List<ProductVariant> normalizedVariants = new ArrayList<>();
+        Set<String> seenSkus = new HashSet<>();
+
+        for (ProductRequest.VariantRequest item : request.getVariants()) {
+            if (item == null) {
+                continue;
+            }
+
+            String normalizedSku = item.getSku() == null ? "" : item.getSku().trim().toUpperCase(Locale.ROOT);
+            if (normalizedSku.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variant SKU is required");
+            }
+            if (!seenSkus.add(normalizedSku)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate SKU in variant matrix: " + normalizedSku);
+            }
+
+            ProductVariant variant = ProductVariant.builder()
+                    .product(product)
+                    .sku(normalizedSku)
+                    .color(item.getColor() == null || item.getColor().isBlank() ? "Default" : item.getColor().trim())
+                    .size(item.getSize() == null || item.getSize().isBlank() ? "Default" : item.getSize().trim())
+                    .stockQuantity(Math.max(0, item.getStockQuantity() == null ? 0 : item.getStockQuantity()))
+                    .priceAdjustment(item.getPriceAdjustment() == null ? BigDecimal.ZERO : item.getPriceAdjustment())
+                    .isActive(item.getIsActive() == null ? true : item.getIsActive())
+                    .build();
+            normalizedVariants.add(variant);
+        }
+
+        if (normalizedVariants.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variant matrix is empty");
+        }
+
+        List<ProductVariant> variants = ensureVariantList(product);
+        variants.clear();
+        variants.addAll(normalizedVariants);
     }
 
     private void syncPrimaryVariant(Product product, String sku, Integer stockQuantity) {
@@ -522,6 +572,17 @@ public class ProductService {
                 .orElse(null);
         long soldCount = salesSnapshot != null ? salesSnapshot.soldCount() : 0L;
         BigDecimal grossRevenue = salesSnapshot != null ? salesSnapshot.grossRevenue() : BigDecimal.ZERO;
+        List<VendorProductSummaryResponse.VariantRow> variantRows = variants.stream()
+                .map(variant -> VendorProductSummaryResponse.VariantRow.builder()
+                        .id(variant.getId())
+                        .sku(variant.getSku())
+                        .color(variant.getColor())
+                        .size(variant.getSize())
+                        .stockQuantity(variant.getStockQuantity())
+                        .priceAdjustment(variant.getPriceAdjustment())
+                        .isActive(variant.getIsActive())
+                        .build())
+                .toList();
 
         return VendorProductSummaryResponse.builder()
                 .id(product.getId())
@@ -540,6 +601,7 @@ public class ProductService {
                 .grossRevenue(grossRevenue)
                 .primarySku(primarySku)
                 .primaryImage(primaryImage)
+                .variants(variantRows)
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .build();
@@ -579,6 +641,17 @@ public class ProductService {
 
         if (request.getStockQuantity() != null && request.getStockQuantity() < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock quantity must be greater than or equal to 0");
+        }
+
+        if (request.getVariants() != null) {
+            for (ProductRequest.VariantRequest variant : request.getVariants()) {
+                if (variant == null) {
+                    continue;
+                }
+                if (variant.getStockQuantity() != null && variant.getStockQuantity() < 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variant stock quantity must be greater than or equal to 0");
+                }
+            }
         }
     }
 
@@ -640,33 +713,32 @@ public class ProductService {
         }
     }
 
-    private void validateSkuUniqueness(Product product, String skuFromRequest, UUID productId) {
-        String requestedSku = skuFromRequest == null ? null : skuFromRequest.trim();
-        if (requestedSku == null || requestedSku.isEmpty()) {
-            requestedSku = ensureVariantList(product).stream()
-                    .map(ProductVariant::getSku)
-                    .filter(sku -> sku != null && !sku.isBlank())
-                    .findFirst()
-                    .orElse(null);
-        }
+    private void validateSkuUniqueness(Product product, UUID productId) {
+        Set<String> requestedSkus = ensureVariantList(product).stream()
+                .map(ProductVariant::getSku)
+                .filter(sku -> sku != null && !sku.isBlank())
+                .map(sku -> sku.trim().toUpperCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
-        if (requestedSku == null || requestedSku.isBlank()) {
+        if (requestedSkus.isEmpty()) {
             return;
         }
 
         UUID effectiveProductId = productId != null ? productId : product.getId();
-        if (effectiveProductId == null) {
-            productVariantRepository.findBySku(requestedSku.toUpperCase(Locale.ROOT))
+        for (String requestedSku : requestedSkus) {
+            if (effectiveProductId == null) {
+                productVariantRepository.findBySku(requestedSku)
+                        .ifPresent(variant -> {
+                            throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists in marketplace");
+                        });
+                continue;
+            }
+
+            productVariantRepository.findConflictingSku(requestedSku, effectiveProductId)
                     .ifPresent(variant -> {
                         throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists in marketplace");
                     });
-            return;
         }
-
-        productVariantRepository.findConflictingSku(requestedSku, effectiveProductId)
-                .ifPresent(variant -> {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists in marketplace");
-                });
     }
 
     private String normalizeKeyword(String keyword) {
