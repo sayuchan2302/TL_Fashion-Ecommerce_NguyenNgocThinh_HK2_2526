@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BadgeCheck, ChevronLeft, MessageCircle, ShoppingBag, Star, TicketPercent, Users } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, Mail, MapPin, MessageCircle, Phone, ShoppingBag, Star, TicketPercent, Users } from 'lucide-react';
 import { storeService, type StoreProduct, type StoreProfile } from '../../services/storeService';
 import { couponService, type Coupon } from '../../services/couponService';
 import { reviewService, type Review } from '../../services/reviewService';
@@ -34,6 +34,28 @@ const formatShortNumber = (value: number) => {
 };
 
 const getProductLink = (product: StoreProduct) => product.slug || product.sku || String(product.id);
+
+const loadAllStoreProducts = async (storeId: string, pageSize = 60): Promise<StoreProduct[]> => {
+  const firstPage = await storeService.getStoreProducts(storeId, 1, pageSize);
+  const totalPages = Math.max(1, Number(firstPage.totalPages || 1));
+  const rows = [...(firstPage.products || [])];
+
+  if (totalPages <= 1) return rows;
+
+  const remainingCalls: Array<Promise<Awaited<ReturnType<typeof storeService.getStoreProducts>>>> = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    remainingCalls.push(storeService.getStoreProducts(storeId, page, pageSize));
+  }
+
+  const settled = await Promise.allSettled(remainingCalls);
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      rows.push(...(result.value.products || []));
+    }
+  }
+
+  return rows;
+};
 
 const buildLoginRedirectTarget = () => {
   if (typeof window === 'undefined') return '/login';
@@ -108,8 +130,8 @@ const StoreProfilePage = () => {
           return;
         }
 
-        const [productRes, couponRes, reviewRes, followerRes] = await Promise.all([
-          storeService.getStoreProducts(storeRow.id, 1, 60),
+        const [allProducts, couponRes, reviewRes, followerRes] = await Promise.all([
+          loadAllStoreProducts(storeRow.id, 60),
           couponService.getAvailableCoupons([storeRow.id]).catch(() => [] as Coupon[]),
           reviewService.getReviewsByStore(storeRow.id).catch(() => [] as Review[]),
           storeFollowService.getFollowerCount(storeRow.id).catch(() => ({
@@ -120,7 +142,7 @@ const StoreProfilePage = () => {
         ]);
         if (cancelled) return;
 
-        setProducts(productRes.products || []);
+        setProducts(allProducts || []);
         setVouchers(couponRes || []);
         setReviews(reviewRes || []);
         setFollowerCount(Math.max(0, Number(followerRes.followerCount || 0)));
@@ -290,6 +312,28 @@ const StoreProfilePage = () => {
                   <p className="storefront-description">
                     {store.description || 'Cửa hàng đối tác chính thức trên marketplace.'}
                   </p>
+                  {store.contactEmail || store.phone || store.address ? (
+                    <div className="storefront-public-contact">
+                      {store.contactEmail ? (
+                        <span>
+                          <Mail size={13} />
+                          {store.contactEmail}
+                        </span>
+                      ) : null}
+                      {store.phone ? (
+                        <span>
+                          <Phone size={13} />
+                          {store.phone}
+                        </span>
+                      ) : null}
+                      {store.address ? (
+                        <span>
+                          <MapPin size={13} />
+                          {store.address}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="storefront-actions">
                     <button
                       type="button"
@@ -299,9 +343,14 @@ const StoreProfilePage = () => {
                     >
                       {followSubmitting ? 'Đang xử lý...' : isFollowing ? 'Đã theo dõi' : 'Theo dõi'}
                     </button>
-                    <button type="button" className="storefront-secondary-btn">
+                    <button
+                      type="button"
+                      className="storefront-secondary-btn storefront-secondary-btn-disabled"
+                      disabled
+                      title="Tính năng chat sẽ được cập nhật sau"
+                    >
                       <MessageCircle size={16} />
-                      Chat
+                      Chat (Sắp ra mắt)
                     </button>
                   </div>
                 </div>

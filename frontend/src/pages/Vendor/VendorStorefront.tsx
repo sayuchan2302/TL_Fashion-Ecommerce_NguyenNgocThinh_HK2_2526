@@ -1,24 +1,120 @@
 import './Vendor.css';
 import { useEffect, useMemo, useState } from 'react';
-import { ImagePlus, Save, ShieldCheck, Tag } from 'lucide-react';
+import { ExternalLink, ImagePlus, Save, ShieldCheck } from 'lucide-react';
 import VendorLayout from './VendorLayout';
 import { vendorPortalService, type VendorSettingsData } from '../../services/vendorPortalService';
+import { storeService, type StoreProfile } from '../../services/storeService';
 import { useToast } from '../../contexts/ToastContext';
 import { getUiErrorMessage } from '../../utils/errorMessage';
 import { AdminStateBlock } from '../Admin/AdminStateBlocks';
 
+const PLACEHOLDER_BANNER =
+  'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600&h=600&fit=crop';
+
 const defaultSettings: VendorSettingsData = {
-  storeInfo: { name: '', slug: '', description: '', logo: '', contactEmail: '', phone: '', address: '' },
+  storeInfo: { name: '', slug: '', description: '', logo: '', banner: '', contactEmail: '', phone: '', address: '' },
   bankInfo: { bankName: '', accountNumber: '', accountHolder: '', verified: false },
   notifications: { newOrder: true, orderStatusChange: true, lowStock: true, payoutComplete: true, promotions: false },
   shipping: { ghn: true, ghtk: true, express: false, warehouseAddress: '', warehouseContact: '', warehousePhone: '' },
 };
 
+const resolveStorefrontStatus = (store: StoreProfile | null) => {
+  if (!store) {
+    return { label: 'Không xác định', detail: 'Không lấy được trạng thái gian hàng công khai.' };
+  }
+
+  if (store.approvalStatus !== 'APPROVED') {
+    return { label: 'Chờ duyệt', detail: 'Store sẽ hiển thị công khai sau khi được admin phê duyệt.' };
+  }
+
+  if (store.status === 'ACTIVE') {
+    return { label: 'Đang hoạt động', detail: 'Gian hàng công khai đang hiển thị cho người mua.' };
+  }
+
+  if (store.status === 'SUSPENDED') {
+    return { label: 'Tạm khóa', detail: 'Gian hàng công khai tạm ẩn do vi phạm hồi kiểm duyệt.' };
+  }
+
+  return { label: 'Tạm offline', detail: 'Gian hàng công khai đang ở trạng thái không hoạt động.' };
+};
+
+const resolveApprovalStatus = (store: StoreProfile | null) => {
+  if (!store) {
+    return {
+      label: 'Không xác định',
+      detail: 'Chưa lấy được thông tin phê duyệt của gian hàng công khai.',
+      tone: 'neutral' as const,
+    };
+  }
+
+  if (store.approvalStatus === 'APPROVED') {
+    return {
+      label: 'Đã duyệt',
+      detail: 'Store đã được admin duyệt.',
+      tone: 'success' as const,
+    };
+  }
+
+  if (store.approvalStatus === 'REJECTED') {
+    return {
+      label: 'Từ chối',
+      detail: store.rejectionReason
+        ? `Store bị từ chối: ${store.rejectionReason}`
+        : 'Store bị từ chối và cần cập nhật hồ sơ trước khi gửi lại.',
+      tone: 'error' as const,
+    };
+  }
+
+  return {
+    label: 'Chờ duyệt',
+    detail: 'Store đang chờ admin phê duyệt để được hiển thị công khai.',
+    tone: 'warning' as const,
+  };
+};
+
+const resolveOperationalStatus = (store: StoreProfile | null) => {
+  if (!store) {
+    return {
+      label: 'Không xác định',
+      detail: 'Chưa lấy được trạng thái vận hành của gian hàng công khai.',
+      tone: 'neutral' as const,
+    };
+  }
+
+  if (store.status === 'ACTIVE') {
+    return {
+      label: 'Đang hoạt động',
+      detail: 'Store đang vận hành bình thường.',
+      tone: 'success' as const,
+    };
+  }
+
+  if (store.status === 'SUSPENDED') {
+    return {
+      label: 'Tạm khóa',
+      detail: 'Store đang bị tạm khóa bởi quản trị viên.',
+      tone: 'error' as const,
+    };
+  }
+
+  return {
+    label: 'Tạm offline',
+    detail: 'Store đang tạm offline và chưa hiển thị công khai.',
+    tone: 'warning' as const,
+  };
+};
+
+const toneToPillClass = (tone: 'success' | 'warning' | 'error' | 'neutral') => {
+  if (tone === 'success') return 'success';
+  if (tone === 'warning') return 'warning';
+  if (tone === 'error') return 'error';
+  return 'neutral';
+};
+
 const VendorStorefront = () => {
   const { addToast } = useToast();
   const [settings, setSettings] = useState<VendorSettingsData>(defaultSettings);
-  const [bannerUrl, setBannerUrl] = useState('');
-  const [tagline, setTagline] = useState('');
+  const [storeMeta, setStoreMeta] = useState<StoreProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -30,9 +126,13 @@ const VendorStorefront = () => {
       setLoading(true);
       try {
         setLoadError('');
-        const next = await vendorPortalService.getSettings();
+        const [nextSettings, nextStore] = await Promise.all([
+          vendorPortalService.getSettings(),
+          storeService.getMyStore(),
+        ]);
         if (!active) return;
-        setSettings(next);
+        setSettings(nextSettings);
+        setStoreMeta(nextStore);
       } catch (err: unknown) {
         if (!active) return;
         const message = getUiErrorMessage(err, 'Không tải được gian hàng công khai');
@@ -42,7 +142,7 @@ const VendorStorefront = () => {
         if (active) setLoading(false);
       }
     };
-    load();
+    void load();
     return () => {
       active = false;
     };
@@ -53,20 +153,22 @@ const VendorStorefront = () => {
       settings.storeInfo.name,
       settings.storeInfo.description,
       settings.storeInfo.logo,
+      settings.storeInfo.banner,
       settings.storeInfo.contactEmail,
       settings.storeInfo.phone,
       settings.storeInfo.address,
-      bannerUrl,
-      tagline,
     ];
     const filled = fields.filter((field) => field.trim()).length;
     return Math.round((filled / fields.length) * 100);
-  }, [bannerUrl, settings, tagline]);
+  }, [settings]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await vendorPortalService.updateSettings(settings);
+      const nextSettings = await vendorPortalService.updateSettings(settings);
+      const nextStore = await storeService.getMyStore();
+      setSettings(nextSettings);
+      setStoreMeta(nextStore);
       addToast('Đã lưu bộ mặt gian hàng', 'success');
     } catch (err: unknown) {
       addToast(getUiErrorMessage(err, 'Lưu gian hàng thất bại'), 'error');
@@ -74,6 +176,85 @@ const VendorStorefront = () => {
       setSaving(false);
     }
   };
+
+  const storefrontStatus = resolveStorefrontStatus(storeMeta);
+  const approvalStatus = resolveApprovalStatus(storeMeta);
+  const operationalStatus = resolveOperationalStatus(storeMeta);
+  const storefrontPath = settings.storeInfo.slug ? `/store/${settings.storeInfo.slug}` : '/store/:slug';
+  const storefrontUrl =
+    typeof window !== 'undefined' && settings.storeInfo.slug ? `${window.location.origin}${storefrontPath}` : '';
+
+  const storefrontChecklist = useMemo(() => {
+    const hasValue = (value: string) => value.trim().length > 0;
+    const hasBrandIdentity = hasValue(settings.storeInfo.name) && hasValue(settings.storeInfo.description);
+    const hasVisualAssets = hasValue(settings.storeInfo.logo) && hasValue(settings.storeInfo.banner);
+    const hasContactInfo =
+      hasValue(settings.storeInfo.contactEmail) &&
+      hasValue(settings.storeInfo.phone) &&
+      hasValue(settings.storeInfo.address);
+    const hasSlug = hasValue(settings.storeInfo.slug);
+    const isApproved = storeMeta?.approvalStatus === 'APPROVED';
+    const isActive = storeMeta?.status === 'ACTIVE';
+
+    return [
+      {
+        key: 'identity',
+        label: 'Tên và mô tả gian hàng',
+        ok: hasBrandIdentity,
+        hint: hasBrandIdentity
+          ? 'Đã có thông tin nhận diện thương hiệu cơ bản.'
+          : 'Thiếu tên hoặc mô tả, khách hàng sẽ khó nhận diện gian hàng.',
+      },
+      {
+        key: 'assets',
+        label: 'Logo và banner',
+        ok: hasVisualAssets,
+        hint: hasVisualAssets
+          ? 'Đã có đủ hình ảnh để hiển thị trên gian hàng công khai.'
+          : 'Cần bổ sung logo hoặc banner để gian hàng công khai hiển thị đầy đủ.',
+      },
+      {
+        key: 'contact',
+        label: 'Thông tin liên hệ công khai',
+        ok: hasContactInfo,
+        hint: hasContactInfo
+          ? 'Email, số điện thoại và địa chỉ đã đầy đủ.'
+          : 'Thiếu email, số điện thoại hoặc địa chỉ công khai.',
+      },
+      {
+        key: 'slug',
+        label: 'Đường dẫn gian hàng',
+        ok: hasSlug,
+        hint: hasSlug ? `Gian hàng đang dùng đường dẫn ${storefrontPath}.` : 'Chưa có slug để tạo đường dẫn gian hàng.',
+      },
+      {
+        key: 'approval',
+        label: 'Phê duyệt từ admin',
+        ok: isApproved,
+        hint: isApproved
+          ? 'Store đã được admin phê duyệt.'
+          : storeMeta?.approvalStatus === 'REJECTED'
+            ? storeMeta.rejectionReason
+              ? `Store bị từ chối: ${storeMeta.rejectionReason}`
+              : 'Store bị từ chối và cần cập nhật hồ sơ.'
+            : 'Store đang chờ admin phê duyệt.',
+      },
+      {
+        key: 'active',
+        label: 'Trạng thái vận hành',
+        ok: isActive,
+        hint: isActive
+          ? 'Store đang hoạt động, khách mua có thể truy cập gian hàng.'
+          : storeMeta?.status === 'SUSPENDED'
+            ? 'Store đang tạm khóa và tạm thời không hiển thị.'
+            : 'Store chưa ở trạng thái hoạt động nên chưa công khai trên marketplace.',
+      },
+    ];
+  }, [settings, storeMeta, storefrontPath]);
+
+  const passedChecks = storefrontChecklist.filter((item) => item.ok).length;
+  const isStorefrontReady = passedChecks === storefrontChecklist.length;
+  const readinessPercent = Math.round((passedChecks / storefrontChecklist.length) * 100);
 
   return (
     <VendorLayout
@@ -90,7 +271,7 @@ const VendorStorefront = () => {
         <AdminStateBlock
           type="empty"
           title="Đang tải gian hàng công khai"
-          description="Hồ sơ storefront của shop đang được đồng bộ."
+          description="Hồ sơ gian hàng của shop đang được đồng bộ."
         />
       ) : loadError ? (
         <AdminStateBlock
@@ -102,106 +283,228 @@ const VendorStorefront = () => {
         />
       ) : (
         <>
+          <section className="admin-panel storefront-hero-panel">
+            <div className="storefront-hero-head">
+              <div className="storefront-hero-copy">
+                <h2>Trung tâm vận hành gian hàng công khai</h2>
+                <p>
+                  Theo dõi nhanh trạng thái duyệt, vận hành và mức sẵn sàng công khai của gian hàng trên marketplace.
+                </p>
+              </div>
+              <div className="storefront-hero-chips">
+                <span className={`admin-pill ${toneToPillClass(approvalStatus.tone)}`}>
+                  Phê duyệt: {approvalStatus.label}
+                </span>
+                <span className={`admin-pill ${toneToPillClass(operationalStatus.tone)}`}>
+                  Vận hành: {operationalStatus.label}
+                </span>
+              </div>
+            </div>
+            <div className="storefront-hero-progress">
+              <div className="storefront-hero-progress-track">
+                <span style={{ width: `${readinessPercent}%` }} />
+              </div>
+              <div className="storefront-hero-progress-meta">
+                <strong>{readinessPercent}% điều kiện công khai</strong>
+                <span>
+                  {isStorefrontReady
+                    ? 'Gian hàng đã đủ điều kiện hiển thị cho khách mua.'
+                    : `Đạt ${passedChecks}/${storefrontChecklist.length} điều kiện vận hành.`}
+                </span>
+              </div>
+            </div>
+            <div className="storefront-hero-actions">
+              <a
+                href={storefrontUrl || '#'}
+                className={`admin-ghost-btn storefront-open-link ${storefrontUrl ? '' : 'is-disabled'}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => {
+                  if (!storefrontUrl) event.preventDefault();
+                }}
+              >
+                <ExternalLink size={14} />
+                Mở gian hàng công khai
+              </a>
+              <span className={`admin-pill ${isStorefrontReady ? 'success' : 'warning'}`}>
+                {isStorefrontReady ? 'Sẵn sàng công khai' : 'Cần hoàn thiện thêm'}
+              </span>
+            </div>
+          </section>
+
           <div className="admin-stats grid-4">
             <div className="admin-stat-card">
               <div className="admin-stat-label">Mức hoàn thiện</div>
               <div className="admin-stat-value">{completion}%</div>
-              <div className="admin-stat-sub">Độ đầy đủ của storefront hiện tại</div>
+              <div className="admin-stat-sub">Tính theo dữ liệu đang chỉnh sửa trên gian hàng công khai</div>
             </div>
             <div className="admin-stat-card success">
               <div className="admin-stat-label">Huy hiệu</div>
-              <div className="admin-stat-value">Official</div>
-              <div className="admin-stat-sub">Hiển thị khi shop đã được duyệt</div>
+              <div className="admin-stat-value">{storeMeta?.isOfficial ? 'Chính hãng' : 'Tiêu chuẩn'}</div>
+              <div className="admin-stat-sub">Tín hiệu tin cậy hiển thị trên hồ sơ công khai</div>
             </div>
             <div className="admin-stat-card info">
-              <div className="admin-stat-label">Điểm chạm</div>
-              <div className="admin-stat-value">/store/:slug</div>
-              <div className="admin-stat-sub">Trang shop công khai trên marketplace</div>
+              <div className="admin-stat-label">Đường dẫn gian hàng</div>
+              <div className="admin-stat-value">{storefrontPath}</div>
+              <div className="admin-stat-sub">Đường dẫn truy cập gian hàng công khai trên marketplace</div>
             </div>
-            <div className="admin-stat-card warning">
-              <div className="admin-stat-label">Trạng thái</div>
-              <div className="admin-stat-value">Sẵn sàng</div>
-              <div className="admin-stat-sub">Có thể cập nhật và lưu ngay</div>
+            <div className={`admin-stat-card ${storefrontStatus.label === 'Đang hoạt động' ? 'success' : 'warning'}`}>
+              <div className="admin-stat-label">Trạng thái hiển thị</div>
+              <div className="admin-stat-value">{storefrontStatus.label}</div>
+              <div className="admin-stat-sub">{storefrontStatus.detail}</div>
             </div>
           </div>
 
           <div className="admin-panels storefront-grid">
             <div className="admin-left">
-              <section className="admin-panel">
+              <section className="admin-panel storefront-section-panel">
                 <div className="admin-panel-head">
                   <h2>Thiết lập thương hiệu</h2>
-                  <span className="admin-muted">Các thông tin này xuất hiện trên storefront và điểm "Bán bởi".</span>
+                  <span className="admin-muted">
+                    Các thông tin này xuất hiện trên gian hàng công khai và điểm "Bán bởi".
+                  </span>
                 </div>
                 <div className="form-grid">
                   <label className="form-field full">
                     <span>Đường dẫn banner</span>
-                    <input value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} />
+                    <input
+                      value={settings.storeInfo.banner}
+                      onChange={(e) =>
+                        setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, banner: e.target.value } }))
+                      }
+                    />
                   </label>
                   <label className="form-field">
                     <span>Tên gian hàng</span>
-                    <input value={settings.storeInfo.name} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, name: e.target.value } }))} />
+                    <input
+                      value={settings.storeInfo.name}
+                      onChange={(e) =>
+                        setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, name: e.target.value } }))
+                      }
+                    />
                   </label>
                   <label className="form-field">
                     <span>Đường dẫn logo</span>
-                    <input value={settings.storeInfo.logo} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, logo: e.target.value } }))} />
-                  </label>
-                  <label className="form-field full">
-                    <span>Khẩu hiệu ngắn</span>
-                    <input value={tagline} onChange={(e) => setTagline(e.target.value)} />
+                    <input
+                      value={settings.storeInfo.logo}
+                      onChange={(e) =>
+                        setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, logo: e.target.value } }))
+                      }
+                    />
                   </label>
                   <label className="form-field full">
                     <span>Mô tả gian hàng</span>
-                    <textarea rows={5} value={settings.storeInfo.description} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, description: e.target.value } }))} />
+                    <textarea
+                      rows={5}
+                      value={settings.storeInfo.description}
+                      onChange={(e) =>
+                        setSettings((current) => ({
+                          ...current,
+                          storeInfo: { ...current.storeInfo, description: e.target.value },
+                        }))
+                      }
+                    />
                   </label>
                 </div>
               </section>
 
-              <section className="admin-panel">
+              <section className="admin-panel storefront-section-panel">
                 <div className="admin-panel-head">
                   <h2>Thông tin công khai</h2>
-                  <span className="admin-muted">Dữ liệu này khách hàng sẽ thấy khi ghé trang shop của bạn.</span>
+                  <span className="admin-muted">Dữ liệu này được hiển thị trực tiếp trên trang /store/:slug.</span>
                 </div>
                 <div className="form-grid">
                   <label className="form-field">
                     <span>Email liên hệ</span>
-                    <input value={settings.storeInfo.contactEmail} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, contactEmail: e.target.value } }))} />
+                    <input
+                      value={settings.storeInfo.contactEmail}
+                      onChange={(e) =>
+                        setSettings((current) => ({
+                          ...current,
+                          storeInfo: { ...current.storeInfo, contactEmail: e.target.value },
+                        }))
+                      }
+                    />
                   </label>
                   <label className="form-field">
                     <span>Số điện thoại</span>
-                    <input value={settings.storeInfo.phone} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, phone: e.target.value } }))} />
+                    <input
+                      value={settings.storeInfo.phone}
+                      onChange={(e) =>
+                        setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, phone: e.target.value } }))
+                      }
+                    />
                   </label>
                   <label className="form-field full">
                     <span>Địa chỉ hiển thị công khai</span>
-                    <input value={settings.storeInfo.address} onChange={(e) => setSettings((current) => ({ ...current, storeInfo: { ...current.storeInfo, address: e.target.value } }))} />
+                    <input
+                      value={settings.storeInfo.address}
+                      onChange={(e) =>
+                        setSettings((current) => ({
+                          ...current,
+                          storeInfo: { ...current.storeInfo, address: e.target.value },
+                        }))
+                      }
+                    />
                   </label>
                 </div>
               </section>
 
-              <section className="admin-panel">
+              <section className="admin-panel storefront-section-panel">
                 <div className="admin-panel-head">
-                  <h2>Tín hiệu tin cậy</h2>
+                  <h2>Luồng vận hành gian hàng</h2>
+                  <span className="admin-muted">
+                    Gian hàng chỉ hiển thị công khai khi đi qua đủ các bước vận hành bắt buộc.
+                  </span>
                 </div>
-                <div className="admin-card-list">
-                  <div className="admin-card-row">
-                    <span className="admin-bold"><ShieldCheck size={15} style={{ verticalAlign: -2, marginRight: 6 }} /> Huy hiệu chính hãng</span>
-                    <span className="admin-muted">Chỉ hiển thị khi store được admin duyệt và đang hoạt động.</span>
+                <div className="admin-card-list storefront-flow-list">
+                  <div className="storefront-flow-step">
+                    <span className="storefront-flow-index">1</span>
+                    <div className="storefront-flow-content">
+                      <p className="admin-bold">Hoàn thiện hồ sơ hiển thị</p>
+                      <p className="admin-muted">Điền đủ tên, mô tả, logo, banner và thông tin liên hệ.</p>
+                    </div>
                   </div>
-                  <div className="admin-card-row">
-                    <span className="admin-bold"><Tag size={15} style={{ verticalAlign: -2, marginRight: 6 }} /> Gắn nhãn người bán</span>
-                    <span className="admin-muted">Tên shop sẽ xuất hiện tại thẻ sản phẩm, trang chi tiết và phần tách đơn.</span>
+                  <div className="storefront-flow-step">
+                    <span className="storefront-flow-index">2</span>
+                    <div className="storefront-flow-content">
+                      <p className="admin-bold">Được admin phê duyệt</p>
+                      <p className="admin-muted">Store cần được duyệt để đủ điều kiện lên công khai.</p>
+                    </div>
+                  </div>
+                  <div className="storefront-flow-step">
+                    <span className="storefront-flow-index">3</span>
+                    <div className="storefront-flow-content">
+                      <p className="admin-bold">Store đang hoạt động</p>
+                      <p className="admin-muted">
+                        Store ở trạng thái tạm offline hoặc tạm khóa sẽ không hiển thị cho người mua.
+                      </p>
+                    </div>
                   </div>
                 </div>
+                <p className="admin-note">
+                  <ShieldCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                  Huy hiệu <strong>Chính hãng</strong> chỉ là tín hiệu uy tín bổ sung, không phải điều kiện bắt buộc để mở
+                  gian hàng.
+                </p>
               </section>
             </div>
 
             <div className="admin-right">
-              <section className="admin-panel">
+              <section className="admin-panel storefront-section-panel">
                 <div className="admin-panel-head">
-                  <h2>Xem trước storefront</h2>
-                  <span className="admin-muted">Mô phỏng giao diện trang shop công khai</span>
+                  <h2>Xem trước gian hàng</h2>
+                  <span className="admin-muted">Mô phỏng giao diện trang shop công khai theo dữ liệu thực tế</span>
                 </div>
                 <div className="vendor-store-preview">
-                  <div className="vendor-store-preview-banner" style={{ backgroundImage: `linear-gradient(rgba(15,23,42,.22), rgba(15,23,42,.38)), url(${bannerUrl})` }} />
+                  <div
+                    className="vendor-store-preview-banner"
+                    style={{
+                      backgroundImage: `linear-gradient(rgba(15,23,42,.22), rgba(15,23,42,.38)), url(${
+                        settings.storeInfo.banner || PLACEHOLDER_BANNER
+                      })`,
+                    }}
+                  />
                   <div className="vendor-store-preview-body">
                     <div className="vendor-store-preview-head">
                       <div className="vendor-store-preview-logo">
@@ -216,9 +519,13 @@ const VendorStorefront = () => {
                       <div className="vendor-store-preview-copy">
                         <div className="vendor-store-preview-title">
                           <h3>{settings.storeInfo.name || 'Chưa cập nhật tên gian hàng'}</h3>
-                          <span className="admin-pill teal"><ShieldCheck size={13} /> Chính hãng</span>
+                          {storeMeta?.isOfficial ? (
+                            <span className="admin-pill teal">
+                              <ShieldCheck size={13} /> Chính hãng
+                            </span>
+                          ) : null}
                         </div>
-                        <p>{tagline || 'Chưa cập nhật khẩu hiệu gian hàng.'}</p>
+                        <p>{storefrontStatus.label}</p>
                       </div>
                     </div>
                     <p className="vendor-store-preview-description">
@@ -233,24 +540,35 @@ const VendorStorefront = () => {
                 </div>
               </section>
 
-              <section className="admin-panel">
+              <section className="admin-panel storefront-section-panel">
                 <div className="admin-panel-head">
-                  <h2>Checklist storefront</h2>
+                  <h2>Checklist vận hành</h2>
+                  <span className="admin-muted">Theo dõi điều kiện công khai theo đúng luồng business.</span>
                 </div>
+                {storeMeta?.approvalStatus === 'REJECTED' ? (
+                  <p className="storefront-business-alert">
+                    Store đang ở trạng thái <strong>Từ chối</strong>.
+                    {storeMeta.rejectionReason ? ` Lý do: ${storeMeta.rejectionReason}` : ' Vui lòng cập nhật hồ sơ để gửi duyệt lại.'}
+                  </p>
+                ) : null}
                 <div className="admin-card-list">
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Logo và banner</span>
-                    <span className="admin-muted">{settings.storeInfo.logo && bannerUrl ? 'Đã sẵn sàng' : 'Cần bổ sung hình ảnh thương hiệu'}</span>
-                  </div>
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Thông tin liên hệ</span>
-                    <span className="admin-muted">{settings.storeInfo.contactEmail && settings.storeInfo.phone ? 'Đã hoàn thiện' : 'Thiếu email hoặc số điện thoại'}</span>
-                  </div>
-                  <div className="admin-card-row">
-                    <span className="admin-bold">Mô tả thương hiệu</span>
-                    <span className="admin-muted">{settings.storeInfo.description ? 'Đã có mô tả shop' : 'Nên thêm mô tả để tăng độ tin cậy'}</span>
-                  </div>
+                  {storefrontChecklist.map((item) => (
+                    <div key={item.key} className="admin-card-row storefront-check-row">
+                      <div className="storefront-check-content">
+                        <span className="admin-bold">{item.label}</span>
+                        <span className="admin-muted">{item.hint}</span>
+                      </div>
+                      <span className={`admin-pill ${item.ok ? 'success' : 'warning'} storefront-check-pill`}>
+                        {item.ok ? 'Đạt' : 'Chưa đạt'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
+                <p className={`storefront-readiness ${isStorefrontReady ? 'success' : 'warning'}`}>
+                  {isStorefrontReady
+                    ? 'Gian hàng đã đủ điều kiện công khai theo logic vận hành hiện tại.'
+                    : `Gian hàng mới đạt ${passedChecks}/${storefrontChecklist.length} điều kiện. Hoàn tất các mục còn thiếu trước khi đưa lên công khai.`}
+                </p>
               </section>
             </div>
           </div>

@@ -11,7 +11,7 @@ import { AdminStateBlock } from '../Admin/AdminStateBlocks';
 type SettingsTab = 'store' | 'bank' | 'notifications' | 'shipping';
 
 const DEFAULT_SETTINGS: VendorSettingsData = {
-  storeInfo: { name: '', slug: '', description: '', logo: '', contactEmail: '', phone: '', address: '' },
+  storeInfo: { name: '', slug: '', description: '', logo: '', banner: '', contactEmail: '', phone: '', address: '' },
   bankInfo: { bankName: '', accountNumber: '', accountHolder: '', verified: false },
   notifications: { newOrder: true, orderStatusChange: true, lowStock: true, payoutComplete: true, promotions: false },
   shipping: { ghn: true, ghtk: true, express: false, warehouseAddress: '', warehouseContact: '', warehousePhone: '' },

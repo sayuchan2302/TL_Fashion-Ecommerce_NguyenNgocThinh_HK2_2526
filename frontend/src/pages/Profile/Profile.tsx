@@ -1115,8 +1115,8 @@ const Profile = () => {
                 );
               })}
 
-              <li className="profile-nav-item mt-4 pt-4 border-t border-gray-200">
-                <button className="profile-nav-btn text-red-500 hover:text-red-600 hover:bg-red-50" onClick={handleLogout}>
+              <li className="profile-nav-item profile-nav-item-logout">
+                <button className="profile-nav-btn profile-nav-btn-logout" onClick={handleLogout}>
                   <LogOut className="profile-nav-icon" />
                   {t.logout}
                 </button>

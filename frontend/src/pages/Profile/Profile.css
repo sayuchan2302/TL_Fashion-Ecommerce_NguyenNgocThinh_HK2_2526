@@ -335,6 +335,12 @@
   width: 100%;
 }
 
+.profile-nav-item-logout {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--co-gray-200);
+}
+
 .profile-nav-btn {
   width: 100%;
   display: flex;
@@ -360,6 +366,15 @@
 .profile-nav-btn.active {
   background-color: var(--co-blue);
   color: var(--co-white);
+}
+
+.profile-nav-btn-logout {
+  color: #dc2626;
+}
+
+.profile-nav-btn-logout:hover {
+  color: #b91c1c;
+  background-color: #fef2f2;
 }
 
 .profile-nav-icon {
@@ -1526,8 +1541,8 @@ body.modal-open {
 }
 
 .address-add-btn {
-  background-color: var(--co-black);
-  color: white;
+  background-color: var(--co-blue);
+  color: var(--co-white);
   border: none;
   border-radius: 999px;
   padding: 10px 24px;
@@ -1537,7 +1552,7 @@ body.modal-open {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: background-color 0.2s;
   white-space: nowrap;
 }
 
@@ -1548,7 +1563,7 @@ body.modal-open {
 }
 
 .address-add-btn:hover {
-  opacity: 0.8;
+  background-color: #1d4ed8;
 }
 
 .address-book-content {

@@ -211,6 +211,7 @@ export interface VendorSettingsData {
     slug: string;
     description: string;
     logo: string;
+    banner: string;
     contactEmail: string;
     phone: string;
     address: string;
@@ -246,6 +247,7 @@ const DEFAULT_SETTINGS: VendorSettingsData = {
     slug: 'fashion-house',
     description: 'Tinh chỉnh trải nghiệm cửa hàng, logistics và thông tin liên hệ tại đây.',
     logo: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop',
+    banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600&h=600&fit=crop',
     contactEmail: 'contact@fashionhouse.vn',
     phone: '0901234567',
     address: '123 Nguyen Hue, Quan 1, TP.HCM',
@@ -448,13 +450,14 @@ const buildDailySeries = (orders: VendorOrderSummary[], days = 7) => {
 
 const toVendorSettings = (store: StoreProfile): VendorSettingsData => ({
   storeInfo: {
-    name: store.name || DEFAULT_SETTINGS.storeInfo.name,
-    slug: store.slug || DEFAULT_SETTINGS.storeInfo.slug,
-    description: store.description || DEFAULT_SETTINGS.storeInfo.description,
-    logo: store.logo || DEFAULT_SETTINGS.storeInfo.logo,
-    contactEmail: store.contactEmail || DEFAULT_SETTINGS.storeInfo.contactEmail,
-    phone: store.phone || DEFAULT_SETTINGS.storeInfo.phone,
-    address: store.address || DEFAULT_SETTINGS.storeInfo.address,
+    name: store.name || '',
+    slug: store.slug || '',
+    description: store.description || '',
+    logo: store.logo || '',
+    banner: store.banner || '',
+    contactEmail: store.contactEmail || '',
+    phone: store.phone || '',
+    address: store.address || '',
   },
   bankInfo: {
     bankName: store.bankName || '',
@@ -615,6 +618,7 @@ export const vendorPortalService = {
       slug: toCanonicalSlug(payload.storeInfo.slug || payload.storeInfo.name),
       description: payload.storeInfo.description,
       logo: payload.storeInfo.logo,
+      banner: payload.storeInfo.banner,
       contactEmail: payload.storeInfo.contactEmail,
       phone: payload.storeInfo.phone,
       address: payload.storeInfo.address,

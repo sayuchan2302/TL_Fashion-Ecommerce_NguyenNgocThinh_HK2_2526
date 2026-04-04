@@ -1321,6 +1321,202 @@
   align-items: start;
 }
 
+.admin-panels.storefront-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
+  gap: 18px;
+}
+
+.storefront-hero-panel,
+.storefront-section-panel {
+  border-radius: 16px;
+  border-color: #dbe5f1;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.storefront-hero-panel {
+  margin-bottom: 16px;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff, #f8fcfa);
+}
+
+.storefront-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.storefront-hero-copy h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.storefront-hero-copy p {
+  margin: 8px 0 0;
+  color: var(--co-gray-600);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 640px;
+}
+
+.storefront-hero-chips {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.storefront-hero-progress {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storefront-hero-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.storefront-hero-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  transition: width 0.28s ease;
+}
+
+.storefront-hero-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.storefront-hero-progress-meta strong {
+  color: var(--co-admin-text);
+  font-size: 14px;
+}
+
+.storefront-hero-progress-meta span {
+  color: var(--co-gray-600);
+  font-size: 12px;
+}
+
+.storefront-hero-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.storefront-section-panel {
+  padding: 16px;
+}
+
+.storefront-section-panel .admin-panel-head {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--co-gray-200);
+  gap: 10px;
+}
+
+.storefront-section-panel .admin-panel-head h2 {
+  font-size: 17px;
+}
+
+.storefront-section-panel .form-field span {
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.storefront-section-panel .form-field input,
+.storefront-section-panel .form-field textarea {
+  border-color: #dbe5f1;
+}
+
+.storefront-section-panel .form-field input:focus,
+.storefront-section-panel .form-field textarea:focus {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+}
+
+.admin-left .storefront-section-panel:nth-of-type(1) {
+  animation-delay: 0.04s;
+}
+
+.admin-left .storefront-section-panel:nth-of-type(2) {
+  animation-delay: 0.08s;
+}
+
+.admin-left .storefront-section-panel:nth-of-type(3) {
+  animation-delay: 0.12s;
+}
+
+.admin-right .storefront-section-panel:nth-of-type(1) {
+  animation-delay: 0.06s;
+}
+
+.admin-right .storefront-section-panel:nth-of-type(2) {
+  animation-delay: 0.14s;
+}
+
+.storefront-flow-list {
+  gap: 10px;
+}
+
+.storefront-flow-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.storefront-flow-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.storefront-flow-content {
+  min-width: 0;
+}
+
+.storefront-flow-content p {
+  margin: 0;
+}
+
+.storefront-flow-content .admin-muted {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.storefront-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.storefront-open-link.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .vendor-store-preview {
   border: 1px solid var(--co-gray-200);
   border-radius: 18px;
@@ -1406,14 +1602,107 @@
   font-size: 14px;
 }
 
-.vendor-inline-btn,
-.vendor-inline-link {
-  padding: 7px 12px;
-  min-height: 34px;
+.storefront-business-alert {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.storefront-check-row {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.storefront-check-row + .storefront-check-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--co-gray-200);
+}
+
+.storefront-check-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.storefront-check-content .admin-muted {
   font-size: 12px;
+  line-height: 1.45;
+}
+
+.storefront-check-pill {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.storefront-readiness {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.storefront-readiness.success {
+  border-color: #bbf7d0;
+  background: #ecfdf3;
+  color: #166534;
+}
+
+.storefront-readiness.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.storefront-hero-panel,
+.storefront-section-panel {
+  animation: storefront-rise-in 0.34s ease both;
+}
+
+@keyframes storefront-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storefront-hero-panel,
+  .storefront-section-panel {
+    animation: none;
+  }
+
+  .storefront-hero-progress-track span {
+    transition: none;
+  }
 }
 
 @media (max-width: 1080px) {
+  .admin-panels.storefront-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .storefront-hero-head {
+    flex-direction: column;
+  }
+
+  .storefront-hero-chips {
+    justify-content: flex-start;
+  }
+
   .admin-table-row.vendor-products {
     grid-template-columns:
       40px
@@ -1531,6 +1820,10 @@
 
   .vendor-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .storefront-hero-actions {
+    align-items: flex-start;
   }
   
   .vendor-analytics-product {
