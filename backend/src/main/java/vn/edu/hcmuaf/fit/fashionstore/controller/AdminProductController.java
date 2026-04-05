@@ -55,10 +55,11 @@ public class AdminProductController {
     public ResponseEntity<AdminProductModerationResponse> toggleStatus(
             @PathVariable UUID id,
             @RequestParam(required = false) Product.ApprovalStatus targetStatus,
+            @RequestParam(required = false) String reason,
             Authentication authentication
     ) {
         String adminEmail = authentication != null ? authentication.getName() : null;
-        return ResponseEntity.ok(adminProductService.toggleApprovalStatus(id, targetStatus, adminEmail));
+        return ResponseEntity.ok(adminProductService.toggleApprovalStatus(id, targetStatus, adminEmail, reason));
     }
 
     @PostMapping("/{id}/reject")

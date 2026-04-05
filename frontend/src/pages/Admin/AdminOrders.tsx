@@ -353,10 +353,10 @@ const AdminOrders = () => {
                 <div role="columnheader">ORDER CODE</div>
                 <div role="columnheader">Khách hàng</div>
                 <div role="columnheader">Sản phẩm</div>
-                <div role="columnheader" className="text-center">GMV</div>
+                <div role="columnheader" className="orders-col-gmv">GMV</div>
                 <div role="columnheader">Thanh toán</div>
                 <div role="columnheader">Ngày tạo</div>
-                <div role="columnheader" className="text-right pr-12">Hành động</div>
+                  <div role="columnheader" className="orders-col-actions">Hành động</div>
               </div>
 
               {pagedOrders.map((order) => (
@@ -400,7 +400,7 @@ const AdminOrders = () => {
                     </span>
                   </div>
                   <div role="cell" className="admin-muted order-date">{new Date(order.date).toLocaleDateString('vi-VN')}</div>
-                  <div role="cell" className="admin-actions" onClick={(event) => event.stopPropagation()}>
+                  <div role="cell" className="admin-actions orders-actions" onClick={(event) => event.stopPropagation()}>
                     <Link
                       to={`/admin/orders/${resolveDetailRouteKey(order.code, order.id)}`}
                       className="admin-icon-btn subtle"

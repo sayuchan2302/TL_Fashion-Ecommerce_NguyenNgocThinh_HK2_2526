@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import './Categories.css';
@@ -103,17 +103,12 @@ const Categories = ({
     () => (categoryTabs && categoryTabs.length > 0 ? categoryTabs : fallbackCategoryTabs),
     [categoryTabs],
   );
-  const [activeTab, setActiveTab] = useState<string>(tabs[0]?.id || 'nam');
+  const [selectedTab, setSelectedTab] = useState<string>(tabs[0]?.id || 'nam');
+  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : (tabs[0]?.id || 'nam');
   const currentTab = tabs.find((tab) => tab.id === activeTab) || tabs[0];
   const currentData = currentTab?.items || [];
   const visibleStores = featuredStores.length > 0 ? featuredStores : featuredStoresFallback;
   const toCategoryLink = (slug: string) => `/category/${encodeURIComponent(slug)}`;
-
-  useEffect(() => {
-    if (!tabs.some((tab) => tab.id === activeTab)) {
-      setActiveTab(tabs[0]?.id || 'nam');
-    }
-  }, [activeTab, tabs]);
 
   return (
     <section className="categories-section container">
@@ -122,7 +117,7 @@ const Categories = ({
           <button
             key={tab.id}
             className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => setSelectedTab(tab.id)}
           >
             {tab.label}
           </button>

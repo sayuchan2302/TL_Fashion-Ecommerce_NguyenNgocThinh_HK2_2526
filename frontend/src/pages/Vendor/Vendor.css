@@ -1091,17 +1091,20 @@
 }
 
 .vendor-admin-product-copy .admin-bold,
-.vendor-admin-category span {
+.vendor-admin-truncate {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vendor-admin-category {
+  min-width: 0;
+}
+
+.vendor-admin-category-badge {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--co-gray-600);
+  max-width: 100%;
+  vertical-align: middle;
   min-width: 0;
 }
 

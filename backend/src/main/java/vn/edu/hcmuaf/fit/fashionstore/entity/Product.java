@@ -73,7 +73,7 @@ public class Product extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", length = 20)
     @Builder.Default
-    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
+    private ApprovalStatus approvalStatus = ApprovalStatus.APPROVED;
 
     @Column(name = "is_featured")
     @Builder.Default

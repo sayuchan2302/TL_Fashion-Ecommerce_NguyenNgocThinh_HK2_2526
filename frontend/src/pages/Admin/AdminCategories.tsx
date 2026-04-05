@@ -69,7 +69,7 @@ const AdminCategories = () => {
     try {
       const data = await adminCategoryService.getAll();
       setCategories(data);
-      setExpandedIds(new Set(data.filter((item) => !item.parentId).map((item) => item.id)));
+      setExpandedIds(new Set());
       if (data.length > 0 && !selectedId && draftMode === 'view') {
         setSelectedId(data[0].id);
       }
@@ -367,34 +367,6 @@ const AdminCategories = () => {
     }
   };
 
-  const duplicateCategory = async (categoryId: string) => {
-    const source = byId.get(categoryId);
-    if (!source) return;
-    const siblings = childMap.get(source.parentId || '__root__') || [];
-    
-    try {
-        const clone = await adminCategoryService.create({
-            name: `${source.name} bản sao`,
-            slug: `${source.slug}-${Date.now().toString().slice(-4)}`,
-            parentId: source.parentId,
-            order: siblings.length + 1,
-            status: source.status,
-            showOnMenu: source.status === 'hidden' ? false : source.showOnMenu,
-            image: source.image,
-            description: source.description,
-        });
-
-        setCategories((prev) => [...prev, clone]);
-        setSelectedId(clone.id);
-        if (clone.parentId) {
-          setExpandedIds((prev) => new Set(prev).add(clone.parentId as string));
-        }
-        pushToast('Đã nhân bản danh mục.');
-    } catch {
-        pushToast('Lỗi nhân bản danh mục.');
-    }
-  };
-
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -558,7 +530,6 @@ const AdminCategories = () => {
               <div className="category-detail-actions">
                 <button className="admin-primary-btn" onClick={() => openEditor(selectedCategory, 'edit')}><Pencil size={14} />Chỉnh sửa</button>
                 <button className="admin-ghost-btn" onClick={() => openCreateChild(selectedCategory.id)}><FolderPlus size={14} />Thêm danh mục con</button>
-                <button className="admin-ghost-btn" onClick={() => duplicateCategory(selectedCategory.id)}><Plus size={14} />Nhân bản</button>
                 <button className={`admin-ghost-btn ${selectedCategory.status === 'visible' ? '' : 'danger'}`} onClick={() => toggleVisibility(selectedCategory.id)}>{selectedCategory.status === 'visible' ? <EyeOff size={14} /> : <Eye size={14} />}{selectedCategory.status === 'visible' ? 'Ẩn danh mục' : 'Hiện danh mục'}</button>
                 <button className="admin-ghost-btn danger" onClick={() => requestDelete(selectedCategory.id)}><Trash2 size={14} />Xóa</button>
               </div>

@@ -1,6 +1,6 @@
 import { apiRequest } from '../../services/apiClient';
 
-export type ProductApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BANNED';
+export type ProductApprovalStatus = 'APPROVED' | 'BANNED';
 
 export interface AdminModerationProduct {
   id: string;
@@ -64,25 +64,28 @@ const toQueryString = (filters: ProductModerationFilters): string => {
   return params.toString();
 };
 
-const mapProduct = (item: Partial<AdminModerationProduct>): AdminModerationProduct => ({
-  id: String(item.id || ''),
-  productCode: item.productCode || '',
-  name: item.name || 'Unnamed product',
-  thumbnail: item.thumbnail || '',
-  storeId: item.storeId,
-  storeName: item.storeName || 'Unknown store',
-  categoryId: item.categoryId,
-  categoryName: item.categoryName || 'Uncategorized',
-  price: Number(item.price || 0),
-  sales: Number(item.sales || 0),
-  stock: Number(item.stock || 0),
-  productStatus: item.productStatus || 'DRAFT',
-  approvalStatus: (item.approvalStatus as ProductApprovalStatus) || 'PENDING',
-  description: item.description || '',
-  images: Array.isArray(item.images) ? item.images.filter(Boolean) : [],
-  createdAt: item.createdAt || new Date().toISOString(),
-  updatedAt: item.updatedAt || new Date().toISOString(),
-});
+const mapProduct = (item: Partial<AdminModerationProduct>): AdminModerationProduct => {
+  const normalizedApprovalStatus = String(item.approvalStatus || '').toUpperCase();
+  return {
+    id: String(item.id || ''),
+    productCode: item.productCode || '',
+    name: item.name || 'Unnamed product',
+    thumbnail: item.thumbnail || '',
+    storeId: item.storeId,
+    storeName: item.storeName || 'Unknown store',
+    categoryId: item.categoryId,
+    categoryName: item.categoryName || 'Uncategorized',
+    price: Number(item.price || 0),
+    sales: Number(item.sales || 0),
+    stock: Number(item.stock || 0),
+    productStatus: item.productStatus || 'DRAFT',
+    approvalStatus: normalizedApprovalStatus === 'BANNED' ? 'BANNED' : 'APPROVED',
+    description: item.description || '',
+    images: Array.isArray(item.images) ? item.images.filter(Boolean) : [],
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
+};
 
 export const listModerationProducts = async (
   filters: ProductModerationFilters,
@@ -106,38 +109,16 @@ export const listModerationProducts = async (
 export const toggleProductApproval = async (
   productId: string,
   targetStatus?: 'APPROVED' | 'BANNED',
+  reason?: string,
 ): Promise<AdminModerationProduct> => {
-  const query = targetStatus ? `?targetStatus=${targetStatus}` : '';
+  const params = new URLSearchParams();
+  if (targetStatus) params.set('targetStatus', targetStatus);
+  if (reason && reason.trim()) params.set('reason', reason.trim());
+  const query = params.size > 0 ? `?${params.toString()}` : '';
   const response = await apiRequest<Partial<AdminModerationProduct>>(
     `/api/admin/products/${productId}/status${query}`,
     { method: 'PATCH' },
     { auth: true },
   );
   return mapProduct(response);
-};
-
-export const rejectProductApproval = async (
-  productId: string,
-  reason: string,
-): Promise<AdminModerationProduct> => {
-  const response = await apiRequest<Partial<AdminModerationProduct>>(
-    `/api/admin/products/${productId}/reject`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    },
-    { auth: true },
-  );
-  return mapProduct(response);
-};
-
-export const bulkApproveProducts = async (productIds: string[]): Promise<{ requested: number; updated: number }> => {
-  return apiRequest<{ requested: number; updated: number }>(
-    '/api/admin/products/bulk-approve',
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ productIds }),
-    },
-    { auth: true },
-  );
 };

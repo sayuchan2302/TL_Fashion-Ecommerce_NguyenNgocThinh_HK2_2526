@@ -43,7 +43,18 @@ public final class ProductModerationSpecification {
             }
 
             if (approvalStatus != null) {
-                predicates.add(cb.equal(root.get("approvalStatus"), approvalStatus));
+                if (approvalStatus == Product.ApprovalStatus.BANNED) {
+                    predicates.add(cb.equal(root.get("approvalStatus"), Product.ApprovalStatus.BANNED));
+                } else if (approvalStatus == Product.ApprovalStatus.APPROVED) {
+                    predicates.add(
+                            cb.or(
+                                    cb.isNull(root.get("approvalStatus")),
+                                    cb.notEqual(root.get("approvalStatus"), Product.ApprovalStatus.BANNED)
+                            )
+                    );
+                } else {
+                    predicates.add(cb.equal(root.get("approvalStatus"), approvalStatus));
+                }
             }
 
             Expression<BigDecimal> effectivePriceExpr = cb.<BigDecimal>selectCase()

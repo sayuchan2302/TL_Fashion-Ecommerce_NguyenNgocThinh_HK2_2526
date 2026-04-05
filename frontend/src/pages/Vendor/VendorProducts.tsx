@@ -1,7 +1,7 @@
 import './Vendor.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, FolderTree, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import VendorLayout from './VendorLayout';
 import { formatCurrency } from '../../services/commissionService';
@@ -793,8 +793,9 @@ const VendorProducts = () => {
                       </div>
                     </div>
                     <div role="cell" className="vendor-admin-category">
-                      <FolderTree size={14} />
-                      <span>{product.category}</span>
+                      <span className="badge vendor-admin-category-badge vendor-admin-truncate">
+                        {product.category}
+                      </span>
                     </div>
                     <div role="cell" className="admin-bold">{formatCurrency(product.price)}</div>
                     <div role="cell">

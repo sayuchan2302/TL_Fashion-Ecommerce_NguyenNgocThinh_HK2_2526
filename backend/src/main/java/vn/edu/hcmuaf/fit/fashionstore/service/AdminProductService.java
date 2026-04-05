@@ -32,6 +32,7 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.specification.ProductModerationSpecification;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -97,7 +98,8 @@ public class AdminProductService {
     public AdminProductModerationResponse toggleApprovalStatus(
             UUID productId,
             Product.ApprovalStatus targetStatus,
-            String adminEmail
+            String adminEmail,
+            String reason
     ) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
@@ -127,8 +129,12 @@ public class AdminProductService {
                 ? ProductAuditLog.Action.APPROVED
                 : ProductAuditLog.Action.BANNED;
 
-        String reason = "Status transitioned from " + currentStatus + " to " + nextStatus;
-        logAudit(product.getId(), resolveAdminId(adminEmail), action, reason);
+        String normalizedReason = reason == null ? "" : reason.trim();
+        String auditReason = hasText(normalizedReason)
+                ? normalizedReason
+                : "Status transitioned from " + currentStatus + " to " + nextStatus;
+        logAudit(product.getId(), resolveAdminId(adminEmail), action, auditReason);
+        notifyVendorOnGovernanceAction(product, nextStatus, normalizedReason);
 
         String storeName = resolveStoreName(product.getStoreId());
         long sales = resolveDeliveredSales(List.of(product)).getOrDefault(product.getId(), 0L);
@@ -145,16 +151,16 @@ public class AdminProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
 
-        product.setApprovalStatus(Product.ApprovalStatus.REJECTED);
+        product.setApprovalStatus(Product.ApprovalStatus.BANNED);
         productRepository.save(product);
 
         logAudit(
                 product.getId(),
                 resolveAdminId(adminEmail),
-                ProductAuditLog.Action.REJECTED,
+                ProductAuditLog.Action.BANNED,
                 normalizedReason
         );
-        notifyVendorOnReject(product, normalizedReason);
+        notifyVendorOnGovernanceAction(product, Product.ApprovalStatus.BANNED, normalizedReason);
 
         String storeName = resolveStoreName(product.getStoreId());
         long sales = resolveDeliveredSales(List.of(product)).getOrDefault(product.getId(), 0L);
@@ -281,7 +287,7 @@ public class AdminProductService {
                 .sales(soldCount)
                 .stock(product.getStockQuantity() == null ? 0 : product.getStockQuantity())
                 .productStatus(product.getStatus())
-                .approvalStatus(effectiveApprovalStatus(product))
+                .approvalStatus(toGovernanceStatus(product))
                 .description(product.getDescription())
                 .images(images)
                 .createdAt(product.getCreatedAt())
@@ -406,7 +412,7 @@ public class AdminProductService {
         productAuditLogRepository.save(log);
     }
 
-    private void notifyVendorOnReject(Product product, String reason) {
+    private void notifyVendorOnGovernanceAction(Product product, Product.ApprovalStatus status, String reason) {
         UUID storeId = product.getStoreId();
         if (storeId == null) {
             return;
@@ -421,13 +427,24 @@ public class AdminProductService {
             Notification notification = Notification.builder()
                     .user(owner)
                     .type(Notification.NotificationType.SYSTEM)
-                    .title("Product rejected")
-                    .message("Product " + resolveProductCode(product) + " was rejected: " + reason)
-                    .link("/vendor/products?approvalStatus=REJECTED")
+                    .title(status == Product.ApprovalStatus.BANNED ? "Sản phẩm bị chặn" : "Sản phẩm được gỡ chặn")
+                    .message(buildGovernanceMessage(status, product, reason))
+                    .link("/vendor/products")
                     .isRead(false)
                     .build();
             notificationRepository.save(notification);
         });
+    }
+
+    private String buildGovernanceMessage(Product.ApprovalStatus status, Product product, String reason) {
+        String code = resolveProductCode(product);
+        if (status == Product.ApprovalStatus.BANNED) {
+            if (hasText(reason)) {
+                return "Sản phẩm " + code + " đã bị chặn do vi phạm: " + reason;
+            }
+            return "Sản phẩm " + code + " đã bị chặn do vi phạm chính sách.";
+        }
+        return "Sản phẩm " + code + " đã được gỡ chặn và hiển thị lại.";
     }
 
     private UUID resolveAdminId(String adminEmail) {
@@ -443,11 +460,35 @@ public class AdminProductService {
         return product.getApprovalStatus() != null ? product.getApprovalStatus() : Product.ApprovalStatus.APPROVED;
     }
 
+    private Product.ApprovalStatus toGovernanceStatus(Product product) {
+        return effectiveApprovalStatus(product) == Product.ApprovalStatus.BANNED
+                ? Product.ApprovalStatus.BANNED
+                : Product.ApprovalStatus.APPROVED;
+    }
+
     private String resolveProductCode(Product product) {
         if (hasText(product.getSku())) {
             return product.getSku().trim();
         }
-        return product.getId() != null ? product.getId().toString() : "";
+        if (hasText(product.getSlug())) {
+            return product.getSlug().trim();
+        }
+        return fallbackSlugFromName(product.getName());
+    }
+
+    private String fallbackSlugFromName(String name) {
+        if (!hasText(name)) {
+            return "san-pham";
+        }
+
+        String normalized = Normalizer.normalize(name.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .replace('đ', 'd')
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+
+        return hasText(normalized) ? normalized : "san-pham";
     }
 
     private int resolveTotalStock(Product product) {

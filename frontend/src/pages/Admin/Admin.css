@@ -926,24 +926,40 @@ body {
 .admin-table-row.orders {
   grid-template-columns:
     44px
-    minmax(120px, 0.9fr)
-    minmax(220px, 1.6fr)
-    minmax(210px, 1.55fr)
-    minmax(120px, 0.9fr)
-    minmax(148px, 1.02fr)
-    minmax(118px, 0.9fr)
-    minmax(124px, 0.92fr);
-  min-width: 920px;
+    minmax(138px, 1.05fr)
+    minmax(190px, 1.4fr)
+    minmax(240px, 1.75fr)
+    minmax(104px, 0.8fr)
+    minmax(126px, 0.9fr)
+    minmax(94px, 0.68fr)
+    minmax(96px, 0.7fr);
+  min-width: 980px;
 }
 
 .admin-table-row.orders .admin-actions {
-  justify-content: flex-end;
-  justify-self: end;
+  justify-content: flex-start;
+  justify-self: start;
 }
 
 .admin-table-row.orders .order-total {
-  justify-self: center;
-  text-align: center;
+  justify-self: start;
+  text-align: left;
+}
+
+.orders-col-actions {
+  text-align: left;
+  justify-self: start;
+}
+
+.orders-col-gmv {
+  text-align: left;
+  justify-self: start;
+}
+
+.orders-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  gap: 8px;
 }
 
 .admin-table-row.wide .admin-actions {
@@ -1593,6 +1609,8 @@ body {
 .order-date {
   white-space: nowrap;
   font-weight: 600;
+  text-align: left;
+  justify-self: start;
 }
 
 .admin-status-group {
@@ -4363,7 +4381,16 @@ textarea:focus-visible {
 }
 
 .moderation-actions {
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  justify-content: center;
+  justify-self: center;
+  gap: 8px;
+}
+
+.moderation-col-actions {
+  text-align: center;
+  justify-self: center;
 }
 
 .moderation-icon-approve {
@@ -4371,7 +4398,7 @@ textarea:focus-visible {
 }
 
 .moderation-icon-ban {
-  color: #b91c1c;
+  color: #dc2626;
 }
 
 .moderation-review-drawer {
@@ -4398,6 +4425,34 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.moderation-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.moderation-readonly-item {
+  border: 1px solid var(--co-gray-200);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.moderation-readonly-item strong {
+  color: var(--co-admin-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moderation-readonly-item-wide {
+  grid-column: span 2;
 }
 
 .moderation-review-panel {
@@ -4454,11 +4509,6 @@ textarea:focus-visible {
   border-color: #a7f3d0;
 }
 
-.moderation-btn-reject {
-  color: #a16207;
-  border-color: #fde68a;
-}
-
 .moderation-btn-ban {
   color: #b91c1c;
   border-color: #fecaca;
@@ -4500,5 +4550,13 @@ textarea:focus-visible {
 
   .moderation-review-grid {
     grid-template-columns: 1fr;
+  }
+
+  .moderation-readonly-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .moderation-readonly-item-wide {
+    grid-column: auto;
   }
 }

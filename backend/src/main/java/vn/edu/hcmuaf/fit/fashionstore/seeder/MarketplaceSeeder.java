@@ -620,11 +620,7 @@ public class MarketplaceSeeder implements ApplicationRunner {
         product.setSalePrice(salePrice);
         product.setGender(gender);
         product.setStatus(status);
-        boolean isPublicReady =
-                status == Product.ProductStatus.ACTIVE
-                        && store.getApprovalStatus() == Store.ApprovalStatus.APPROVED
-                        && store.getStatus() == Store.StoreStatus.ACTIVE;
-        product.setApprovalStatus(isPublicReady ? Product.ApprovalStatus.APPROVED : Product.ApprovalStatus.PENDING);
+        product.setApprovalStatus(Product.ApprovalStatus.APPROVED);
         product.setIsFeatured(featured);
         product.setMaterial(material);
         product.setFit(fit);

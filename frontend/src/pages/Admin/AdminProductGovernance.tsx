@@ -2,16 +2,14 @@ import './Admin.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Eye, ShieldBan } from 'lucide-react';
+import { Ban, CheckCircle2, Eye } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { AdminStateBlock } from './AdminStateBlocks';
 import { PanelStatsGrid, PanelTableFooter, PanelTabs } from '../../components/Panel/PanelPrimitives';
 import { useAdminToast } from './useAdminToast';
 import ProductReviewModal from './ProductReviewModal';
 import {
-  bulkApproveProducts,
   listModerationProducts,
-  rejectProductApproval,
   toggleProductApproval,
   type AdminModerationProduct,
   type ProductApprovalStatus,
@@ -24,10 +22,8 @@ const PAGE_SIZE = 12;
 
 const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [
   { key: 'ALL', label: 'Tất cả' },
-  { key: 'PENDING', label: 'Chờ duyệt' },
-  { key: 'APPROVED', label: 'Đã duyệt' },
-  { key: 'REJECTED', label: 'Từ chối' },
-  { key: 'BANNED', label: 'Bị chặn' },
+  { key: 'APPROVED', label: 'Đang hiển thị' },
+  { key: 'BANNED', label: 'Đã chặn' },
 ];
 
 const formatCurrency = (value: number) =>
@@ -46,18 +42,12 @@ const formatDate = (value?: string) => {
 
 const statusLabel: Record<StatusFilter, string> = {
   ALL: 'Tất cả',
-  PENDING: 'Chờ duyệt',
-  APPROVED: 'Đã duyệt',
-  REJECTED: 'Từ chối',
-  BANNED: 'Bị chặn',
+  APPROVED: 'Đang hiển thị',
+  BANNED: 'Đã chặn',
 };
 
-const statusPillClass = (status: ProductApprovalStatus) => {
-  if (status === 'APPROVED') return 'admin-pill success';
-  if (status === 'PENDING') return 'admin-pill pending';
-  if (status === 'REJECTED') return 'admin-pill warning';
-  return 'admin-pill danger';
-};
+const statusPillClass = (status: ProductApprovalStatus) =>
+  status === 'BANNED' ? 'admin-pill danger' : 'admin-pill success';
 
 const AdminProductGovernance = () => {
   const { toast, pushToast } = useAdminToast(2200);
@@ -71,15 +61,13 @@ const AdminProductGovernance = () => {
   const [totalElements, setTotalElements] = useState(0);
   const [tabCounts, setTabCounts] = useState<Record<StatusFilter, number>>({
     ALL: 0,
-    PENDING: 0,
     APPROVED: 0,
-    REJECTED: 0,
     BANNED: 0,
   });
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reviewingProduct, setReviewingProduct] = useState<AdminModerationProduct | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('PENDING');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const baseFilterParams = useMemo(
     () => ({
@@ -116,7 +104,7 @@ const AdminProductGovernance = () => {
       setRows([]);
       setTotalPages(1);
       setTotalElements(0);
-      setLoadError(getUiErrorMessage(error, 'Không tải được danh sách kiểm duyệt sản phẩm.'));
+      setLoadError(getUiErrorMessage(error, 'Không tải được danh sách sản phẩm vendor.'));
     } finally {
       setIsLoading(false);
     }
@@ -124,19 +112,15 @@ const AdminProductGovernance = () => {
 
   const loadStatusCounts = useCallback(async () => {
     try {
-      const [allRes, pendingRes, approvedRes, rejectedRes, bannedRes] = await Promise.all([
+      const [allRes, approvedRes, bannedRes] = await Promise.all([
         listModerationProducts({ ...baseFilterParams, page: 0, size: 1, status: 'ALL' }),
-        listModerationProducts({ ...baseFilterParams, page: 0, size: 1, status: 'PENDING' }),
         listModerationProducts({ ...baseFilterParams, page: 0, size: 1, status: 'APPROVED' }),
-        listModerationProducts({ ...baseFilterParams, page: 0, size: 1, status: 'REJECTED' }),
         listModerationProducts({ ...baseFilterParams, page: 0, size: 1, status: 'BANNED' }),
       ]);
 
       setTabCounts({
         ALL: allRes.totalElements,
-        PENDING: pendingRes.totalElements,
         APPROVED: approvedRes.totalElements,
-        REJECTED: rejectedRes.totalElements,
         BANNED: bannedRes.totalElements,
       });
     } catch {
@@ -152,45 +136,31 @@ const AdminProductGovernance = () => {
     void loadStatusCounts();
   }, [loadStatusCounts]);
 
-  const selectedRows = useMemo(() => rows.filter((item) => selected.has(item.id)), [rows, selected]);
-  const selectedIds = useMemo(() => selectedRows.map((item) => item.id), [selectedRows]);
-
-  const toggleAll = (checked: boolean) => {
-    setSelected(checked ? new Set(rows.map((item) => item.id)) : new Set());
-  };
-
-  const toggleOne = (id: string, checked: boolean) => {
-    const next = new Set(selected);
-    if (checked) next.add(id);
-    else next.delete(id);
-    setSelected(next);
-  };
-
   const refreshData = async (message?: string) => {
     await Promise.all([loadProducts(), loadStatusCounts()]);
     if (message) pushToast(message);
   };
 
-  const handleApprove = async (product: AdminModerationProduct) => {
+  const handleUnblock = async (product: AdminModerationProduct) => {
     try {
       setActionLoading(true);
       if (product.approvalStatus !== 'APPROVED') {
         await toggleProductApproval(product.id, 'APPROVED');
       }
-      await refreshData(`Đã duyệt ${product.productCode}.`);
+      await refreshData(`Đã gỡ chặn ${product.productCode}.`);
       setReviewingProduct(null);
     } catch (error: unknown) {
-      pushToast(getUiErrorMessage(error, 'Không thể duyệt sản phẩm.'));
+      pushToast(getUiErrorMessage(error, 'Không thể gỡ chặn sản phẩm.'));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleBan = async (product: AdminModerationProduct) => {
+  const handleBlock = async (product: AdminModerationProduct, reason: string) => {
     try {
       setActionLoading(true);
       if (product.approvalStatus !== 'BANNED') {
-        await toggleProductApproval(product.id, 'BANNED');
+        await toggleProductApproval(product.id, 'BANNED', reason);
       }
       await refreshData(`Đã chặn ${product.productCode}.`);
       setReviewingProduct(null);
@@ -201,39 +171,8 @@ const AdminProductGovernance = () => {
     }
   };
 
-  const handleReject = async (product: AdminModerationProduct, reason: string) => {
-    try {
-      setActionLoading(true);
-      await rejectProductApproval(product.id, reason);
-      await refreshData(`Đã từ chối ${product.productCode}.`);
-      setReviewingProduct(null);
-    } catch (error: unknown) {
-      pushToast(getUiErrorMessage(error, 'Không thể từ chối sản phẩm.'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleBulkApprove = async () => {
-    if (selectedIds.length === 0) {
-      pushToast('Vui lòng chọn sản phẩm cần duyệt.');
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-      const result = await bulkApproveProducts(selectedIds);
-      setSelected(new Set());
-      await refreshData(`Đã duyệt ${result.updated}/${result.requested} sản phẩm.`);
-    } catch (error: unknown) {
-      pushToast(getUiErrorMessage(error, 'Không thể duyệt hàng loạt.'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   return (
-    <AdminLayout title="Kiểm duyệt sản phẩm" breadcrumbs={['Gian hàng', 'Kiểm duyệt sản phẩm']}>
+    <AdminLayout title="Quản lý sản phẩm" breadcrumbs={['Gian hàng', 'Quản lý sản phẩm']}>
       <PanelStatsGrid
         items={[
           {
@@ -247,21 +186,10 @@ const AdminProductGovernance = () => {
             },
           },
           {
-            key: 'pending',
-            label: 'Chờ duyệt',
-            value: tabCounts.PENDING,
-            sub: 'Đợi admin kiểm duyệt',
-            tone: tabCounts.PENDING > 0 ? 'warning' : '',
-            onClick: () => {
-              setStatusFilter('PENDING');
-              setPage(0);
-            },
-          },
-          {
             key: 'approved',
-            label: 'Đã duyệt',
+            label: 'Đang hiển thị',
             value: tabCounts.APPROVED,
-            sub: 'Được phép hiển thị',
+            sub: 'Được phép hiển thị trên sàn',
             tone: 'success',
             onClick: () => {
               setStatusFilter('APPROVED');
@@ -270,9 +198,9 @@ const AdminProductGovernance = () => {
           },
           {
             key: 'banned',
-            label: 'Bị chặn',
+            label: 'Đã chặn',
             value: tabCounts.BANNED,
-            sub: 'Vi phạm chính sách',
+            sub: 'Vi phạm chính sách, đang bị ẩn',
             tone: tabCounts.BANNED > 0 ? 'danger' : '',
             onClick: () => {
               setStatusFilter('BANNED');
@@ -299,23 +227,18 @@ const AdminProductGovernance = () => {
       <section className="admin-panels single">
         <div className="admin-panel">
           <div className="admin-panel-head">
-            <h2>Danh sách sản phẩm kiểm duyệt</h2>
+            <h2>Danh sách sản phẩm vendor</h2>
             <div className="admin-actions">
-              {selected.size > 0 ? (
-                <button className="admin-primary-btn" onClick={() => void handleBulkApprove()} disabled={actionLoading}>
-                  <CheckCircle2 size={16} />
-                  Duyệt đã chọn ({selected.size})
-                </button>
-              ) : (
-                <span className="admin-muted moderation-total-text">Tổng {totalElements} sản phẩm</span>
-              )}
+              <span className="admin-muted moderation-total-text">
+                {selected.size > 0 ? `Đã chọn ${selected.size}` : `Tổng ${totalElements} sản phẩm`}
+              </span>
             </div>
           </div>
 
           {isLoading ? (
             <AdminStateBlock
               type="empty"
-              title="Đang tải danh sách kiểm duyệt"
+              title="Đang tải dữ liệu sản phẩm"
               description="Hệ thống đang đồng bộ dữ liệu sản phẩm từ các gian hàng."
             />
           ) : loadError ? (
@@ -332,17 +255,19 @@ const AdminProductGovernance = () => {
             <AdminStateBlock
               type="empty"
               title="Không có sản phẩm trong trạng thái này"
-              description="Hiện chưa có sản phẩm cần xử lý theo tiêu chí đang chọn."
+              description="Hiện chưa có sản phẩm phù hợp với tiêu chí bạn đang chọn."
             />
           ) : (
             <>
-              <div className="admin-table moderation-table" role="table" aria-label="Danh sách kiểm duyệt sản phẩm">
+              <div className="admin-table moderation-table" role="table" aria-label="Danh sách sản phẩm vendor">
                 <div className="admin-table-row admin-table-head moderation-row" role="row">
                   <div role="columnheader">
                     <input
                       type="checkbox"
                       checked={selected.size === rows.length && rows.length > 0}
-                      onChange={(event) => toggleAll(event.target.checked)}
+                      onChange={(event) => {
+                        setSelected(event.target.checked ? new Set(rows.map((item) => item.id)) : new Set());
+                      }}
                       aria-label="Chọn tất cả"
                     />
                   </div>
@@ -352,7 +277,7 @@ const AdminProductGovernance = () => {
                   <div role="columnheader">Giá</div>
                   <div role="columnheader">Sales / Stock</div>
                   <div role="columnheader">Trạng thái</div>
-                  <div role="columnheader">Thao tác</div>
+                  <div role="columnheader" className="moderation-col-actions">Thao tác</div>
                 </div>
 
                 {rows.map((product) => (
@@ -361,11 +286,15 @@ const AdminProductGovernance = () => {
                       <input
                         type="checkbox"
                         checked={selected.has(product.id)}
-                        onChange={(event) => toggleOne(product.id, event.target.checked)}
+                        onChange={(event) => {
+                          const next = new Set(selected);
+                          if (event.target.checked) next.add(product.id);
+                          else next.delete(product.id);
+                          setSelected(next);
+                        }}
                         aria-label={`Chọn ${product.productCode}`}
                       />
                     </div>
-
                     <div role="cell" className="moderation-product-cell">
                       <img src={product.thumbnail || ''} alt={product.name} className="moderation-thumb" />
                       <div className="moderation-product-copy">
@@ -382,7 +311,7 @@ const AdminProductGovernance = () => {
                           <p className="admin-muted small">{formatDate(product.createdAt)}</p>
                         </>
                       ) : (
-                        <span className="admin-muted">No store</span>
+                        <span className="admin-muted">Không rõ</span>
                       )}
                     </div>
 
@@ -404,32 +333,33 @@ const AdminProductGovernance = () => {
                     <div role="cell" className="admin-actions moderation-actions">
                       <button
                         className="admin-icon-btn subtle"
-                        title="Xem kiểm duyệt"
+                        title="Xem chi tiết"
                         onClick={() => setReviewingProduct(product)}
                         disabled={actionLoading}
                       >
                         <Eye size={16} />
                       </button>
-                      <button
-                        className="admin-icon-btn subtle moderation-icon-approve"
-                        title="Duyệt"
-                        onClick={() => {
-                          void handleApprove(product);
-                        }}
-                        disabled={actionLoading}
-                      >
-                        <CheckCircle2 size={16} />
-                      </button>
-                      <button
-                        className="admin-icon-btn subtle moderation-icon-ban"
-                        title="Chặn"
-                        onClick={() => {
-                          void handleBan(product);
-                        }}
-                        disabled={actionLoading}
-                      >
-                        <ShieldBan size={16} />
-                      </button>
+                      {product.approvalStatus === 'BANNED' ? (
+                        <button
+                          className="admin-icon-btn subtle moderation-icon-approve"
+                          title="Gỡ chặn"
+                          onClick={() => {
+                            void handleUnblock(product);
+                          }}
+                          disabled={actionLoading}
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          className="admin-icon-btn subtle danger-icon moderation-icon-ban"
+                          title="Chặn sản phẩm"
+                          onClick={() => setReviewingProduct(product)}
+                          disabled={actionLoading}
+                        >
+                          <Ban size={16} />
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -449,12 +379,12 @@ const AdminProductGovernance = () => {
       </section>
 
       <ProductReviewModal
+        key={reviewingProduct?.id || 'no-product'}
         open={Boolean(reviewingProduct)}
         product={reviewingProduct}
         onClose={() => setReviewingProduct(null)}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        onBan={handleBan}
+        onBlock={handleBlock}
+        onUnblock={handleUnblock}
         loading={actionLoading}
       />
 

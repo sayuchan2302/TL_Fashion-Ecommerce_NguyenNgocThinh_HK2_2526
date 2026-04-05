@@ -38,7 +38,7 @@ const parseHighlightsFromDescription = (description?: string) => {
   }
 
   return source
-    .split(/[.;•\-]/)
+    .split(/[.;•-]/)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 8)
     .slice(0, 6);
