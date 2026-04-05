@@ -55,6 +55,7 @@ export interface MarketplaceHomeData {
 
 interface MarketplaceProductCardPayload {
   id: string;
+  slug?: string;
   productCode: string;
   name: string;
   image?: string;
@@ -121,9 +122,11 @@ const mapProductCard = (row: MarketplaceProductCardPayload): Product => {
   const price = toNumber(row.priceAmount ?? row.price, 0);
   const originalPrice = toNumber(row.originalPriceAmount ?? row.originalPrice, 0);
   const resolvedOriginalPrice = originalPrice > price ? originalPrice : undefined;
+  const routeKey = (row.slug || row.productCode || row.id || '').trim();
+  const normalizedRouteKey = routeKey || row.id;
 
   return {
-    id: row.id || row.productCode,
+    id: normalizedRouteKey,
     sku: row.productCode || row.id,
     name: row.name || 'Sản phẩm',
     category: 'Marketplace',

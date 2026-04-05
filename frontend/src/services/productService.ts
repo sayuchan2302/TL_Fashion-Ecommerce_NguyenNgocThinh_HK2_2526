@@ -175,6 +175,9 @@ const mapBackendProduct = (product: BackendProduct): Product => {
 
   const colors = Array.from(new Set(variants.map((variant) => variant.color).filter(Boolean)));
   const sortedImages = sortImages(product.images);
+  const imageUrls = sortedImages
+    .map((image) => (image?.url || '').trim())
+    .filter(Boolean);
   const storeInfo = product.storeId
     ? {
         storeId: product.storeId,
@@ -199,7 +202,8 @@ const mapBackendProduct = (product: BackendProduct): Product => {
     category: product.category?.name || 'Fashion',
     price: product.salePrice || product.basePrice || 0,
     originalPrice: product.basePrice || undefined,
-    image: sortedImages[0]?.url || '',
+    image: imageUrls[0] || '',
+    images: imageUrls,
     colors,
     stock: variants.reduce((sum, variant) => sum + (variant.stock || 0), 0),
     status: product.status || 'ACTIVE',

@@ -311,7 +311,6 @@
   font-size: 13px;
   color: var(--co-admin-text-muted);
 }
-
 /* ── Star Input ────────────────────────────────────────────── */
 .review-star-input {
   display: flex;

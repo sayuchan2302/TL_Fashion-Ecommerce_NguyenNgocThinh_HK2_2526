@@ -320,6 +320,7 @@ public class MarketplacePublicService {
 
         return MarketplaceProductCardResponse.builder()
                 .id(product.getId())
+                .slug(product.getSlug())
                 .productCode(resolveProductCode(product))
                 .name(product.getName())
                 .image(resolvePrimaryImage(product))

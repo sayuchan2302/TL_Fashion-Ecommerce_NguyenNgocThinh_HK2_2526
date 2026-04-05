@@ -16,6 +16,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MarketplaceProductCardResponse {
     private UUID id;
+    private String slug;
     private String productCode;
     private String name;
     private String image;

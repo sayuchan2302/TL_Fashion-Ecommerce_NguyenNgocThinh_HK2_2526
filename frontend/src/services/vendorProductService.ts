@@ -76,7 +76,7 @@ interface BackendProductRequest {
   stockQuantity?: number;
   imageUrl?: string;
   variants?: Array<{
-    sku: string;
+    sku?: string;
     color: string;
     size: string;
     stockQuantity: number;
@@ -123,7 +123,6 @@ export interface VendorProductCategory {
 
 export interface VendorProductUpsertInput {
   name: string;
-  sku: string;
   categoryId?: string;
   price: number;
   basePrice?: number;
@@ -152,7 +151,6 @@ export interface VendorProductVariant {
 }
 
 export interface VendorProductVariantInput {
-  sku: string;
   color: string;
   size: string;
   stockQuantity: number;
@@ -292,9 +290,9 @@ const toRequestPayload = (
   options?: { forceStatus?: 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'ARCHIVED' },
 ): BackendProductRequest => {
   const normalizedName = normalizeText(input.name);
-  const normalizedSku = normalizeText(input.sku).toUpperCase();
+  const timestamp = Date.now();
   const normalizedSlug =
-    normalizeText(input.slug) || slugify(`${normalizedName}-${normalizedSku}`) || `sp-${Date.now()}`;
+    normalizeText(input.slug) || slugify(`${normalizedName}-${timestamp}`) || `sp-${timestamp}`;
   const normalizedImage = normalizeText(input.image);
 
   return {
@@ -310,19 +308,16 @@ const toRequestPayload = (
     fit: normalizeText(input.fit) || undefined,
     gender: normalizeText(input.gender) || undefined,
     status: options?.forceStatus || (input.visible ? 'ACTIVE' : 'DRAFT'),
-    sku: normalizedSku || undefined,
     stockQuantity: Math.max(0, Number(input.stock || 0)),
     imageUrl: normalizedImage || undefined,
     variants: (input.variants || [])
       .map((variant) => ({
-        sku: normalizeText(variant.sku).toUpperCase(),
         color: normalizeText(variant.color) || 'Default',
         size: normalizeText(variant.size) || 'Default',
         stockQuantity: Math.max(0, Number(variant.stockQuantity || 0)),
         priceAdjustment: Number(variant.priceAdjustment || 0),
         isActive: variant.isActive !== false,
-      }))
-      .filter((variant) => variant.sku),
+      })),
   };
 };
 

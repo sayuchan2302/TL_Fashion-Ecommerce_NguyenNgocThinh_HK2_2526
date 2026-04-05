@@ -7,15 +7,16 @@ interface ProductInfoProps {
     name: string;
     price: number;
     originalPrice?: number;
-    rating?: number;
     sold?: number;
     colors?: string[];
     variants?: { size: string; color: string; price: number; stock: number }[];
   };
+  averageRating?: number | null;
+  reviewCount?: number;
   onVariantChange?: (color: string, size: string) => void;
 }
 
-const ProductInfo = ({ product, onVariantChange }: ProductInfoProps) => {
+const ProductInfo = ({ product, averageRating = null, reviewCount = 0, onVariantChange }: ProductInfoProps) => {
   const colorOptions = useMemo(() => product.colors || Array.from(new Set(product.variants?.map((v) => v.color) || [])), [product.colors, product.variants]);
   const sizeOptions = useMemo(() => Array.from(new Set(product.variants?.map((v) => v.size) || [])), [product.variants]);
   const [selectedColor, setSelectedColor] = useState(colorOptions[0] || '');
@@ -44,15 +45,25 @@ const ProductInfo = ({ product, onVariantChange }: ProductInfoProps) => {
       {/* Title & Reviews */}
       <h1 className="pdp-title">{product.name}</h1>
       <div className="pdp-meta">
-        <div className="pdp-rating">
-          <span className="rating-score">{product.rating ?? '4.8'}</span>
-          <Star size={14} fill="#FFD700" color="#FFD700" />
-          <span className="rating-count">(120 đánh giá)</span>
-        </div>
-        <span className="separator">|</span>
-        <div className="pdp-sold">
-          Đã bán {product.sold ? (product.sold > 1000 ? `${(product.sold / 1000).toFixed(1)}k` : product.sold) : '—'}
-        </div>
+        {reviewCount > 0 ? (
+          <div className="pdp-rating">
+            <span className="rating-score">{averageRating?.toFixed(1) || '0.0'}</span>
+            <Star size={14} fill="#FFD700" color="#FFD700" />
+            <span className="rating-count">({reviewCount} đánh giá)</span>
+          </div>
+        ) : (
+          <div className="pdp-rating">
+            <span className="rating-count">Chưa có đánh giá</span>
+          </div>
+        )}
+        {typeof product.sold === 'number' && (
+          <>
+            <span className="separator">|</span>
+            <div className="pdp-sold">
+              Đã bán {product.sold > 1000 ? `${(product.sold / 1000).toFixed(1)}k` : product.sold}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Price Block */}

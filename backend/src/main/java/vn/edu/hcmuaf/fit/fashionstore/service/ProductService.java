@@ -261,10 +261,6 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product name is required");
         }
 
-        if (!hasVariantPayload(request) && (request.getSku() == null || request.getSku().isBlank())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SKU is required");
-        }
-
         if (request.getCategoryId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is required");
         }
@@ -315,6 +311,7 @@ public class ProductService {
 
     @Transactional
     public VendorProductSummaryResponse createVendorProduct(ProductRequest request, UUID storeId) {
+        clearVendorProvidedSku(request);
         Product created = createForStore(request, storeId);
         return toVendorProductSummaryResponse(created);
     }
@@ -344,6 +341,7 @@ public class ProductService {
 
     @Transactional
     public VendorProductSummaryResponse updateVendorProduct(UUID id, UUID storeId, ProductRequest request) {
+        clearVendorProvidedSku(request);
         Product updated = updateForStore(id, storeId, request);
         return toVendorProductSummaryResponse(updated);
     }
@@ -449,9 +447,8 @@ public class ProductService {
 
             String normalizedSku = item.getSku() == null ? "" : item.getSku().trim().toUpperCase(Locale.ROOT);
             if (normalizedSku.isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variant SKU is required");
-            }
-            if (!seenSkus.add(normalizedSku)) {
+                normalizedSku = generateSystemSku(seenSkus);
+            } else if (!seenSkus.add(normalizedSku)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate SKU in variant matrix: " + normalizedSku);
             }
 
@@ -491,7 +488,7 @@ public class ProductService {
         if (variant == null) {
             String fallbackSku = sku != null && !sku.isBlank()
                     ? sku.trim().toUpperCase(Locale.ROOT)
-                    : "SKU-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+                    : generateSystemSku(new HashSet<>());
             ProductVariant newVariant = ProductVariant.builder()
                     .product(product)
                     .sku(fallbackSku)
@@ -507,6 +504,8 @@ public class ProductService {
 
         if (sku != null && !sku.isBlank()) {
             variant.setSku(sku.trim().toUpperCase(Locale.ROOT));
+        } else if (variant.getSku() == null || variant.getSku().isBlank()) {
+            variant.setSku(generateSystemSku(new HashSet<>()));
         }
         if (stockQuantity != null) {
             variant.setStockQuantity(Math.max(0, stockQuantity));
@@ -523,6 +522,39 @@ public class ProductService {
         if (variant.getIsActive() == null) {
             variant.setIsActive(true);
         }
+    }
+
+    private void clearVendorProvidedSku(ProductRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        request.setSku(null);
+        if (request.getVariants() == null) {
+            return;
+        }
+
+        for (ProductRequest.VariantRequest variant : request.getVariants()) {
+            if (variant == null) {
+                continue;
+            }
+            variant.setSku(null);
+        }
+    }
+
+    private String generateSystemSku(Set<String> reservedSkus) {
+        for (int attempt = 0; attempt < 32; attempt++) {
+            String candidate = "SKU-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+            if (reservedSkus.contains(candidate)) {
+                continue;
+            }
+            if (productVariantRepository.findBySku(candidate).isPresent()) {
+                continue;
+            }
+            reservedSkus.add(candidate);
+            return candidate;
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Unable to generate unique SKU");
     }
 
     // ─── Delete (With ownership validation) ────────────────────────────────────
