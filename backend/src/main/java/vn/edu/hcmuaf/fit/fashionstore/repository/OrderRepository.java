@@ -188,7 +188,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
      * Calculate total commission collected for a store
      */
     @Query("SELECT COALESCE(SUM(o.commissionFee), 0) FROM Order o WHERE o.storeId = :storeId AND o.status = 'DELIVERED'")
-    Double calculateCommissionByStoreId(@Param("storeId") UUID storeId);
+    BigDecimal calculateCommissionByStoreId(@Param("storeId") UUID storeId);
 
     long countByParentOrderIsNull();
 
@@ -336,4 +336,76 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             ORDER BY o.createdAt DESC, oi.createdAt DESC
             """)
     List<EligibleReviewItemProjection> findEligibleReviewItemsByUserId(@Param("userId") UUID userId);
+
+    // ─── Vendor Analytics ──────────────────────────────────────────────────────
+
+    interface DailySeriesProjection {
+        String getDate();
+        BigDecimal getRevenue();
+        Long getOrderCount();
+        BigDecimal getPayout();
+        BigDecimal getCommission();
+    }
+
+    interface PeriodSummaryProjection {
+        BigDecimal getTotalRevenue();
+        BigDecimal getTotalPayout();
+        BigDecimal getTotalCommission();
+        Long getOrderCount();
+        BigDecimal getAvgOrderValue();
+    }
+
+    @Query("""
+            SELECT DATE(o.createdAt) AS date,
+                   COALESCE(SUM(o.total), 0) AS revenue,
+                   COUNT(o.id) AS orderCount,
+                   COALESCE(SUM(o.vendorPayout), 0) AS payout,
+                   COALESCE(SUM(o.commissionFee), 0) AS commission
+            FROM Order o
+            WHERE o.storeId = :storeId
+              AND o.status = 'DELIVERED'
+              AND o.createdAt >= :fromDate
+              AND o.createdAt < :toDate
+            GROUP BY DATE(o.createdAt)
+            ORDER BY date ASC
+            """)
+    List<DailySeriesProjection> findDailySeriesByStoreBetween(
+            @Param("storeId") UUID storeId,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query("""
+            SELECT COALESCE(SUM(o.total), 0) AS totalRevenue,
+                   COALESCE(SUM(o.vendorPayout), 0) AS totalPayout,
+                   COALESCE(SUM(o.commissionFee), 0) AS totalCommission,
+                   COUNT(o.id) AS orderCount,
+                   CASE WHEN COUNT(o.id) > 0
+                        THEN COALESCE(SUM(o.total), 0) / COUNT(o.id)
+                        ELSE 0 END AS avgOrderValue
+            FROM Order o
+            WHERE o.storeId = :storeId
+              AND o.status = 'DELIVERED'
+              AND o.createdAt >= :fromDate
+              AND o.createdAt < :toDate
+            """)
+    List<PeriodSummaryProjection> findPeriodSummaryByStoreBetween(
+            @Param("storeId") UUID storeId,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query("""
+            SELECT COUNT(DISTINCT o.user.id)
+            FROM Order o
+            WHERE o.storeId = :storeId
+              AND o.status = 'DELIVERED'
+              AND o.createdAt >= :fromDate
+              AND o.createdAt < :toDate
+            """)
+    long countDistinctCustomersByStoreBetween(
+            @Param("storeId") UUID storeId,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
 }

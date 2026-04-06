@@ -1,7 +1,7 @@
 import type { PanelNavItem } from '../pages/Admin/AdminLayout';
 
 export const adminPanelNav: PanelNavItem[] = [
-  { label: 'Tổng quan', to: '/admin/dashboard', exact: true },
+  { label: 'Dashboard', to: '/admin/dashboard', exact: true },
   { label: 'Danh mục', to: '/admin/categories' },
   { label: 'Gian hàng', to: '/admin/stores' },
   { label: 'Quản lý sản phẩm', to: '/admin/product-governance' },
@@ -15,7 +15,7 @@ export const adminPanelNav: PanelNavItem[] = [
 ];
 
 export const vendorPanelNav: PanelNavItem[] = [
-  { label: 'Tổng quan', to: '/vendor/dashboard', exact: true },
+  { label: 'Dashboard', to: '/vendor/dashboard', exact: true },
   { label: 'Kho', to: '/vendor/products' },
   { label: 'Đơn hàng', to: '/vendor/orders' },
   { label: 'Hoàn trả', to: '/vendor/returns' },

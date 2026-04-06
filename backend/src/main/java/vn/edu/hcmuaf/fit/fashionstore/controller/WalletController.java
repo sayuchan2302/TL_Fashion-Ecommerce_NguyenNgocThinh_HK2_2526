@@ -1,19 +1,14 @@
 package vn.edu.hcmuaf.fit.fashionstore.controller;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import vn.edu.hcmuaf.fit.fashionstore.dto.response.PayoutRequestResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.WalletResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.WalletTransactionResponse;
+import vn.edu.hcmuaf.fit.fashionstore.entity.PayoutRequest;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Store;
 import vn.edu.hcmuaf.fit.fashionstore.entity.VendorWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.WalletTransaction;
@@ -23,7 +18,6 @@ import vn.edu.hcmuaf.fit.fashionstore.security.AuthContext.UserContext;
 import vn.edu.hcmuaf.fit.fashionstore.service.WalletService;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,16 +37,12 @@ public class WalletController {
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Page<WalletResponse>> getAllWallets(Pageable pageable) {
-        List<VendorWallet> wallets = walletService.getAllWallets();
-        List<WalletResponse> responses = wallets.stream().map(this::toResponse).toList();
-        int start = (int) pageable.getOffset();
-        if (start >= responses.size()) {
-            return ResponseEntity.ok(new PageImpl<>(List.of(), pageable, responses.size()));
-        }
-        int end = Math.min(start + pageable.getPageSize(), responses.size());
-        Page<WalletResponse> page = new PageImpl<>(responses.subList(start, end), pageable, responses.size());
-        return ResponseEntity.ok(page);
+    public ResponseEntity<Page<WalletResponse>> getAllWallets(
+            @RequestParam(required = false, defaultValue = "") String keyword,
+            Pageable pageable
+    ) {
+        Page<VendorWallet> wallets = walletService.getAllWalletsPageable(keyword, pageable);
+        return ResponseEntity.ok(wallets.map(this::toResponse));
     }
 
     @GetMapping("/my-wallet")
@@ -92,7 +82,7 @@ public class WalletController {
     ) {
         BigDecimal amount = (payload != null && payload.get("amount") != null)
                 ? new BigDecimal(payload.get("amount").toString())
-                : walletService.getWallet(storeId).getBalance();
+                : walletService.getWallet(storeId).getAvailableBalance();
         String note = (payload != null && payload.get("note") != null)
                 ? payload.get("note").toString()
                 : "Giai ngan toan bo so du";
@@ -100,6 +90,79 @@ public class WalletController {
         WalletTransaction transaction = walletService.withdraw(storeId, amount, note);
         return ResponseEntity.ok(toResponse(transaction));
     }
+
+    // ─── Payout Request Endpoints ──────────────────────────────────────────────
+
+    @PostMapping("/my-payout")
+    @PreAuthorize("hasRole('VENDOR')")
+    public ResponseEntity<PayoutRequestResponse> createPayoutRequest(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, String> payload
+    ) {
+        UserContext ctx = authContext.requireVendor(authHeader);
+        BigDecimal amount = new BigDecimal(payload.get("amount"));
+        String bankAccountName = payload.get("bankAccountName");
+        String bankAccountNumber = payload.get("bankAccountNumber");
+        String bankName = payload.get("bankName");
+
+        PayoutRequest request = walletService.createPayoutRequest(
+                ctx.getStoreId(), amount, bankAccountName, bankAccountNumber, bankName);
+
+        return ResponseEntity.ok(toPayoutResponse(request));
+    }
+
+    @GetMapping("/my-payouts")
+    @PreAuthorize("hasRole('VENDOR')")
+    public ResponseEntity<Page<PayoutRequestResponse>> getMyPayouts(
+            @RequestHeader("Authorization") String authHeader,
+            Pageable pageable
+    ) {
+        UserContext ctx = authContext.requireVendor(authHeader);
+        Page<PayoutRequest> payouts = walletService.getStorePayouts(ctx.getStoreId(), pageable);
+        return ResponseEntity.ok(payouts.map(this::toPayoutResponse));
+    }
+
+    @GetMapping("/payouts/pending")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Page<PayoutRequestResponse>> getPendingPayouts(Pageable pageable) {
+        Page<PayoutRequest> payouts = walletService.getPendingPayouts(pageable);
+        return ResponseEntity.ok(payouts.map(this::toPayoutResponse));
+    }
+
+    @PostMapping("/payouts/{id}/approve")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<PayoutRequestResponse> approvePayout(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable UUID id
+    ) {
+        UserContext ctx = authContext.requireAdmin(authHeader);
+        PayoutRequest request = walletService.approvePayoutRequest(id, ctx.getUserId());
+        return ResponseEntity.ok(toPayoutResponse(request));
+    }
+
+    @PostMapping("/payouts/{id}/reject")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<PayoutRequestResponse> rejectPayout(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> payload
+    ) {
+        UserContext ctx = authContext.requireAdmin(authHeader);
+        String note = payload.getOrDefault("note", "");
+        PayoutRequest request = walletService.rejectPayoutRequest(id, ctx.getUserId(), note);
+        return ResponseEntity.ok(toPayoutResponse(request));
+    }
+
+    @GetMapping("/payouts/summary")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Map<String, Object>> getPayoutSummary() {
+        return ResponseEntity.ok(Map.of(
+                "pendingCount", walletService.getPendingPayoutCount(),
+                "pendingTotal", walletService.getPendingPayoutTotal()
+        ));
+    }
+
+    // ─── Mappers ───────────────────────────────────────────────────────────────
 
     private WalletResponse toResponse(VendorWallet wallet) {
         Store store = storeRepository.findById(wallet.getStoreId()).orElse(null);
@@ -111,7 +174,9 @@ public class WalletController {
                 .storeId(wallet.getStoreId())
                 .storeName(storeName)
                 .storeSlug(storeSlug)
-                .balance(wallet.getBalance())
+                .availableBalance(wallet.getAvailableBalance())
+                .frozenBalance(wallet.getFrozenBalance())
+                .totalBalance(wallet.getTotalBalance())
                 .lastUpdated(wallet.getLastUpdated())
                 .build();
     }
@@ -126,6 +191,25 @@ public class WalletController {
                 .type(transaction.getType())
                 .description(transaction.getDescription())
                 .createdAt(transaction.getCreatedAt())
+                .build();
+    }
+
+    private PayoutRequestResponse toPayoutResponse(PayoutRequest request) {
+        Store store = storeRepository.findById(request.getStoreId()).orElse(null);
+        return PayoutRequestResponse.builder()
+                .id(request.getId())
+                .storeId(request.getStoreId())
+                .storeName(store != null ? store.getName() : "Unknown Store")
+                .storeSlug(store != null ? store.getSlug() : null)
+                .amount(request.getAmount())
+                .bankAccountName(request.getBankAccountName())
+                .bankAccountNumber(request.getBankAccountNumber())
+                .bankName(request.getBankName())
+                .status(request.getStatus().name())
+                .adminNote(request.getAdminNote())
+                .processedBy(request.getProcessedBy())
+                .processedAt(request.getProcessedAt())
+                .createdAt(request.getCreatedAt())
                 .build();
     }
 }

@@ -55,8 +55,9 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
                 "uq_customer_wallet_tx_return_type",
                 "ALTER TABLE customer_wallet_transactions ADD CONSTRAINT uq_customer_wallet_tx_return_type UNIQUE (return_request_id, type)"
         );
+        ensureWalletTransactionTypeCheckConstraint();
 
-        log.info("Wallet idempotency constraints are ensured: uq_wallet_tx_order_type, uq_customer_wallet_tx_return_type");
+        log.info("Wallet constraints are ensured: uq_wallet_tx_order_type, uq_customer_wallet_tx_return_type, wallet_transactions_type_check");
     }
 
     private boolean tableExists(String qualifiedTableName) {
@@ -106,5 +107,24 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
             return;
         }
         jdbcTemplate.execute(ddl);
+    }
+
+    private void ensureWalletTransactionTypeCheckConstraint() {
+        jdbcTemplate.execute("ALTER TABLE wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_type_check");
+        jdbcTemplate.execute("""
+                ALTER TABLE wallet_transactions
+                ADD CONSTRAINT wallet_transactions_type_check
+                CHECK (
+                    type IN (
+                        'CREDIT',
+                        'DEBIT',
+                        'WITHDRAWAL',
+                        'ESCROW_CREDIT',
+                        'ESCROW_RELEASE',
+                        'PAYOUT_DEBIT',
+                        'REFUND_DEBIT'
+                    )
+                )
+                """);
     }
 }

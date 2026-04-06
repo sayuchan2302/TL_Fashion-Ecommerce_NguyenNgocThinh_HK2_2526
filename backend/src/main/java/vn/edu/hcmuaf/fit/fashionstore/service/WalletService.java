@@ -1,11 +1,14 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWalletTransaction;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
+import vn.edu.hcmuaf.fit.fashionstore.entity.PayoutRequest;
 import vn.edu.hcmuaf.fit.fashionstore.entity.VendorWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.WalletTransaction;
 import vn.edu.hcmuaf.fit.fashionstore.exception.ForbiddenException;
@@ -13,6 +16,7 @@ import vn.edu.hcmuaf.fit.fashionstore.exception.ResourceNotFoundException;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CustomerWalletRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CustomerWalletTransactionRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.OrderRepository;
+import vn.edu.hcmuaf.fit.fashionstore.repository.PayoutRequestRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.VendorWalletRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.WalletTransactionRepository;
 
@@ -30,6 +34,7 @@ public class WalletService {
     private final WalletTransactionRepository walletTransactionRepository;
     private final CustomerWalletRepository customerWalletRepository;
     private final CustomerWalletTransactionRepository customerWalletTransactionRepository;
+    private final PayoutRequestRepository payoutRequestRepository;
     private final PublicCodeService publicCodeService;
 
     public WalletService(OrderRepository orderRepository,
@@ -37,127 +42,246 @@ public class WalletService {
                          WalletTransactionRepository walletTransactionRepository,
                          CustomerWalletRepository customerWalletRepository,
                          CustomerWalletTransactionRepository customerWalletTransactionRepository,
+                         PayoutRequestRepository payoutRequestRepository,
                          PublicCodeService publicCodeService) {
         this.orderRepository = orderRepository;
         this.vendorWalletRepository = vendorWalletRepository;
         this.walletTransactionRepository = walletTransactionRepository;
         this.customerWalletRepository = customerWalletRepository;
         this.customerWalletTransactionRepository = customerWalletTransactionRepository;
+        this.payoutRequestRepository = payoutRequestRepository;
         this.publicCodeService = publicCodeService;
     }
 
+    // ─── Escrow Engine ─────────────────────────────────────────────────────────
+
+    /**
+     * When order is COMPLETED (customer clicks "Received"):
+     * Calculate NetIncome = VendorPayout and add to frozenBalance.
+     * Money is held in escrow for 7 days before becoming withdrawable.
+     */
     @Transactional
-    public void creditVendorForOrder(Order order) {
-        if (order == null || order.getId() == null) {
-            return;
-        }
+    public void creditEscrowForCompletedOrder(Order order) {
+        if (order == null || order.getId() == null) return;
 
         Order lockedOrder = orderRepository.findByIdForUpdate(order.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (lockedOrder.getStoreId() == null) {
-            return; // Only credit orders that belong to a vendor store
-        }
+        if (lockedOrder.getStoreId() == null) return;
 
         if (walletTransactionRepository.existsByOrderIdAndType(
                 lockedOrder.getId(),
-                WalletTransaction.TransactionType.CREDIT
-        )) {
-            return; // Idempotent: payout already credited for this order
-        }
+                WalletTransaction.TransactionType.ESCROW_CREDIT
+        )) return;
 
-        VendorWallet wallet = vendorWalletRepository.findByStoreId(lockedOrder.getStoreId())
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(lockedOrder.getStoreId())
                 .orElseGet(() -> createWallet(lockedOrder.getStoreId()));
 
-        BigDecimal amount = lockedOrder.getVendorPayout();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
+        BigDecimal netIncome = lockedOrder.getVendorPayout();
+        if (netIncome == null || netIncome.compareTo(BigDecimal.ZERO) <= 0) return;
 
         WalletTransaction transaction = WalletTransaction.builder()
                 .transactionCode(publicCodeService.nextTransactionCode())
                 .wallet(wallet)
                 .orderId(lockedOrder.getId())
-                .amount(amount)
-                .type(WalletTransaction.TransactionType.CREDIT)
-                .description("Payout for Order " + (lockedOrder.getOrderCode() != null ? lockedOrder.getOrderCode() : lockedOrder.getId()))
+                .amount(netIncome)
+                .type(WalletTransaction.TransactionType.ESCROW_CREDIT)
+                .description("Escrow hold for Order " + (lockedOrder.getOrderCode() != null ? lockedOrder.getOrderCode() : lockedOrder.getId()))
                 .build();
 
         try {
             walletTransactionRepository.save(transaction);
         } catch (DataIntegrityViolationException ex) {
-            if (isUniqueConstraintViolation(ex, UQ_WALLET_TX_ORDER_TYPE)) {
-                return;
-            }
+            if (isUniqueConstraintViolation(ex, UQ_WALLET_TX_ORDER_TYPE)) return;
             throw ex;
         }
 
-        wallet.setBalance(wallet.getBalance().add(amount));
+        wallet.setFrozenBalance(wallet.getFrozenBalance().add(netIncome));
         wallet.setLastUpdated(LocalDateTime.now());
         vendorWalletRepository.save(wallet);
     }
 
+    /**
+     * Scheduled task: Move matured escrow from frozenBalance to availableBalance.
+     * Called after 7-day holding period.
+     */
+    @Transactional
+    public void releaseEscrowToAvailable(UUID storeId, UUID orderId, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found for store"));
+
+        if (wallet.getFrozenBalance().compareTo(amount) < 0) {
+            throw new IllegalArgumentException("Insufficient frozen balance for escrow release");
+        }
+
+        wallet.setFrozenBalance(wallet.getFrozenBalance().subtract(amount));
+        wallet.setAvailableBalance(wallet.getAvailableBalance().add(amount));
+        wallet.setLastUpdated(LocalDateTime.now());
+        vendorWalletRepository.save(wallet);
+
+        WalletTransaction transaction = WalletTransaction.builder()
+                .transactionCode(publicCodeService.nextTransactionCode())
+                .wallet(wallet)
+                .orderId(orderId)
+                .amount(amount)
+                .type(WalletTransaction.TransactionType.ESCROW_RELEASE)
+                .description("Escrow released to available balance")
+                .build();
+
+        walletTransactionRepository.save(transaction);
+    }
+
+    /**
+     * Debit vendor when order is refunded. Deducts from frozenBalance first,
+     * then availableBalance if frozen is insufficient.
+     */
     @Transactional
     public void debitVendorForRefund(Order order) {
-        if (order == null || order.getId() == null) {
-            return;
-        }
+        if (order == null || order.getId() == null) return;
 
         Order lockedOrder = orderRepository.findByIdForUpdate(order.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (lockedOrder.getStoreId() == null) {
-            return; // Only debit orders that belong to a vendor store
-        }
+        if (lockedOrder.getStoreId() == null) return;
 
         if (!walletTransactionRepository.existsByOrderIdAndType(
                 lockedOrder.getId(),
-                WalletTransaction.TransactionType.CREDIT
-        )) {
-            return; // No payout was credited, skip debit
-        }
+                WalletTransaction.TransactionType.ESCROW_CREDIT
+        )) return;
 
         if (walletTransactionRepository.existsByOrderIdAndType(
                 lockedOrder.getId(),
-                WalletTransaction.TransactionType.DEBIT
-        )) {
-            return; // Idempotent: refund already debited for this order
-        }
+                WalletTransaction.TransactionType.REFUND_DEBIT
+        )) return;
 
-        VendorWallet wallet = vendorWalletRepository.findByStoreId(lockedOrder.getStoreId())
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(lockedOrder.getStoreId())
                 .orElseGet(() -> createWallet(lockedOrder.getStoreId()));
 
         BigDecimal amount = lockedOrder.getVendorPayout();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        BigDecimal remaining = amount;
+
+        if (wallet.getFrozenBalance().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal fromFrozen = wallet.getFrozenBalance().min(remaining);
+            wallet.setFrozenBalance(wallet.getFrozenBalance().subtract(fromFrozen));
+            remaining = remaining.subtract(fromFrozen);
         }
+
+        if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            if (wallet.getAvailableBalance().compareTo(remaining) < 0) {
+                throw new IllegalArgumentException("Insufficient wallet balance for refund");
+            }
+            wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(remaining));
+        }
+
+        wallet.setLastUpdated(LocalDateTime.now());
+        vendorWalletRepository.save(wallet);
 
         WalletTransaction transaction = WalletTransaction.builder()
                 .transactionCode(publicCodeService.nextTransactionCode())
                 .wallet(wallet)
                 .orderId(lockedOrder.getId())
                 .amount(amount)
-                .type(WalletTransaction.TransactionType.DEBIT)
-                .description("Refund for Order " + (lockedOrder.getOrderCode() != null ? lockedOrder.getOrderCode() : lockedOrder.getId()))
+                .type(WalletTransaction.TransactionType.REFUND_DEBIT)
+                .description("Refund debit for Order " + (lockedOrder.getOrderCode() != null ? lockedOrder.getOrderCode() : lockedOrder.getId()))
                 .build();
 
-        try {
-            walletTransactionRepository.save(transaction);
-        } catch (DataIntegrityViolationException ex) {
-            if (isUniqueConstraintViolation(ex, UQ_WALLET_TX_ORDER_TYPE)) {
-                return;
-            }
-            throw ex;
+        walletTransactionRepository.save(transaction);
+    }
+
+    // ─── Payout System ─────────────────────────────────────────────────────────
+
+    @Transactional
+    public PayoutRequest createPayoutRequest(UUID storeId, BigDecimal amount,
+                                              String bankAccountName, String bankAccountNumber, String bankName) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Payout amount must be greater than zero");
         }
 
-        wallet.setBalance(wallet.getBalance().subtract(amount));
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(storeId)
+                .orElseGet(() -> createWallet(storeId));
+
+        if (wallet.getAvailableBalance().compareTo(amount) < 0) {
+            throw new IllegalArgumentException("Insufficient available balance. Available: " + wallet.getAvailableBalance());
+        }
+
+        PayoutRequest request = PayoutRequest.builder()
+                .storeId(storeId)
+                .amount(amount)
+                .bankAccountName(bankAccountName)
+                .bankAccountNumber(bankAccountNumber)
+                .bankName(bankName)
+                .status(PayoutRequest.PayoutStatus.PENDING)
+                .build();
+
+        return payoutRequestRepository.save(request);
+    }
+
+    @Transactional
+    public PayoutRequest approvePayoutRequest(UUID payoutRequestId, UUID adminId) {
+        PayoutRequest request = payoutRequestRepository.findById(payoutRequestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payout request not found"));
+
+        if (request.getStatus() != PayoutRequest.PayoutStatus.PENDING) {
+            throw new IllegalStateException("Payout request is not pending");
+        }
+
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(request.getStoreId())
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+
+        if (wallet.getAvailableBalance().compareTo(request.getAmount()) < 0) {
+            throw new IllegalArgumentException("Insufficient available balance for payout approval");
+        }
+
+        wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(request.getAmount()));
         wallet.setLastUpdated(LocalDateTime.now());
         vendorWalletRepository.save(wallet);
+
+        request.setStatus(PayoutRequest.PayoutStatus.APPROVED);
+        request.setProcessedBy(adminId);
+        request.setProcessedAt(LocalDateTime.now());
+        payoutRequestRepository.save(request);
+
+        WalletTransaction transaction = WalletTransaction.builder()
+                .transactionCode(publicCodeService.nextTransactionCode())
+                .wallet(wallet)
+                .amount(request.getAmount())
+                .type(WalletTransaction.TransactionType.PAYOUT_DEBIT)
+                .description("Payout approved: " + request.getId())
+                .build();
+
+        walletTransactionRepository.save(transaction);
+
+        return request;
     }
+
+    @Transactional
+    public PayoutRequest rejectPayoutRequest(UUID payoutRequestId, UUID adminId, String note) {
+        PayoutRequest request = payoutRequestRepository.findById(payoutRequestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payout request not found"));
+
+        if (request.getStatus() != PayoutRequest.PayoutStatus.PENDING) {
+            throw new IllegalStateException("Payout request is not pending");
+        }
+
+        request.setStatus(PayoutRequest.PayoutStatus.REJECTED);
+        request.setAdminNote(note);
+        request.setProcessedBy(adminId);
+        request.setProcessedAt(LocalDateTime.now());
+
+        return payoutRequestRepository.save(request);
+    }
+
+    // ─── Wallet Queries ────────────────────────────────────────────────────────
 
     private VendorWallet createWallet(UUID storeId) {
         return vendorWalletRepository.save(VendorWallet.builder()
                 .storeId(storeId)
+                .availableBalance(BigDecimal.ZERO)
+                .frozenBalance(BigDecimal.ZERO)
                 .balance(BigDecimal.ZERO)
                 .lastUpdated(LocalDateTime.now())
                 .build());
@@ -170,15 +294,38 @@ public class WalletService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<VendorWallet> getAllWallets() {
-        return vendorWalletRepository.findAll();
+    public Page<VendorWallet> getAllWalletsPageable(String keyword, Pageable pageable) {
+        return vendorWalletRepository.searchAll(
+                keyword == null || keyword.isBlank() ? null : keyword.trim(), pageable);
     }
 
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<WalletTransaction> getTransactions(UUID storeId, org.springframework.data.domain.Pageable pageable) {
+    public Page<WalletTransaction> getTransactions(UUID storeId, Pageable pageable) {
         VendorWallet wallet = getWallet(storeId);
         return walletTransactionRepository.findByWalletId(wallet.getId(), pageable);
     }
+
+    @Transactional(readOnly = true)
+    public Page<PayoutRequest> getPendingPayouts(Pageable pageable) {
+        return payoutRequestRepository.findByStatus(PayoutRequest.PayoutStatus.PENDING, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PayoutRequest> getStorePayouts(UUID storeId, Pageable pageable) {
+        return payoutRequestRepository.findByStoreId(storeId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public long getPendingPayoutCount() {
+        return payoutRequestRepository.countByStatus(PayoutRequest.PayoutStatus.PENDING);
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal getPendingPayoutTotal() {
+        return payoutRequestRepository.sumPendingAmount();
+    }
+
+    // ─── Legacy: Full withdrawal (for admin) ───────────────────────────────────
 
     @Transactional
     public WalletTransaction withdraw(UUID storeId, BigDecimal amount, String note) {
@@ -186,14 +333,21 @@ public class WalletService {
             throw new IllegalArgumentException("Withdrawal amount must be greater than zero");
         }
 
-        VendorWallet wallet = vendorWalletRepository.findByStoreId(storeId)
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(storeId)
                 .orElseThrow(() -> new IllegalArgumentException("Wallet not found"));
 
-        if (wallet.getBalance().compareTo(amount) < 0) {
-            throw new IllegalArgumentException("Insufficient balance");
+        BigDecimal remaining = amount;
+
+        if (wallet.getAvailableBalance().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal fromAvailable = wallet.getAvailableBalance().min(remaining);
+            wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(fromAvailable));
+            remaining = remaining.subtract(fromAvailable);
         }
 
-        wallet.setBalance(wallet.getBalance().subtract(amount));
+        if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException("Insufficient available balance for withdrawal");
+        }
+
         wallet.setLastUpdated(LocalDateTime.now());
         vendorWalletRepository.save(wallet);
 
@@ -208,14 +362,12 @@ public class WalletService {
         return walletTransactionRepository.save(transaction);
     }
 
+    // ─── Customer Wallet ───────────────────────────────────────────────────────
+
     @Transactional
     public void refundToCustomerFromEscrow(UUID returnRequestId, Order order, BigDecimal refundAmount, String reason) {
-        if (returnRequestId == null || order == null || order.getId() == null) {
-            return;
-        }
-        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
+        if (returnRequestId == null || order == null || order.getId() == null) return;
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) return;
 
         Order lockedOrder = orderRepository.findByIdForUpdate(order.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -228,9 +380,7 @@ public class WalletService {
                 returnRequestId,
                 CustomerWalletTransaction.TransactionType.CREDIT_REFUND
         );
-        if (alreadyProcessed) {
-            return;
-        }
+        if (alreadyProcessed) return;
 
         CustomerWallet wallet = customerWalletRepository.findByUserId(lockedOrder.getUser().getId())
                 .orElseGet(() -> createCustomerWallet(lockedOrder.getUser().getId()));
@@ -259,9 +409,7 @@ public class WalletService {
         try {
             customerWalletTransactionRepository.save(transaction);
         } catch (DataIntegrityViolationException ex) {
-            if (isUniqueConstraintViolation(ex, UQ_CUSTOMER_WALLET_TX_RETURN_TYPE)) {
-                return;
-            }
+            if (isUniqueConstraintViolation(ex, UQ_CUSTOMER_WALLET_TX_RETURN_TYPE)) return;
             throw ex;
         }
 
@@ -286,15 +434,11 @@ public class WalletService {
     }
 
     private boolean isUniqueConstraintViolation(DataIntegrityViolationException ex, String constraintName) {
-        if (ex == null || constraintName == null || constraintName.isBlank()) {
-            return false;
-        }
+        if (ex == null || constraintName == null || constraintName.isBlank()) return false;
         Throwable current = ex;
         while (current != null) {
             String message = current.getMessage();
-            if (message != null && message.toLowerCase().contains(constraintName.toLowerCase())) {
-                return true;
-            }
+            if (message != null && message.toLowerCase().contains(constraintName.toLowerCase())) return true;
             current = current.getCause();
         }
         return false;

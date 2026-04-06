@@ -10,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.OrderRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.AdminOrderResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.OrderTreeResponseDto;
+import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorAnalyticsResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderDetailResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorOrderPageResponse;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.VendorTopProductResponse;
@@ -17,7 +18,9 @@ import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
 import vn.edu.hcmuaf.fit.fashionstore.security.AuthContext;
 import vn.edu.hcmuaf.fit.fashionstore.security.AuthContext.UserContext;
 import vn.edu.hcmuaf.fit.fashionstore.service.OrderService;
+import vn.edu.hcmuaf.fit.fashionstore.service.VendorAnalyticsService;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -31,10 +34,12 @@ public class OrderController {
 
     private final OrderService orderService;
     private final AuthContext authContext;
+    private final VendorAnalyticsService vendorAnalyticsService;
 
-    public OrderController(OrderService orderService, AuthContext authContext) {
+    public OrderController(OrderService orderService, AuthContext authContext, VendorAnalyticsService vendorAnalyticsService) {
         this.orderService = orderService;
         this.authContext = authContext;
+        this.vendorAnalyticsService = vendorAnalyticsService;
     }
 
     // ─── Customer Endpoints ────────────────────────────────────────────────────
@@ -255,6 +260,15 @@ public class OrderController {
             @RequestParam(defaultValue = "5") int limit) {
         UserContext ctx = authContext.requireVendor(authHeader);
         return ResponseEntity.ok(orderService.getTopProductsByStore(ctx.getStoreId(), days, limit));
+    }
+
+    @GetMapping("/my-store/analytics")
+    @PreAuthorize("hasAnyRole('VENDOR', 'SUPER_ADMIN')")
+    public ResponseEntity<VendorAnalyticsResponse> getMyStoreAnalytics(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(defaultValue = "5") BigDecimal commissionRate) {
+        UserContext ctx = authContext.requireVendor(authHeader);
+        return ResponseEntity.ok(vendorAnalyticsService.getAnalytics(ctx.getStoreId(), commissionRate));
     }
 
     // ─── Admin Endpoints ───────────────────────────────────────────────────────

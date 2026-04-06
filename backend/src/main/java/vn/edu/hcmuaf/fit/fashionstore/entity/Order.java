@@ -21,7 +21,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "orders", indexes = {
-        @Index(name = "idx_orders_order_code", columnList = "order_code", unique = true)
+        @Index(name = "idx_orders_order_code", columnList = "order_code", unique = true),
+        @Index(name = "idx_orders_store_id", columnList = "store_id"),
+        @Index(name = "idx_orders_created_at", columnList = "created_at"),
+        @Index(name = "idx_orders_store_created", columnList = "store_id, created_at"),
+        @Index(name = "idx_orders_status_store", columnList = "status, store_id, created_at"),
 })
 public class Order extends BaseEntity {
 

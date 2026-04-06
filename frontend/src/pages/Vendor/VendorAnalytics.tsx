@@ -69,7 +69,7 @@ const VendorAnalytics = () => {
       setLoading(true);
       try {
         setLoadError('');
-        const next = await vendorPortalService.getAnalytics({ topProductsDays: PERIOD_TO_DAYS[activePeriod] });
+        const next = await vendorPortalService.getAnalytics({ commissionRate: analytics.commissionRate });
         if (!active) return;
         setAnalytics(next);
       } catch (err: unknown) {

@@ -48,6 +48,6 @@ public class WalletTransaction extends BaseEntity {
     private String description;
 
     public enum TransactionType {
-        CREDIT, DEBIT, WITHDRAWAL
+        CREDIT, DEBIT, WITHDRAWAL, ESCROW_CREDIT, ESCROW_RELEASE, PAYOUT_DEBIT, REFUND_DEBIT
     }
 }

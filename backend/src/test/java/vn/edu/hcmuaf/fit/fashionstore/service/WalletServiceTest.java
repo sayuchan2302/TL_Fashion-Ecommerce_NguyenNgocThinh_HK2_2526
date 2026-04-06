@@ -1,5 +1,6 @@
 package vn.edu.hcmuaf.fit.fashionstore.service;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -8,12 +9,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWalletTransaction;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
+import vn.edu.hcmuaf.fit.fashionstore.entity.PayoutRequest;
 import vn.edu.hcmuaf.fit.fashionstore.entity.User;
 import vn.edu.hcmuaf.fit.fashionstore.entity.VendorWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.WalletTransaction;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CustomerWalletRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CustomerWalletTransactionRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.OrderRepository;
+import vn.edu.hcmuaf.fit.fashionstore.repository.PayoutRequestRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.VendorWalletRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.WalletTransactionRepository;
 
@@ -33,25 +36,17 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WalletServiceTest {
 
-    @Mock
-    private OrderRepository orderRepository;
-
-    @Mock
-    private VendorWalletRepository vendorWalletRepository;
-
-    @Mock
-    private WalletTransactionRepository walletTransactionRepository;
-
-    @Mock
-    private CustomerWalletRepository customerWalletRepository;
-
-    @Mock
-    private CustomerWalletTransactionRepository customerWalletTransactionRepository;
+    @Mock private OrderRepository orderRepository;
+    @Mock private VendorWalletRepository vendorWalletRepository;
+    @Mock private WalletTransactionRepository walletTransactionRepository;
+    @Mock private CustomerWalletRepository customerWalletRepository;
+    @Mock private CustomerWalletTransactionRepository customerWalletTransactionRepository;
+    @Mock private PayoutRequestRepository payoutRequestRepository;
 
     private WalletService walletService;
     private FixedPublicCodeService publicCodeService;
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void setUp() {
         publicCodeService = new FixedPublicCodeService();
         walletService = new WalletService(
@@ -60,6 +55,7 @@ class WalletServiceTest {
                 walletTransactionRepository,
                 customerWalletRepository,
                 customerWalletTransactionRepository,
+                payoutRequestRepository,
                 publicCodeService
         );
     }
@@ -76,12 +72,12 @@ class WalletServiceTest {
                 .build();
 
         when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(lockedOrder));
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.CREDIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.ESCROW_CREDIT))
                 .thenReturn(false);
 
         walletService.debitVendorForRefund(lockedOrder);
 
-        verify(vendorWalletRepository, never()).findByStoreId(any());
+        verify(vendorWalletRepository, never()).findByStoreIdForUpdate(any());
         verify(vendorWalletRepository, never()).save(any());
         verify(walletTransactionRepository, never()).save(any());
     }
@@ -98,14 +94,14 @@ class WalletServiceTest {
                 .build();
 
         when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(lockedOrder));
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.CREDIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.ESCROW_CREDIT))
                 .thenReturn(true);
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.DEBIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.REFUND_DEBIT))
                 .thenReturn(true);
 
         walletService.debitVendorForRefund(lockedOrder);
 
-        verify(vendorWalletRepository, never()).findByStoreId(any());
+        verify(vendorWalletRepository, never()).findByStoreIdForUpdate(any());
         verify(vendorWalletRepository, never()).save(any());
         verify(walletTransactionRepository, never()).save(any());
     }
@@ -124,30 +120,32 @@ class WalletServiceTest {
 
         VendorWallet wallet = VendorWallet.builder()
                 .storeId(storeId)
-                .balance(new BigDecimal("500000"))
+                .availableBalance(new BigDecimal("500000"))
+                .frozenBalance(new BigDecimal("0"))
                 .build();
 
         when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(lockedOrder));
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.CREDIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.ESCROW_CREDIT))
                 .thenReturn(true);
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.DEBIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.REFUND_DEBIT))
                 .thenReturn(false);
-        when(vendorWalletRepository.findByStoreId(storeId)).thenReturn(Optional.of(wallet));
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
         when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        publicCodeService.pushTransactionCode("GD-260401-000001");
+        when(walletTransactionRepository.save(any(WalletTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        publicCodeService.push("GD-260401-000001");
 
         walletService.debitVendorForRefund(lockedOrder);
 
-        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("350000")));
+        assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("350000")));
         verify(walletTransactionRepository).save(argThat(transaction ->
-                transaction.getType() == WalletTransaction.TransactionType.DEBIT
+                transaction.getType() == WalletTransaction.TransactionType.REFUND_DEBIT
                         && orderId.equals(transaction.getOrderId())
                         && transaction.getAmount().compareTo(new BigDecimal("150000")) == 0
         ));
     }
 
     @Test
-    void creditVendorForOrderSkipsWalletMutationWhenDuplicateTransactionRaceOccurs() {
+    void creditEscrowForOrderSkipsWalletMutationWhenDuplicateTransactionRaceOccurs() {
         UUID orderId = UUID.randomUUID();
         UUID storeId = UUID.randomUUID();
 
@@ -159,19 +157,20 @@ class WalletServiceTest {
                 .build();
         VendorWallet wallet = VendorWallet.builder()
                 .storeId(storeId)
-                .balance(new BigDecimal("500000"))
+                .availableBalance(new BigDecimal("500000"))
+                .frozenBalance(new BigDecimal("0"))
                 .build();
 
         when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(lockedOrder));
-        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.CREDIT))
+        when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.ESCROW_CREDIT))
                 .thenReturn(false);
-        when(vendorWalletRepository.findByStoreId(storeId)).thenReturn(Optional.of(wallet));
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
         when(walletTransactionRepository.save(any(WalletTransaction.class)))
                 .thenThrow(new DataIntegrityViolationException("uq_wallet_tx_order_type"));
 
-        walletService.creditVendorForOrder(lockedOrder);
+        walletService.creditEscrowForCompletedOrder(lockedOrder);
 
-        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("500000")));
+        assertEquals(0, wallet.getFrozenBalance().compareTo(new BigDecimal("0")));
         verify(vendorWalletRepository, never()).save(any(VendorWallet.class));
     }
 
@@ -232,7 +231,7 @@ class WalletServiceTest {
             super(null, null, null, null);
         }
 
-        private void pushTransactionCode(String code) {
+        void push(String code) {
             transactionCodes.add(code);
         }
 

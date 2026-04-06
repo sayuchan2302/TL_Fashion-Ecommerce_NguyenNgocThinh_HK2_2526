@@ -19,9 +19,10 @@ import { motion } from 'framer-motion';
 import { startTransition, useEffect, useState } from 'react';
 import VendorLayout from './VendorLayout';
 import { getVendorOrderStatusLabel, getVendorOrderStatusTone } from './vendorOrderPresentation';
-import { calculateCommission, formatCurrency } from '../../services/commissionService';
+import { formatCurrency } from '../../services/commissionService';
 import { vendorPortalService, type VendorDashboardData, type VendorOrderSummary } from '../../services/vendorPortalService';
 import { vendorVoucherService } from '../../services/vendorVoucherService';
+import { walletService, type VendorWallet } from '../../services/walletService';
 import { useToast } from '../../contexts/ToastContext';
 import { getUiErrorMessage } from '../../utils/errorMessage';
 import { AdminStateBlock } from '../Admin/AdminStateBlocks';
@@ -52,6 +53,7 @@ const VendorDashboard = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [runningVoucherCount, setRunningVoucherCount] = useState(0);
+  const [wallet, setWallet] = useState<VendorWallet | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -60,14 +62,16 @@ const VendorDashboard = () => {
       setLoading(true);
       try {
         setLoadError('');
-        const [next, voucherResult] = await Promise.all([
+        const [next, voucherResult, walletData] = await Promise.all([
           vendorPortalService.getDashboardData(),
           vendorVoucherService.list({ status: 'running', page: 1, size: 1 }),
+          walletService.getMyWallet(),
         ]);
         if (!active) return;
         startTransition(() => {
           setData(next);
           setRunningVoucherCount(voucherResult.counts.running);
+          setWallet(walletData);
         });
       } catch (err: unknown) {
         if (!active) return;
@@ -177,7 +181,7 @@ const VendorDashboard = () => {
   return (
     <VendorLayout
       title="Dashboard"
-      breadcrumbs={['Kênh Người Bán', 'Tổng quan']}
+      breadcrumbs={['Kênh Người Bán', 'Dashboard']}
     >
       {loadError ? (
         <section className="admin-panels single">
@@ -223,21 +227,19 @@ const VendorDashboard = () => {
         transition={{ duration: 0.22, delay: 0.15 }}
         style={{ marginBottom: 16 }}
       >
-        <h3>Tổng quan thực nhận: hoa hồng {stats.commissionRate}%</h3>
+        <h3>Số dư ví: hoa hồng {stats.commissionRate}%</h3>
         <div className="commission-row">
-          <span className="label">GMV lũy kế (đơn giao thành công)</span>
-          <span className="value">{formatCurrency(stats.totalRevenue)}</span>
+          <span className="label">Khả dụng (rút được)</span>
+          <span className="value" style={{ color: '#0d9488' }}>{formatCurrency(wallet?.availableBalance ?? 0)}</span>
         </div>
         <div className="commission-row">
-          <span className="label">Phí sàn ({stats.commissionRate}%)</span>
-          <span className="value" style={{ color: '#d97706' }}>
-            -{formatCurrency(calculateCommission(stats.totalRevenue, stats.commissionRate).commission)}
-          </span>
+          <span className="label">Đóng băng (chờ 7 ngày)</span>
+          <span className="value" style={{ color: '#d97706' }}>{formatCurrency(wallet?.frozenBalance ?? 0)}</span>
         </div>
         <div className="commission-divider" />
         <div className="commission-row total">
-          <span className="label">Thực nhận dự kiến</span>
-          <span className="value">{formatCurrency(calculateCommission(stats.totalRevenue, stats.commissionRate).payout)}</span>
+          <span className="label">Tổng số dư</span>
+          <span className="value">{formatCurrency(wallet?.totalBalance ?? 0)}</span>
         </div>
       </motion.section>
 

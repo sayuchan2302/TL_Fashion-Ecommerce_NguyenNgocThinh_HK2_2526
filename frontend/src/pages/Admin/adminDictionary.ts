@@ -10,7 +10,7 @@ export const ADMIN_DICTIONARY = {
       cta: 'Cấu hình ngay',
     },
     nav: {
-      dashboard: 'Tổng quan',
+      dashboard: 'Dashboard',
       orders: 'Đơn hàng',
       products: 'Sản phẩm',
       categories: 'Danh mục',

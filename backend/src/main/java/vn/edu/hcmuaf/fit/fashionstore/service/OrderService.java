@@ -939,7 +939,7 @@ public class OrderService {
         }
 
         if (status == Order.OrderStatus.DELIVERED && savedOrder.getStoreId() != null) {
-            walletService.creditVendorForOrder(savedOrder);
+            walletService.creditEscrowForCompletedOrder(savedOrder);
         }
 
         if (previousStatus == Order.OrderStatus.DELIVERED

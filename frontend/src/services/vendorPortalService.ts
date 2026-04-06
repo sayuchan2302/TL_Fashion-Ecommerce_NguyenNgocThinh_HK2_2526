@@ -101,6 +101,53 @@ interface BackendTopProduct {
   grossRevenue?: number;
 }
 
+interface BackendVendorAnalyticsResponse {
+  today: {
+    revenue: number;
+    payout: number;
+    commission: number;
+    orders: number;
+    avgOrderValue: number;
+    conversionRate: number;
+    previousRevenue: number;
+    previousPayout: number;
+    previousCommission: number;
+    previousOrders: number;
+  };
+  week: {
+    revenue: number;
+    payout: number;
+    commission: number;
+    orders: number;
+    avgOrderValue: number;
+    conversionRate: number;
+    previousRevenue: number;
+    previousPayout: number;
+    previousCommission: number;
+    previousOrders: number;
+  };
+  month: {
+    revenue: number;
+    payout: number;
+    commission: number;
+    orders: number;
+    avgOrderValue: number;
+    conversionRate: number;
+    previousRevenue: number;
+    previousPayout: number;
+    previousCommission: number;
+    previousOrders: number;
+  };
+  dailyData: Array<{
+    date: string;
+    revenue: number;
+    payout: number;
+    commission: number;
+    orders: number;
+  }>;
+  commissionRate: number;
+}
+
 interface VendorStatsResponse {
   totalOrders?: number;
   pendingOrders?: number;
@@ -657,82 +704,62 @@ export const vendorPortalService = {
     return toVendorSettings(updatedStore);
   },
 
-  async getAnalytics(params: { topProductsDays?: 1 | 7 | 30; topProductsLimit?: number } = {}) {
-    const pageSize = 200;
-    const topProductsDays = params.topProductsDays === 1 || params.topProductsDays === 7 || params.topProductsDays === 30
-      ? params.topProductsDays
-      : 30;
-    const topProductsLimit = Math.min(Math.max(params.topProductsLimit ?? 5, 1), 20);
-
-    const [store, firstOrdersPage, topProducts] = await Promise.all([
-      storeService.getMyStore(),
-      this.getOrders({ page: 1, size: pageSize }),
-      apiRequest<BackendTopProduct[]>(
-        `/api/orders/my-store/top-products?days=${topProductsDays}&limit=${topProductsLimit}`,
-        {},
-        { auth: true },
-      ),
-    ]);
-
-    let recentOrders = [...firstOrdersPage.items];
-    if (firstOrdersPage.totalPages > 1) {
-      const pendingRequests: Array<Promise<VendorOrdersPage>> = [];
-      for (let nextPage = 2; nextPage <= firstOrdersPage.totalPages; nextPage += 1) {
-        pendingRequests.push(this.getOrders({ page: nextPage, size: pageSize }));
-      }
-      const remainingPages = await Promise.all(pendingRequests);
-      recentOrders = recentOrders.concat(remainingPages.flatMap((page) => page.items));
-    }
-
-    const todayCurrent = summarizeWindow(recentOrders, 0, 1);
-    const todayPrevious = summarizeWindow(recentOrders, 1, 2);
-    const weekCurrent = summarizeWindow(recentOrders, 0, 7);
-    const weekPrevious = summarizeWindow(recentOrders, 7, 14);
-    const monthCurrent = summarizeWindow(recentOrders, 0, 30);
-    const monthPrevious = summarizeWindow(recentOrders, 30, 60);
+  async getAnalytics(params: { commissionRate?: number } = {}) {
+    const commissionRate = params.commissionRate ?? 5;
+    const analytics = await apiRequest<BackendVendorAnalyticsResponse>(
+      `/api/orders/my-store/analytics?commissionRate=${commissionRate}`,
+      {},
+      { auth: true },
+    );
 
     return {
       periods: {
         today: {
-          revenue: todayCurrent.revenue,
-          payout: todayCurrent.payout,
-          commission: todayCurrent.commission,
-          orders: todayCurrent.orders,
-          avgOrderValue: todayCurrent.avgOrderValue,
-          conversionRate: todayCurrent.conversionRate,
-          previousRevenue: todayPrevious.revenue,
-          previousPayout: todayPrevious.payout,
-          previousCommission: todayPrevious.commission,
-          previousOrders: todayPrevious.orders,
+          revenue: analytics.today.revenue,
+          payout: analytics.today.payout,
+          commission: analytics.today.commission,
+          orders: analytics.today.orders,
+          avgOrderValue: analytics.today.avgOrderValue,
+          conversionRate: analytics.today.conversionRate,
+          previousRevenue: analytics.today.previousRevenue,
+          previousPayout: analytics.today.previousPayout,
+          previousCommission: analytics.today.previousCommission,
+          previousOrders: analytics.today.previousOrders,
         },
         week: {
-          revenue: weekCurrent.revenue,
-          payout: weekCurrent.payout,
-          commission: weekCurrent.commission,
-          orders: weekCurrent.orders,
-          avgOrderValue: weekCurrent.avgOrderValue,
-          conversionRate: weekCurrent.conversionRate,
-          previousRevenue: weekPrevious.revenue,
-          previousPayout: weekPrevious.payout,
-          previousCommission: weekPrevious.commission,
-          previousOrders: weekPrevious.orders,
+          revenue: analytics.week.revenue,
+          payout: analytics.week.payout,
+          commission: analytics.week.commission,
+          orders: analytics.week.orders,
+          avgOrderValue: analytics.week.avgOrderValue,
+          conversionRate: analytics.week.conversionRate,
+          previousRevenue: analytics.week.previousRevenue,
+          previousPayout: analytics.week.previousPayout,
+          previousCommission: analytics.week.previousCommission,
+          previousOrders: analytics.week.previousOrders,
         },
         month: {
-          revenue: monthCurrent.revenue,
-          payout: monthCurrent.payout,
-          commission: monthCurrent.commission,
-          orders: monthCurrent.orders,
-          avgOrderValue: monthCurrent.avgOrderValue,
-          conversionRate: monthCurrent.conversionRate,
-          previousRevenue: monthPrevious.revenue,
-          previousPayout: monthPrevious.payout,
-          previousCommission: monthPrevious.commission,
-          previousOrders: monthPrevious.orders,
+          revenue: analytics.month.revenue,
+          payout: analytics.month.payout,
+          commission: analytics.month.commission,
+          orders: analytics.month.orders,
+          avgOrderValue: analytics.month.avgOrderValue,
+          conversionRate: analytics.month.conversionRate,
+          previousRevenue: analytics.month.previousRevenue,
+          previousPayout: analytics.month.previousPayout,
+          previousCommission: analytics.month.previousCommission,
+          previousOrders: analytics.month.previousOrders,
         },
       },
-      dailyData: buildDailySeries(recentOrders, 7),
-      topProducts: (topProducts || []).map((product, index) => mapBackendTopProduct(product, index)),
-      commissionRate: store.commissionRate ?? 5,
+      dailyData: analytics.dailyData.map((d) => ({
+        date: d.date,
+        revenue: d.revenue,
+        payout: d.payout,
+        commission: d.commission,
+        orders: d.orders,
+      })),
+      topProducts: [],
+      commissionRate: analytics.commissionRate,
     };
   },
 };

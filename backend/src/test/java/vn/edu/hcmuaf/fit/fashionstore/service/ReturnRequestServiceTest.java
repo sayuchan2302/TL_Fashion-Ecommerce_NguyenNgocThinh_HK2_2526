@@ -288,7 +288,7 @@ class ReturnRequestServiceTest {
         private final List<UUID> returnRequestIds = new ArrayList<>();
 
         private RecordingWalletService() {
-            super(null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null);
         }
 
         @Override

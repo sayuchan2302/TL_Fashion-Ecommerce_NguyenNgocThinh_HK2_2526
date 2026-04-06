@@ -368,7 +368,7 @@ class OrderServiceTest {
         private UUID lastDebitedOrderId;
 
         private RecordingWalletService() {
-            super(null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null);
         }
 
         @Override
@@ -378,7 +378,7 @@ class OrderServiceTest {
         }
 
         @Override
-        public void creditVendorForOrder(Order order) {
+        public void creditEscrowForCompletedOrder(Order order) {
             // No-op for OrderService unit tests
         }
 
