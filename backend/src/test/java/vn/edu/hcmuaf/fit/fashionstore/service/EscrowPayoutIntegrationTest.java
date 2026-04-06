@@ -139,12 +139,9 @@ class EscrowPayoutIntegrationTest {
                     .vendorPayout(BigDecimal.ZERO)
                     .build();
 
-            when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
-            when(walletTransactionRepository.existsByOrderIdAndType(orderId, WalletTransaction.TransactionType.ESCROW_CREDIT))
-                    .thenReturn(false);
-
             walletService.creditEscrowForCompletedOrder(order);
 
+            verify(orderRepository, never()).findByIdForUpdate(any());
             verify(vendorWalletRepository, never()).findByStoreIdForUpdate(any());
         }
 
@@ -446,7 +443,7 @@ class EscrowPayoutIntegrationTest {
                     .frozenBalance(new BigDecimal("300000"))
                     .build();
 
-            when(payoutRequestRepository.findById(payoutId)).thenReturn(Optional.of(request));
+            when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
             when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -479,7 +476,7 @@ class EscrowPayoutIntegrationTest {
                     .status(PayoutRequest.PayoutStatus.APPROVED)
                     .build();
 
-            when(payoutRequestRepository.findById(payoutId)).thenReturn(Optional.of(request));
+            when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
 
             assertThrows(IllegalStateException.class,
                     () -> walletService.approvePayoutRequest(payoutId, UUID.randomUUID()));
@@ -505,7 +502,7 @@ class EscrowPayoutIntegrationTest {
                     .frozenBalance(new BigDecimal("0"))
                     .build();
 
-            when(payoutRequestRepository.findById(payoutId)).thenReturn(Optional.of(request));
+            when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
 
             assertThrows(IllegalArgumentException.class,
@@ -535,7 +532,7 @@ class EscrowPayoutIntegrationTest {
                     .status(PayoutRequest.PayoutStatus.PENDING)
                     .build();
 
-            when(payoutRequestRepository.findById(payoutId)).thenReturn(Optional.of(request));
+            when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
             PayoutRequest result = walletService.rejectPayoutRequest(payoutId, adminId, "Account verification failed");
@@ -557,8 +554,8 @@ class EscrowPayoutIntegrationTest {
     class ConcurrencyTests {
 
         @Test
-        @DisplayName("Multiple payout requests: only first succeeds with limited balance")
-        void multiplePayoutRequestsOnlyFirstSucceeds() {
+        @DisplayName("Multiple payout requests can be created while balance remains unchanged until approval")
+        void multiplePayoutRequestsCanBeCreatedUntilApproval() {
             UUID storeId = UUID.randomUUID();
             BigDecimal available = new BigDecimal("1200000");
             BigDecimal requestAmount = new BigDecimal("1000000");
@@ -576,13 +573,14 @@ class EscrowPayoutIntegrationTest {
                 return req;
             });
 
-            // First request should succeed
             PayoutRequest first = walletService.createPayoutRequest(storeId, requestAmount, "A", "111", "VCB");
             assertEquals(PayoutRequest.PayoutStatus.PENDING, first.getStatus());
 
-            // Second request should fail (1.2M - 1M = 200K remaining < 1M requested)
-            assertThrows(IllegalArgumentException.class,
-                    () -> walletService.createPayoutRequest(storeId, requestAmount, "B", "222", "VCB"));
+            PayoutRequest second = walletService.createPayoutRequest(storeId, requestAmount, "B", "222", "VCB");
+            assertEquals(PayoutRequest.PayoutStatus.PENDING, second.getStatus());
+
+            assertEquals(0, wallet.getAvailableBalance().compareTo(available),
+                    "availableBalance should not be deducted during request creation");
         }
     }
 

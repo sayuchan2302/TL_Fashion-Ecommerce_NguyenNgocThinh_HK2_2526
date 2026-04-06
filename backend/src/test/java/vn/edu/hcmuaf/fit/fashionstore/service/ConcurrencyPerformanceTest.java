@@ -56,8 +56,8 @@ class ConcurrencyPerformanceTest {
     // ─── CONCURRENCY: Rapid Payout Requests ──────────────────────────────────
 
     @Test
-    @DisplayName("Race Condition: 5 concurrent payout requests with 1.2M balance, only 1 should succeed")
-    void concurrentPayoutRequestsOnlyOneSucceeds() throws InterruptedException {
+    @DisplayName("Race Condition: concurrent payout request creation does not deduct balance before approval")
+    void concurrentPayoutRequestsCreationKeepsBalanceUnchanged() throws InterruptedException {
         setUpService();
         UUID storeId = UUID.randomUUID();
         BigDecimal available = new BigDecimal("1200000");
@@ -104,10 +104,12 @@ class ConcurrencyPerformanceTest {
         latch.await();
         executor.shutdown();
 
-        assertEquals(1, successCount.get(),
-                "Only 1 payout request should succeed with 1.2M balance and 1M per request");
-        assertEquals(4, failCount.get(),
-                "4 requests should fail with insufficient balance");
+        assertEquals(5, successCount.get(),
+                "All requests can be created as pending because deduction happens at approval time");
+        assertEquals(0, failCount.get(),
+                "Creation should not fail due to balances reserved by other pending requests");
+        assertEquals(0, wallet.getAvailableBalance().compareTo(available),
+                "availableBalance should remain unchanged after request creation");
     }
 
     // ─── PERFORMANCE: Analytics Query Speed ──────────────────────────────────

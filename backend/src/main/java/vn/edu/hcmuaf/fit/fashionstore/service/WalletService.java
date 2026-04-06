@@ -90,6 +90,10 @@ public class WalletService {
     @Transactional
     public void creditEscrowForCompletedOrder(Order order) {
         if (order == null || order.getId() == null) return;
+        if (order.getStoreId() == null) return;
+
+        BigDecimal inputNetIncome = order.getVendorPayout();
+        if (inputNetIncome == null || inputNetIncome.compareTo(BigDecimal.ZERO) <= 0) return;
 
         Order lockedOrder = orderRepository.findByIdForUpdate(order.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -101,11 +105,11 @@ public class WalletService {
                 WalletTransaction.TransactionType.ESCROW_CREDIT
         )) return;
 
-        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(lockedOrder.getStoreId())
-                .orElseGet(() -> createWallet(lockedOrder.getStoreId()));
-
         BigDecimal netIncome = lockedOrder.getVendorPayout();
         if (netIncome == null || netIncome.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(lockedOrder.getStoreId())
+                .orElseGet(() -> createWallet(lockedOrder.getStoreId()));
 
         WalletTransaction transaction = WalletTransaction.builder()
                 .transactionCode(publicCodeService.nextTransactionCode())
