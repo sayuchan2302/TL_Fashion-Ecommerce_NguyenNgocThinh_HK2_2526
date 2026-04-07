@@ -67,6 +67,10 @@ public class Order extends BaseEntity {
     @Column(name = "coupon_code")
     private String couponCode;
 
+    @Builder.Default
+    @Column(name = "discount_usage_consumed")
+    private Boolean discountUsageConsumed = false;
+
     @Column(name = "tracking_number")
     private String trackingNumber;
 

@@ -1,0 +1,2 @@
+ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS discount_usage_consumed BOOLEAN NOT NULL DEFAULT FALSE;

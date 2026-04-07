@@ -1,8 +1,10 @@
 package vn.edu.hcmuaf.fit.fashionstore.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -61,6 +63,17 @@ public interface VoucherRepository extends JpaRepository<Voucher, UUID> {
               AND v.storeId IN :storeIds
             """)
     List<Voucher> findByCodeAndStoreIds(
+            @Param("code") String code,
+            @Param("storeIds") Collection<UUID> storeIds
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT v FROM Voucher v
+            WHERE UPPER(v.code) = UPPER(:code)
+              AND v.storeId IN :storeIds
+            """)
+    List<Voucher> findByCodeAndStoreIdsForUpdate(
             @Param("code") String code,
             @Param("storeIds") Collection<UUID> storeIds
     );

@@ -69,6 +69,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
             """)
     Optional<Product> findPublicByIdForUpdate(@Param("id") UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Product p WHERE p.id = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") UUID id);
+
     @Query("""
             SELECT p FROM Product p
             WHERE p.slug = :slug

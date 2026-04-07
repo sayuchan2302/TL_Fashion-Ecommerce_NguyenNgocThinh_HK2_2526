@@ -251,6 +251,85 @@ class ReturnRequestServiceTest {
         assertEquals(List.of("debit", "refund"), recordingWalletService.getCallSequence());
     }
 
+    @Test
+    void confirmReceiptCalculatesRefundFromNetPaidAmountPerItem() {
+        UUID returnId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+
+        User user = buildUser(userId);
+        OrderItem itemA = buildOrderItem(UUID.randomUUID(), storeId, 1, new BigDecimal("100000"));
+        OrderItem itemB = buildOrderItem(UUID.randomUUID(), storeId, 1, new BigDecimal("100000"));
+        Order order = buildOrder(UUID.randomUUID(), user, Order.OrderStatus.DELIVERED, List.of(itemA, itemB));
+        order.setSubtotal(new BigDecimal("200000"));
+        order.setShippingFee(new BigDecimal("20000"));
+        order.setDiscount(new BigDecimal("20000"));
+        order.setTotal(new BigDecimal("200000"));
+
+        ReturnRequest request = ReturnRequest.builder()
+                .id(returnId)
+                .order(order)
+                .user(user)
+                .storeId(storeId)
+                .status(ReturnRequest.ReturnStatus.RECEIVED)
+                .items(List.of(new ReturnRequest.ReturnItemSnapshot(
+                        itemA.getId(),
+                        itemA.getProductName(),
+                        itemA.getVariantName(),
+                        itemA.getProductImage(),
+                        null,
+                        1,
+                        itemA.getUnitPrice()
+                )))
+                .build();
+
+        when(returnRequestRepository.findById(returnId)).thenReturn(Optional.of(request));
+        when(returnRequestRepository.save(any(ReturnRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReturnRequestResponse response = returnRequestService.confirmReceipt(returnId, storeId, "vendor@local");
+
+        assertEquals(0, response.getRefundAmount().compareTo(new BigDecimal("90000.00")));
+    }
+
+    @Test
+    void confirmReceiptCalculatesPartialQuantityRefundFromNetLineAmount() {
+        UUID returnId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+
+        User user = buildUser(userId);
+        OrderItem item = buildOrderItem(UUID.randomUUID(), storeId, 3, new BigDecimal("100000"));
+        Order order = buildOrder(UUID.randomUUID(), user, Order.OrderStatus.DELIVERED, List.of(item));
+        order.setSubtotal(new BigDecimal("300000"));
+        order.setShippingFee(BigDecimal.ZERO);
+        order.setDiscount(new BigDecimal("30000"));
+        order.setTotal(new BigDecimal("270000"));
+
+        ReturnRequest request = ReturnRequest.builder()
+                .id(returnId)
+                .order(order)
+                .user(user)
+                .storeId(storeId)
+                .status(ReturnRequest.ReturnStatus.RECEIVED)
+                .items(List.of(new ReturnRequest.ReturnItemSnapshot(
+                        item.getId(),
+                        item.getProductName(),
+                        item.getVariantName(),
+                        item.getProductImage(),
+                        null,
+                        1,
+                        item.getUnitPrice()
+                )))
+                .build();
+
+        when(returnRequestRepository.findById(returnId)).thenReturn(Optional.of(request));
+        when(returnRequestRepository.save(any(ReturnRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReturnRequestResponse response = returnRequestService.confirmReceipt(returnId, storeId, "vendor@local");
+
+        assertEquals(0, response.getRefundAmount().compareTo(new BigDecimal("90000.00")));
+    }
+
     private User buildUser(UUID userId) {
         return User.builder()
                 .id(userId)

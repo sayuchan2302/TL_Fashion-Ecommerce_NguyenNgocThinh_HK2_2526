@@ -7,6 +7,7 @@ import { formatCurrency } from '../../services/commissionService';
 import { vendorPortalService } from '../../services/vendorPortalService';
 import { useToast } from '../../contexts/ToastContext';
 import { getUiErrorMessage } from '../../utils/errorMessage';
+import { getOptimizedImageUrl } from '../../utils/getOptimizedImageUrl';
 import { AdminStateBlock } from '../Admin/AdminStateBlocks';
 
 type Period = 'today' | 'week' | 'month';
@@ -49,6 +50,17 @@ const periodLabels: Record<Period, string> = {
   month: '30 ngày',
 };
 
+
+const buildTopProductFallbackImage = (name: string) =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=E2E8F0&color=334155&size=120&font-size=0.45`;
+
+const resolveTopProductImage = (name: string, image?: string) => {
+  const normalized = (image || '').trim();
+  if (!normalized) {
+    return buildTopProductFallbackImage(name);
+  }
+  return getOptimizedImageUrl(normalized, { width: 120, format: 'webp' }) || normalized;
+};
 const VendorAnalytics = () => {
   const { addToast } = useToast();
   const [activePeriod, setActivePeriod] = useState<Period>('week');
@@ -108,7 +120,11 @@ const VendorAnalytics = () => {
     [analytics.dailyData]
   );
 
-  const topRevenue = Math.max(...analytics.topProducts.map((item) => item.revenue), 1);
+  const topSellingProducts = useMemo(
+    () => [...analytics.topProducts].sort((a, b) => b.sales - a.sales).slice(0, 3),
+    [analytics.topProducts]
+  );
+  const topSales = Math.max(...topSellingProducts.map((item) => item.sales), 1);
 
   const TrendIndicator = ({ value, label }: { value: number; label: string }) => {
     const isPositive = value >= 0;
@@ -350,30 +366,40 @@ const VendorAnalytics = () => {
               <div className="analytics-panel-head">
                 <h2>Sản phẩm bán chạy</h2>
                 <span className="analytics-muted">
-                  {analytics.topProducts.length > 0 ? `${analytics.topProducts.length} sản phẩm` : 'Chưa có dữ liệu'}
+                  {topSellingProducts.length > 0 ? `Top ${topSellingProducts.length}` : 'Chưa có dữ liệu'}
                 </span>
               </div>
-              {analytics.topProducts.length === 0 ? (
+              {topSellingProducts.length === 0 ? (
                 <div className="analytics-empty-products">
                   <Package size={32} className="analytics-empty-icon" />
                   <p>Chưa có sản phẩm nổi bật</p>
                   <span className="analytics-muted">Top sản phẩm sẽ xuất hiện khi có doanh thu</span>
                 </div>
               ) : (
-                <div className="top-products-grid">
-                  {analytics.topProducts.map((product, index) => {
+                <div className="vendor-top-products-grid">
+                  {topSellingProducts.map((product, index) => {
                     const payout = product.revenue * (1 - analytics.commissionRate / 100);
-                    const pct = (product.revenue / topRevenue) * 100;
+                    const pct = (product.sales / topSales) * 100;
                     return (
-                      <div key={product.id} className="top-product-card">
-                        <div className="top-product-rank">#{index + 1}</div>
-                        <div className="top-product-info">
-                          <span className="top-product-name">{product.name}</span>
-                          <div className="top-product-stats">
-                            <span className="top-product-stat">
+                      <div key={product.id} className="vendor-analytics-product">
+                        <div className="vendor-analytics-product-rank">#{index + 1}</div>
+                        <img
+                          className="vendor-analytics-product-img"
+                          src={resolveTopProductImage(product.name, product.img)}
+                          alt={product.name}
+                          loading="lazy"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = buildTopProductFallbackImage(product.name);
+                          }}
+                        />
+                        <div className="vendor-analytics-product-info">
+                          <span className="name">{product.name}</span>
+                          <div className="stats">
+                            <span className="stat">
                               <ShoppingCart size={12} /> {product.sales} đã bán
                             </span>
-                            <span className="top-product-stat revenue">
+                            <span className="stat revenue">
                               {formatCurrency(product.revenue)}
                             </span>
                           </div>
@@ -381,9 +407,9 @@ const VendorAnalytics = () => {
                             <div className="top-product-bar-fill" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
-                        <div className="top-product-payout">
-                          <span className="top-product-payout-label">Thực nhận</span>
-                          <span className="top-product-payout-value">{formatCurrency(payout)}</span>
+                        <div className="vendor-analytics-product-payout">
+                          <span className="label">Thực nhận</span>
+                          <span className="value">{formatCurrency(payout)}</span>
                         </div>
                       </div>
                     );

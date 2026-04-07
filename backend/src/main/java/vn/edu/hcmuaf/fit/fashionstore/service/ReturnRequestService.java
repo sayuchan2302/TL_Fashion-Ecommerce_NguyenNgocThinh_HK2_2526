@@ -21,9 +21,13 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.ReturnRequestRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.StoreRepository;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -592,8 +596,122 @@ public class ReturnRequestService {
     }
 
     private BigDecimal calculateRefundAmount(ReturnRequest request) {
-        return request.getItems().stream()
-                .map(item -> safeAmount(item.getUnitPrice()).multiply(BigDecimal.valueOf(Math.max(0, item.getQuantity() == null ? 0 : item.getQuantity()))))
+        if (request == null) {
+            return BigDecimal.ZERO;
+        }
+
+        List<ReturnRequest.ReturnItemSnapshot> snapshots = request.getItems() == null ? List.of() : request.getItems();
+        if (snapshots.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        Order order = request.getOrder();
+        List<OrderItem> orderItems = order == null || order.getItems() == null ? List.of() : order.getItems();
+        if (orderItems.isEmpty()) {
+            return calculateLegacyRefundFromSnapshots(snapshots);
+        }
+
+        Map<UUID, OrderItem> orderItemMap = orderItems.stream()
+                .filter(item -> item != null && item.getId() != null)
+                .collect(Collectors.toMap(OrderItem::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+        if (orderItemMap.isEmpty()) {
+            return calculateLegacyRefundFromSnapshots(snapshots);
+        }
+
+        BigDecimal totalGross = orderItemMap.values().stream()
+                .map(item -> safeAmount(item.getTotalPrice()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalGross.compareTo(BigDecimal.ZERO) <= 0) {
+            return calculateLegacyRefundFromSnapshots(snapshots);
+        }
+
+        BigDecimal totalDiscount = safeAmount(order == null ? BigDecimal.ZERO : order.getDiscount())
+                .min(totalGross);
+        Map<UUID, BigDecimal> allocatedDiscountByItem = allocateDiscountByOrderItem(orderItemMap, totalGross, totalDiscount);
+
+        BigDecimal refund = BigDecimal.ZERO;
+        for (ReturnRequest.ReturnItemSnapshot snapshot : snapshots) {
+            if (snapshot == null || snapshot.getOrderItemId() == null) {
+                continue;
+            }
+
+            int returnQty = Math.max(0, snapshot.getQuantity() == null ? 0 : snapshot.getQuantity());
+            if (returnQty <= 0) {
+                continue;
+            }
+
+            OrderItem matchedItem = orderItemMap.get(snapshot.getOrderItemId());
+            if (matchedItem == null) {
+                refund = refund.add(
+                        safeAmount(snapshot.getUnitPrice())
+                                .multiply(BigDecimal.valueOf(returnQty))
+                );
+                continue;
+            }
+
+            int orderedQty = Math.max(0, matchedItem.getQuantity() == null ? 0 : matchedItem.getQuantity());
+            BigDecimal lineGross = safeAmount(matchedItem.getTotalPrice());
+            if (orderedQty <= 0 || lineGross.compareTo(BigDecimal.ZERO) <= 0) {
+                refund = refund.add(
+                        safeAmount(snapshot.getUnitPrice())
+                                .multiply(BigDecimal.valueOf(returnQty))
+                );
+                continue;
+            }
+
+            BigDecimal lineDiscount = allocatedDiscountByItem
+                    .getOrDefault(matchedItem.getId(), BigDecimal.ZERO)
+                    .min(lineGross);
+            BigDecimal lineNet = lineGross.subtract(lineDiscount).max(BigDecimal.ZERO);
+
+            BigDecimal lineRefund = lineNet.multiply(BigDecimal.valueOf(returnQty))
+                    .divide(BigDecimal.valueOf(orderedQty), 2, RoundingMode.HALF_UP)
+                    .min(lineNet);
+            refund = refund.add(lineRefund);
+        }
+
+        return refund.max(BigDecimal.ZERO);
+    }
+
+    private Map<UUID, BigDecimal> allocateDiscountByOrderItem(
+            Map<UUID, OrderItem> orderItemMap,
+            BigDecimal totalGross,
+            BigDecimal totalDiscount
+    ) {
+        Map<UUID, BigDecimal> allocatedByItem = new LinkedHashMap<>();
+        if (orderItemMap.isEmpty() || totalDiscount.compareTo(BigDecimal.ZERO) <= 0 || totalGross.compareTo(BigDecimal.ZERO) <= 0) {
+            return allocatedByItem;
+        }
+
+        List<OrderItem> sortedItems = new ArrayList<>(orderItemMap.values());
+        sortedItems.sort(Comparator.comparing(item -> item.getId().toString()));
+
+        BigDecimal allocated = BigDecimal.ZERO;
+        int size = sortedItems.size();
+        for (int i = 0; i < size; i++) {
+            OrderItem orderItem = sortedItems.get(i);
+            BigDecimal lineGross = safeAmount(orderItem.getTotalPrice());
+
+            BigDecimal lineDiscount;
+            if (i == size - 1) {
+                lineDiscount = totalDiscount.subtract(allocated);
+            } else {
+                lineDiscount = totalDiscount.multiply(lineGross)
+                        .divide(totalGross, 2, RoundingMode.HALF_UP);
+                allocated = allocated.add(lineDiscount);
+            }
+
+            lineDiscount = lineDiscount.max(BigDecimal.ZERO).min(lineGross);
+            allocatedByItem.put(orderItem.getId(), lineDiscount);
+        }
+        return allocatedByItem;
+    }
+
+    private BigDecimal calculateLegacyRefundFromSnapshots(List<ReturnRequest.ReturnItemSnapshot> snapshots) {
+        return snapshots.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(item -> safeAmount(item.getUnitPrice())
+                        .multiply(BigDecimal.valueOf(Math.max(0, item.getQuantity() == null ? 0 : item.getQuantity()))))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

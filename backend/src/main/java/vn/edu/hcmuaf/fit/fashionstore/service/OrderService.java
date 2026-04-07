@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
@@ -39,6 +40,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -110,6 +112,13 @@ public class OrderService {
     private static final LocalDateTime DEFAULT_FILTER_TO = LocalDateTime.of(2999, 12, 31, 23, 59, 59);
     private static final EnumSet<Order.OrderStatus> TRACKING_UPDATABLE_STATUSES =
             EnumSet.of(Order.OrderStatus.PROCESSING, Order.OrderStatus.SHIPPED);
+    private static final EnumSet<Order.OrderStatus> RESTOCKABLE_CANCEL_SOURCE_STATUSES =
+            EnumSet.of(
+                    Order.OrderStatus.PENDING,
+                    Order.OrderStatus.WAITING_FOR_VENDOR,
+                    Order.OrderStatus.CONFIRMED,
+                    Order.OrderStatus.PROCESSING
+            );
 
     private record PreparedOrderItem(
             Product product,
@@ -378,6 +387,7 @@ public class OrderService {
         if (savedOrder.isParentOrder()) {
             savedOrder = syncParentOrderStatus(savedOrder.getId());
         }
+        consumeDiscountUsageIfEligible(savedOrder);
         return toAdminOrderResponse(savedOrder);
     }
 
@@ -812,7 +822,7 @@ public class OrderService {
                     discountApplication.discountForStore(onlyGroup.storeId())
             );
             created = processOrderAfterCheckout(created);
-            incrementDiscountUsage(discountApplication);
+            consumeDiscountUsageIfEligible(created);
             return toAdminOrderResponse(created);
         }
 
@@ -826,7 +836,7 @@ public class OrderService {
                 discountApplication
         );
         parent = processOrderAfterCheckout(parent);
-        incrementDiscountUsage(discountApplication);
+        consumeDiscountUsageIfEligible(parent);
         return toAdminOrderResponse(parent);
     }
 
@@ -840,19 +850,7 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can only cancel orders waiting for vendor confirmation");
         }
 
-        order.setStatus(Order.OrderStatus.CANCELLED);
-        order.setNote((order.getNote() != null ? order.getNote() : "") + "\nCancellation reason: " + reason);
-        Order savedOrder = orderRepository.save(order);
-
-        if (savedOrder.isParentOrder()) {
-            cascadeCancelToSubOrders(savedOrder, reason);
-            return toAdminOrderResponse(syncParentOrderStatus(savedOrder.getId()));
-        }
-
-        if (savedOrder.isSubOrder()) {
-            syncParentOrderStatus(savedOrder.getParentOrder().getId());
-        }
-
+        Order savedOrder = applyStatusUpdate(order, Order.OrderStatus.CANCELLED, null, null, reason, false);
         return toAdminOrderResponse(savedOrder);
     }
 
@@ -983,6 +981,9 @@ public class OrderService {
         }
 
         order.setStatus(status);
+        if (status == Order.OrderStatus.CANCELLED) {
+            restoreReservedStockOnCancellation(order, previousStatus);
+        }
 
         if (status == Order.OrderStatus.DELIVERED) {
             if (enforceVendorRules) {
@@ -996,6 +997,10 @@ public class OrderService {
 
         if (savedOrder.isParentOrder()) {
             cascadeStatusToSubOrders(savedOrder, status, trackingNumber, carrier, reason);
+        }
+
+        if (savedOrder.getPaymentStatus() == Order.PaymentStatus.PAID) {
+            consumeDiscountUsageIfEligible(savedOrder);
         }
 
         if (status == Order.OrderStatus.DELIVERED && savedOrder.getStoreId() != null) {
@@ -1012,12 +1017,14 @@ public class OrderService {
             syncParentOrderStatus(savedOrder.getParentOrder().getId());
         }
 
+        if (savedOrder.isParentOrder()) {
+            return syncParentOrderStatus(savedOrder.getId());
+        }
+
         return savedOrder;
     }
 
     private void cascadeStatusToSubOrders(Order parentOrder, Order.OrderStatus status, String trackingNumber, String carrier, String reason) {
-        if (status == Order.OrderStatus.CANCELLED) return; // Handled separately by cascadeCancelToSubOrders
-
         List<Order> subOrders = orderRepository.findByParentOrderOrderByCreatedAtDesc(parentOrder);
         for (Order subOrder : subOrders) {
             if (subOrder.getStatus() == status) continue;
@@ -1028,6 +1035,58 @@ public class OrderService {
             // Recurse without enforcing vendor rules (since Admin forced it)
             applyStatusUpdate(subOrder, status, subTracking, subCarrier, reason, false);
         }
+    }
+
+    private void restoreReservedStockOnCancellation(Order order, Order.OrderStatus previousStatus) {
+        if (order == null || order.getStoreId() == null) {
+            return;
+        }
+        if (!RESTOCKABLE_CANCEL_SOURCE_STATUSES.contains(previousStatus)) {
+            return;
+        }
+
+        List<OrderItem> items = order.getItems() == null ? List.of() : order.getItems();
+        for (OrderItem item : items) {
+            restoreStockForOrderItem(item);
+        }
+    }
+
+    private void restoreStockForOrderItem(OrderItem item) {
+        if (item == null) {
+            return;
+        }
+        int quantity = Math.max(0, item.getQuantity() == null ? 0 : item.getQuantity());
+        if (quantity <= 0) {
+            return;
+        }
+
+        ProductVariant itemVariant = item.getVariant();
+        if (itemVariant != null && itemVariant.getId() != null) {
+            ProductVariant lockedVariant = productVariantRepository.findByIdForUpdate(itemVariant.getId()).orElse(null);
+            if (lockedVariant != null) {
+                lockedVariant.setStockQuantity(safeInt(lockedVariant.getStockQuantity()) + quantity);
+                Product variantProduct = lockedVariant.getProduct();
+                if (variantProduct != null && variantProduct.getId() != null) {
+                    Product lockedProduct = productRepository.findByIdForUpdate(variantProduct.getId()).orElse(null);
+                    if (lockedProduct != null) {
+                        Long activeVariantStock = productVariantRepository.sumActiveStockByProductId(lockedProduct.getId());
+                        int productStock = activeVariantStock == null ? 0 : Math.max(0, activeVariantStock.intValue());
+                        lockedProduct.setStockQuantity(productStock);
+                    }
+                }
+                return;
+            }
+        }
+
+        Product itemProduct = item.getProduct();
+        if (itemProduct == null || itemProduct.getId() == null) {
+            return;
+        }
+        Product lockedProduct = productRepository.findByIdForUpdate(itemProduct.getId()).orElse(null);
+        if (lockedProduct == null) {
+            return;
+        }
+        lockedProduct.setStockQuantity(safeInt(lockedProduct.getStockQuantity()) + quantity);
     }
 
     private void validateStatusTransition(Order.OrderStatus current, Order.OrderStatus next, boolean enforceVendorRules) {
@@ -1471,18 +1530,113 @@ public class OrderService {
         return byStore;
     }
 
-    private void incrementDiscountUsage(DiscountApplication discountApplication) {
-        if (discountApplication.coupon() != null) {
-            Coupon coupon = discountApplication.coupon();
-            coupon.setUsedCount(safeInt(coupon.getUsedCount()) + 1);
-            couponRepository.save(coupon);
+    private void consumeDiscountUsageIfEligible(Order rootCandidate) {
+        if (rootCandidate == null || rootCandidate.getId() == null) {
+            return;
+        }
+        if (rootCandidate.getParentOrder() != null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(rootCandidate.getDiscountUsageConsumed())) {
+            return;
+        }
+        String candidateCode = normalizeDiscountCode(rootCandidate.getCouponCode());
+        if (candidateCode == null) {
+            return;
+        }
+        if (!isDiscountEligibleForConsumption(rootCandidate)) {
+            return;
         }
 
-        if (discountApplication.voucher() != null) {
-            Voucher voucher = discountApplication.voucher();
-            voucher.setUsedCount(safeInt(voucher.getUsedCount()) + 1);
-            voucherRepository.save(voucher);
+        Order lockedRoot = orderRepository.findByIdForUpdate(rootCandidate.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (lockedRoot.getParentOrder() != null) {
+            return;
         }
+        if (Boolean.TRUE.equals(lockedRoot.getDiscountUsageConsumed())) {
+            return;
+        }
+
+        String normalizedCode = normalizeDiscountCode(lockedRoot.getCouponCode());
+        if (normalizedCode == null) {
+            return;
+        }
+        if (!isDiscountEligibleForConsumption(lockedRoot)) {
+            return;
+        }
+
+        boolean consumed = incrementVoucherUsageIfMatched(lockedRoot, normalizedCode);
+        if (!consumed) {
+            consumed = incrementCouponUsageIfMatched(normalizedCode);
+        }
+        if (!consumed) {
+            return;
+        }
+
+        lockedRoot.setDiscountUsageConsumed(true);
+        orderRepository.save(lockedRoot);
+    }
+
+    private boolean isDiscountEligibleForConsumption(Order order) {
+        if (order == null) {
+            return false;
+        }
+        if (order.getPaymentMethod() == Order.PaymentMethod.COD) {
+            return true;
+        }
+        return order.getPaymentStatus() == Order.PaymentStatus.PAID;
+    }
+
+    private boolean incrementCouponUsageIfMatched(String normalizedCode) {
+        Coupon coupon = couponRepository.findByCodeForUpdate(normalizedCode).orElse(null);
+        if (coupon == null) {
+            return false;
+        }
+        int usedCount = safeInt(coupon.getUsedCount());
+        Integer maxUses = coupon.getMaxUses();
+        if (maxUses != null && usedCount >= maxUses) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Coupon usage limit has been reached");
+        }
+        coupon.setUsedCount(usedCount + 1);
+        couponRepository.save(coupon);
+        return true;
+    }
+
+    private boolean incrementVoucherUsageIfMatched(Order rootOrder, String normalizedCode) {
+        Set<UUID> storeIds = new HashSet<>();
+        if (rootOrder.getStoreId() != null) {
+            storeIds.add(rootOrder.getStoreId());
+        }
+        if (rootOrder.isParentOrder()) {
+            List<Order> subOrders = orderRepository.findByParentOrderOrderByCreatedAtDesc(rootOrder);
+            for (Order subOrder : subOrders) {
+                if (subOrder.getStoreId() != null) {
+                    storeIds.add(subOrder.getStoreId());
+                }
+            }
+        }
+        if (storeIds.isEmpty()) {
+            return false;
+        }
+
+        List<Voucher> matchedVouchers = voucherRepository.findByCodeAndStoreIdsForUpdate(normalizedCode, storeIds);
+        if (matchedVouchers.isEmpty()) {
+            return false;
+        }
+        if (matchedVouchers.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher code is ambiguous for order stores");
+        }
+
+        Voucher voucher = matchedVouchers.get(0);
+        int totalIssued = safeInt(voucher.getTotalIssued());
+        int usedCount = safeInt(voucher.getUsedCount());
+        if (totalIssued <= 0 || usedCount >= totalIssued) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Voucher usage limit has been reached");
+        }
+        voucher.setUsedCount(usedCount + 1);
+        voucherRepository.save(voucher);
+        return true;
     }
 
     private String normalizeDiscountCode(String rawCode) {
@@ -1734,17 +1888,6 @@ public class OrderService {
         return originalNote + "\n" + splitNote;
     }
 
-    private void cascadeCancelToSubOrders(Order parentOrder, String reason) {
-        List<Order> subOrders = orderRepository.findByParentOrderOrderByCreatedAtDesc(parentOrder);
-        for (Order subOrder : subOrders) {
-            if (subOrder.getStatus() == Order.OrderStatus.PENDING || subOrder.getStatus() == Order.OrderStatus.WAITING_FOR_VENDOR) {
-                subOrder.setStatus(Order.OrderStatus.CANCELLED);
-                subOrder.setNote((subOrder.getNote() != null ? subOrder.getNote() : "") + "\nCancellation reason: " + reason);
-                orderRepository.save(subOrder);
-            }
-        }
-    }
-
     private Order syncParentOrderStatus(UUID parentOrderId) {
         Order parentOrder = findById(parentOrderId);
         List<Order> subOrders = orderRepository.findByParentOrderIdOrderByCreatedAtDesc(parentOrderId);
@@ -1767,7 +1910,11 @@ public class OrderService {
             parentOrder.setPaymentStatus(Order.PaymentStatus.FAILED);
         }
 
-        return orderRepository.save(parentOrder);
+        Order savedParent = orderRepository.save(parentOrder);
+        if (savedParent.getPaymentStatus() == Order.PaymentStatus.PAID) {
+            consumeDiscountUsageIfEligible(savedParent);
+        }
+        return savedParent;
     }
 
     private Order.OrderStatus deriveParentStatus(List<Order> subOrders) {

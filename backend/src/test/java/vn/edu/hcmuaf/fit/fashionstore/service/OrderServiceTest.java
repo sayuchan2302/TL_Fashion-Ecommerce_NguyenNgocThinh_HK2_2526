@@ -11,12 +11,15 @@ import org.springframework.web.server.ResponseStatusException;
 import vn.edu.hcmuaf.fit.fashionstore.dto.request.OrderRequest;
 import vn.edu.hcmuaf.fit.fashionstore.dto.response.AdminOrderResponse;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Address;
+import vn.edu.hcmuaf.fit.fashionstore.entity.Coupon;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
+import vn.edu.hcmuaf.fit.fashionstore.entity.OrderItem;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Product;
 import vn.edu.hcmuaf.fit.fashionstore.entity.ProductImage;
 import vn.edu.hcmuaf.fit.fashionstore.entity.ProductVariant;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Store;
 import vn.edu.hcmuaf.fit.fashionstore.entity.User;
+import vn.edu.hcmuaf.fit.fashionstore.entity.Voucher;
 import vn.edu.hcmuaf.fit.fashionstore.repository.AddressRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.CouponRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.OrderRepository;
@@ -27,6 +30,7 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.UserRepository;
 import vn.edu.hcmuaf.fit.fashionstore.repository.VoucherRepository;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
@@ -37,6 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -347,6 +354,392 @@ class OrderServiceTest {
         assertEquals(Order.OrderStatus.CANCELLED, updated.getStatus());
         assertEquals(1, walletService.getDebitCallCount());
         assertEquals(updated.getId(), walletService.getLastDebitedOrderId());
+    }
+
+    @Test
+    void adminCancelParentOrderCascadesToAllChildrenIncludingDelivered() {
+        UUID parentId = UUID.randomUUID();
+        Order parent = Order.builder()
+                .id(parentId)
+                .status(Order.OrderStatus.PROCESSING)
+                .subtotal(new BigDecimal("200000"))
+                .shippingFee(new BigDecimal("30000"))
+                .discount(BigDecimal.ZERO)
+                .total(new BigDecimal("230000"))
+                .paymentMethod(Order.PaymentMethod.COD)
+                .paymentStatus(Order.PaymentStatus.UNPAID)
+                .build();
+
+        Order subOrderA = buildStoreOrder(Order.OrderStatus.CONFIRMED);
+        subOrderA.setId(UUID.randomUUID());
+        subOrderA.setParentOrder(parent);
+        subOrderA.setPaymentMethod(Order.PaymentMethod.COD);
+        subOrderA.setPaymentStatus(Order.PaymentStatus.UNPAID);
+
+        Order subOrderB = buildStoreOrder(Order.OrderStatus.DELIVERED);
+        subOrderB.setId(UUID.randomUUID());
+        subOrderB.setParentOrder(parent);
+        subOrderB.setPaymentMethod(Order.PaymentMethod.COD);
+        subOrderB.setPaymentStatus(Order.PaymentStatus.PAID);
+
+        when(orderRepository.findById(parentId)).thenReturn(Optional.of(parent));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findByParentOrderOrderByCreatedAtDesc(parent)).thenReturn(List.of(subOrderA, subOrderB));
+        when(orderRepository.findByParentOrderIdOrderByCreatedAtDesc(parentId)).thenReturn(List.of(subOrderA, subOrderB));
+
+        Order updated = orderService.updateStatus(parentId, Order.OrderStatus.CANCELLED);
+
+        assertEquals(Order.OrderStatus.CANCELLED, updated.getStatus());
+        assertEquals(Order.OrderStatus.CANCELLED, subOrderA.getStatus());
+        assertEquals(Order.OrderStatus.CANCELLED, subOrderB.getStatus());
+    }
+
+    @Test
+    void cancelPreShipmentOrderRestoresReservedStock() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        Product product = Product.builder()
+                .id(productId)
+                .storeId(storeId)
+                .stockQuantity(3)
+                .build();
+        ProductVariant variant = ProductVariant.builder()
+                .id(variantId)
+                .product(product)
+                .isActive(true)
+                .stockQuantity(3)
+                .build();
+
+        Order order = buildStoreOrder(Order.OrderStatus.CONFIRMED);
+        OrderItem item = OrderItem.builder()
+                .id(UUID.randomUUID())
+                .order(order)
+                .product(product)
+                .variant(variant)
+                .quantity(2)
+                .unitPrice(new BigDecimal("50000"))
+                .totalPrice(new BigDecimal("100000"))
+                .storeId(storeId)
+                .build();
+        order.setItems(new ArrayList<>(List.of(item)));
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productVariantRepository.findByIdForUpdate(variantId)).thenReturn(Optional.of(variant));
+        when(productRepository.findByIdForUpdate(productId)).thenReturn(Optional.of(product));
+        when(productVariantRepository.sumActiveStockByProductId(productId)).thenReturn(5L);
+
+        Order updated = orderService.updateStatus(orderId, Order.OrderStatus.CANCELLED);
+
+        assertEquals(Order.OrderStatus.CANCELLED, updated.getStatus());
+        assertEquals(5, variant.getStockQuantity());
+        assertEquals(5, product.getStockQuantity());
+    }
+
+    @Test
+    void cancelShippedOrderDoesNotRestoreStock() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        Product product = Product.builder()
+                .id(productId)
+                .storeId(storeId)
+                .stockQuantity(3)
+                .build();
+        ProductVariant variant = ProductVariant.builder()
+                .id(variantId)
+                .product(product)
+                .isActive(true)
+                .stockQuantity(3)
+                .build();
+
+        Order order = buildStoreOrder(Order.OrderStatus.SHIPPED);
+        OrderItem item = OrderItem.builder()
+                .id(UUID.randomUUID())
+                .order(order)
+                .product(product)
+                .variant(variant)
+                .quantity(2)
+                .unitPrice(new BigDecimal("50000"))
+                .totalPrice(new BigDecimal("100000"))
+                .storeId(storeId)
+                .build();
+        order.setItems(List.of(item));
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order updated = orderService.updateStatus(orderId, Order.OrderStatus.CANCELLED);
+
+        assertEquals(Order.OrderStatus.CANCELLED, updated.getStatus());
+        assertEquals(3, variant.getStockQuantity());
+        assertEquals(3, product.getStockQuantity());
+        verify(productVariantRepository, never()).findByIdForUpdate(eq(variantId));
+        verify(productRepository, never()).findByIdForUpdate(eq(productId));
+    }
+
+    @Test
+    void createCodOrderConsumesDiscountUsageImmediately() {
+        UUID userId = UUID.randomUUID();
+        UUID addressId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        User user = User.builder()
+                .id(userId)
+                .email("buyer@example.com")
+                .password("secret")
+                .build();
+        Address address = Address.builder()
+                .id(addressId)
+                .user(user)
+                .fullName("Buyer")
+                .phone("0900000000")
+                .province("HCM")
+                .district("Q1")
+                .ward("Ben Nghe")
+                .detail("1 Test Street")
+                .build();
+        Product product = Product.builder()
+                .id(productId)
+                .name("T-Shirt")
+                .storeId(storeId)
+                .basePrice(new BigDecimal("100000"))
+                .salePrice(new BigDecimal("80000"))
+                .stockQuantity(5)
+                .build();
+        ProductVariant variant = ProductVariant.builder()
+                .id(variantId)
+                .product(product)
+                .sku("TS-RED-M")
+                .isActive(true)
+                .stockQuantity(5)
+                .priceAdjustment(BigDecimal.ZERO)
+                .build();
+        Store store = Store.builder()
+                .id(storeId)
+                .name("Store A")
+                .commissionRate(new BigDecimal("10.0"))
+                .build();
+        Coupon coupon = Coupon.builder()
+                .code("SAVE10")
+                .discountType(Coupon.DiscountType.PERCENT)
+                .discountValue(10.0)
+                .minOrderAmount(0.0)
+                .maxUses(100)
+                .usedCount(0)
+                .isActive(true)
+                .build();
+        OrderRequest request = OrderRequest.builder()
+                .addressId(addressId)
+                .paymentMethod("COD")
+                .couponCode("save10")
+                .items(List.of(
+                        OrderRequest.OrderItemRequest.builder()
+                                .productId(productId)
+                                .variantId(variantId)
+                                .quantity(1)
+                                .build()
+                ))
+                .build();
+
+        final Order[] persisted = new Order[1];
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
+        when(productRepository.findPublicByIdForUpdate(productId)).thenReturn(Optional.of(product));
+        when(productVariantRepository.findByIdForUpdate(variantId)).thenReturn(Optional.of(variant));
+        when(productVariantRepository.sumActiveStockByProductId(productId)).thenReturn(4L);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+        when(couponRepository.findByCode("SAVE10")).thenReturn(Optional.of(coupon));
+        when(couponRepository.findByCodeForUpdate("SAVE10")).thenReturn(Optional.of(coupon));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(orderId);
+            }
+            persisted[0] = saved;
+            return saved;
+        });
+        when(orderRepository.findByIdForUpdate(orderId)).thenAnswer(invocation -> Optional.ofNullable(persisted[0]));
+
+        orderService.create(userId, request);
+
+        assertEquals(1, coupon.getUsedCount());
+        assertTrue(Boolean.TRUE.equals(persisted[0].getDiscountUsageConsumed()));
+    }
+
+    @Test
+    void onlineOrderConsumesDiscountOnlyAfterPaidAndOnlyOnce() {
+        UUID userId = UUID.randomUUID();
+        UUID addressId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        User user = User.builder()
+                .id(userId)
+                .email("buyer@example.com")
+                .password("secret")
+                .build();
+        Address address = Address.builder()
+                .id(addressId)
+                .user(user)
+                .fullName("Buyer")
+                .phone("0900000000")
+                .province("HCM")
+                .district("Q1")
+                .ward("Ben Nghe")
+                .detail("1 Test Street")
+                .build();
+        Product product = Product.builder()
+                .id(productId)
+                .name("T-Shirt")
+                .storeId(storeId)
+                .basePrice(new BigDecimal("100000"))
+                .salePrice(new BigDecimal("80000"))
+                .stockQuantity(5)
+                .build();
+        ProductVariant variant = ProductVariant.builder()
+                .id(variantId)
+                .product(product)
+                .sku("TS-RED-M")
+                .isActive(true)
+                .stockQuantity(5)
+                .priceAdjustment(BigDecimal.ZERO)
+                .build();
+        Store store = Store.builder()
+                .id(storeId)
+                .name("Store A")
+                .commissionRate(new BigDecimal("10.0"))
+                .build();
+        Coupon coupon = Coupon.builder()
+                .code("SAVE10")
+                .discountType(Coupon.DiscountType.PERCENT)
+                .discountValue(10.0)
+                .minOrderAmount(0.0)
+                .maxUses(100)
+                .usedCount(0)
+                .isActive(true)
+                .build();
+        OrderRequest request = OrderRequest.builder()
+                .addressId(addressId)
+                .paymentMethod("VNPAY")
+                .couponCode("SAVE10")
+                .items(List.of(
+                        OrderRequest.OrderItemRequest.builder()
+                                .productId(productId)
+                                .variantId(variantId)
+                                .quantity(1)
+                                .build()
+                ))
+                .build();
+
+        final Order[] persisted = new Order[1];
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
+        when(productRepository.findPublicByIdForUpdate(productId)).thenReturn(Optional.of(product));
+        when(productVariantRepository.findByIdForUpdate(variantId)).thenReturn(Optional.of(variant));
+        when(productVariantRepository.sumActiveStockByProductId(productId)).thenReturn(4L);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+        when(couponRepository.findByCode("SAVE10")).thenReturn(Optional.of(coupon));
+        when(couponRepository.findByCodeForUpdate("SAVE10")).thenReturn(Optional.of(coupon));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(orderId);
+            }
+            persisted[0] = saved;
+            return saved;
+        });
+        when(orderRepository.findById(orderId)).thenAnswer(invocation -> Optional.ofNullable(persisted[0]));
+        when(orderRepository.findByIdForUpdate(orderId)).thenAnswer(invocation -> Optional.ofNullable(persisted[0]));
+
+        orderService.create(userId, request);
+        assertEquals(0, coupon.getUsedCount());
+
+        orderService.markOrderPaid(orderId);
+        assertEquals(1, coupon.getUsedCount());
+
+        orderService.markOrderPaid(orderId);
+        assertEquals(1, coupon.getUsedCount());
+        assertTrue(Boolean.TRUE.equals(persisted[0].getDiscountUsageConsumed()));
+    }
+
+    @Test
+    void markOrderPaidFailsWhenCouponUsageQuotaReachedAtConsumeTime() {
+        UUID id = UUID.randomUUID();
+
+        Order order = Order.builder()
+                .id(id)
+                .status(Order.OrderStatus.WAITING_FOR_VENDOR)
+                .paymentMethod(Order.PaymentMethod.VNPAY)
+                .paymentStatus(Order.PaymentStatus.UNPAID)
+                .couponCode("SAVE10")
+                .discount(new BigDecimal("10000"))
+                .subtotal(new BigDecimal("100000"))
+                .shippingFee(BigDecimal.ZERO)
+                .total(new BigDecimal("90000"))
+                .build();
+        Coupon coupon = Coupon.builder()
+                .code("SAVE10")
+                .maxUses(1)
+                .usedCount(1)
+                .isActive(true)
+                .build();
+
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(couponRepository.findByCodeForUpdate("SAVE10")).thenReturn(Optional.of(coupon));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> orderService.markOrderPaid(id));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals("Coupon usage limit has been reached", ex.getReason());
+        assertEquals(1, safeInt(coupon.getUsedCount()));
+        assertTrue(!Boolean.TRUE.equals(order.getDiscountUsageConsumed()));
+    }
+
+    @Test
+    void markOrderPaidFailsWhenVoucherUsageQuotaReachedAtConsumeTime() {
+        UUID id = UUID.randomUUID();
+        UUID localStoreId = UUID.randomUUID();
+
+        Order order = Order.builder()
+                .id(id)
+                .storeId(localStoreId)
+                .status(Order.OrderStatus.WAITING_FOR_VENDOR)
+                .paymentMethod(Order.PaymentMethod.VNPAY)
+                .paymentStatus(Order.PaymentStatus.UNPAID)
+                .couponCode("VOUCH10")
+                .discount(new BigDecimal("10000"))
+                .subtotal(new BigDecimal("100000"))
+                .shippingFee(BigDecimal.ZERO)
+                .total(new BigDecimal("90000"))
+                .build();
+        Voucher voucher = Voucher.builder()
+                .storeId(localStoreId)
+                .code("VOUCH10")
+                .totalIssued(1)
+                .usedCount(1)
+                .status(Voucher.VoucherStatus.RUNNING)
+                .build();
+
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(voucherRepository.findByCodeAndStoreIdsForUpdate(eq("VOUCH10"), any())).thenReturn(List.of(voucher));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> orderService.markOrderPaid(id));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals("Voucher usage limit has been reached", ex.getReason());
+        assertEquals(1, safeInt(voucher.getUsedCount()));
+        assertTrue(!Boolean.TRUE.equals(order.getDiscountUsageConsumed()));
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private Order buildStoreOrder(Order.OrderStatus status) {

@@ -31,11 +31,11 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
             return;
         }
 
-        int duplicateVendorTxCount = countDuplicateVendorTransactions();
-        if (duplicateVendorTxCount > 0) {
+        int duplicateVendorReturnTxCount = countDuplicateVendorReturnTransactions();
+        if (duplicateVendorReturnTxCount > 0) {
             throw new IllegalStateException(
-                    "Cannot apply uq_wallet_tx_order_type because duplicate vendor wallet transactions already exist. " +
-                            "Please clean duplicate (order_id, type) rows first."
+                    "Cannot apply uq_wallet_tx_return_type because duplicate vendor return transactions already exist. " +
+                            "Please clean duplicate (return_request_id, type) rows first."
             );
         }
 
@@ -47,9 +47,10 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
             );
         }
 
+        dropConstraintIfExists("wallet_transactions", "uq_wallet_tx_order_type");
         ensureConstraint(
-                "uq_wallet_tx_order_type",
-                "ALTER TABLE wallet_transactions ADD CONSTRAINT uq_wallet_tx_order_type UNIQUE (order_id, type)"
+                "uq_wallet_tx_return_type",
+                "ALTER TABLE wallet_transactions ADD CONSTRAINT uq_wallet_tx_return_type UNIQUE (return_request_id, type)"
         );
         ensureConstraint(
                 "uq_customer_wallet_tx_return_type",
@@ -57,7 +58,7 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
         );
         ensureWalletTransactionTypeCheckConstraint();
 
-        log.info("Wallet constraints are ensured: uq_wallet_tx_order_type, uq_customer_wallet_tx_return_type, wallet_transactions_type_check");
+        log.info("Wallet constraints are ensured: uq_wallet_tx_return_type, uq_customer_wallet_tx_return_type, wallet_transactions_type_check");
     }
 
     private boolean tableExists(String qualifiedTableName) {
@@ -69,13 +70,13 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
         return Boolean.TRUE.equals(exists);
     }
 
-    private int countDuplicateVendorTransactions() {
+    private int countDuplicateVendorReturnTransactions() {
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM (
-                    SELECT order_id, type
+                    SELECT return_request_id, type
                     FROM wallet_transactions
-                    WHERE order_id IS NOT NULL
-                    GROUP BY order_id, type
+                    WHERE return_request_id IS NOT NULL
+                    GROUP BY return_request_id, type
                     HAVING COUNT(*) > 1
                 ) dup
                 """, Integer.class);
@@ -109,6 +110,10 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
         jdbcTemplate.execute(ddl);
     }
 
+    private void dropConstraintIfExists(String tableName, String constraintName) {
+        jdbcTemplate.execute("ALTER TABLE " + tableName + " DROP CONSTRAINT IF EXISTS " + constraintName);
+    }
+
     private void ensureWalletTransactionTypeCheckConstraint() {
         jdbcTemplate.execute("ALTER TABLE wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_type_check");
         jdbcTemplate.execute("""
@@ -122,7 +127,8 @@ public class WalletIdempotencySchemaMigration implements CommandLineRunner {
                         'ESCROW_CREDIT',
                         'ESCROW_RELEASE',
                         'PAYOUT_DEBIT',
-                        'REFUND_DEBIT'
+                        'REFUND_DEBIT',
+                        'RETURN_REFUND_DEBIT'
                     )
                 )
                 """);

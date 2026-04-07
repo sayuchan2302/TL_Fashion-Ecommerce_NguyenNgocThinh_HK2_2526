@@ -8,7 +8,6 @@ import {
   PanelDrawerFooter,
   PanelDrawerHeader,
   PanelDrawerSection,
-  PanelSearchField,
   PanelStatsGrid,
   PanelTabs,
   PanelTableFooter,
@@ -102,7 +101,6 @@ const VendorReturnDashboard = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<VendorReturnTab>('needsAction');
-  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [detailItem, setDetailItem] = useState<ReturnRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -129,7 +127,6 @@ const VendorReturnDashboard = () => {
       setLoadError(null);
       const response = await returnService.listVendor({
         statuses: TAB_STATUS_MAP[activeTab],
-        q: searchQuery,
         page: Math.max(page - 1, 0),
         size: PAGE_SIZE,
       });
@@ -150,7 +147,7 @@ const VendorReturnDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, page, searchQuery]);
+  }, [activeTab, page]);
 
   useEffect(() => {
     void fetchTabCounts();
@@ -159,10 +156,6 @@ const VendorReturnDashboard = () => {
   useEffect(() => {
     void fetchPageData();
   }, [fetchPageData]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, searchQuery]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -291,11 +284,6 @@ const VendorReturnDashboard = () => {
         <div className="admin-panel">
           <div className="admin-panel-head">
             <h2>Danh sách yêu cầu hoàn trả</h2>
-            <PanelSearchField
-              placeholder="Tìm theo mã hoàn trả, mã đơn, khách hàng..."
-              value={searchQuery}
-              onChange={setSearchQuery}
-            />
           </div>
 
           {isLoading ? (
@@ -314,13 +302,9 @@ const VendorReturnDashboard = () => {
             />
           ) : rows.length === 0 ? (
             <AdminStateBlock
-              type={searchQuery.trim() ? 'search-empty' : 'empty'}
-              title={searchQuery.trim() ? 'Không có yêu cầu phù hợp' : 'Chưa có yêu cầu hoàn trả'}
-              description={
-                searchQuery.trim()
-                  ? 'Thử đổi từ khóa hoặc tab để xem dữ liệu khác.'
-                  : 'Khi khách gửi yêu cầu đổi trả, dữ liệu sẽ hiển thị ở đây.'
-              }
+              type="empty"
+              title="Chưa có yêu cầu hoàn trả"
+              description="Khi khách gửi yêu cầu đổi trả, dữ liệu sẽ hiển thị ở đây."
             />
           ) : (
             <>
