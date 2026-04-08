@@ -32,10 +32,14 @@ public class VendorWallet extends BaseEntity {
     @Builder.Default
     private BigDecimal frozenBalance = BigDecimal.ZERO;
 
+    @Column(name = "reserved_balance", nullable = false)
+    @Builder.Default
+    private BigDecimal reservedBalance = BigDecimal.ZERO;
+
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
     public BigDecimal getTotalBalance() {
-        return availableBalance.add(frozenBalance);
+        return availableBalance.add(frozenBalance).add(reservedBalance);
     }
 }

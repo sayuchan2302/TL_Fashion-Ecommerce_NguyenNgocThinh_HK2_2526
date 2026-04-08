@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.hcmuaf.fit.fashionstore.event.SubOrderReadyForVendorEvent;
@@ -1655,7 +1654,6 @@ public class OrderService {
         return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO);
     }
 
-    @Transactional(isolation = Isolation.SERIALIZABLE)
     private Order createParentOrderWithSubOrders(
             User user,
             Address address,

@@ -63,7 +63,7 @@ const VendorSettings = () => {
       current ? { ...current, storeInfo: { ...current.storeInfo, [key]: value } } : current,
     );
 
-  const updateBankField = (key: keyof VendorSettingsData['bankInfo']) => (value: string | boolean) =>
+  const updateBankField = (key: 'bankName' | 'accountNumber' | 'accountHolder') => (value: string) =>
     setSettings((current) =>
       current ? { ...current, bankInfo: { ...current.bankInfo, [key]: value } } : current,
     );
@@ -270,7 +270,8 @@ const VendorSettings = () => {
                       <input
                         type="checkbox"
                         checked={settings.bankInfo.verified}
-                        onChange={() => updateBankField('verified')(!settings.bankInfo.verified)}
+                        disabled
+                        readOnly
                       />
                       <span className="switch-slider" />
                     </label>

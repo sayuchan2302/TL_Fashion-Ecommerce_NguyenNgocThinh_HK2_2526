@@ -107,7 +107,6 @@ interface StoreUpdateRequest {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountHolder?: string;
-  bankVerified?: boolean;
   notifyNewOrder?: boolean;
   notifyOrderStatusChange?: boolean;
   notifyLowStock?: boolean;

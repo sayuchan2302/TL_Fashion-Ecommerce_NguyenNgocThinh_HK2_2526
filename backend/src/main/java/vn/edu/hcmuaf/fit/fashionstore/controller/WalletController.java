@@ -49,7 +49,7 @@ public class WalletController {
     @PreAuthorize("hasRole('VENDOR')")
     public ResponseEntity<WalletResponse> getMyWallet(@RequestHeader("Authorization") String authHeader) {
         UserContext ctx = authContext.requireVendor(authHeader);
-        VendorWallet wallet = walletService.getWallet(ctx.getStoreId());
+        VendorWallet wallet = walletService.getOrCreateWallet(ctx.getStoreId());
         return ResponseEntity.ok(toResponse(wallet));
     }
 
@@ -82,7 +82,7 @@ public class WalletController {
     ) {
         BigDecimal amount = (payload != null && payload.get("amount") != null)
                 ? new BigDecimal(payload.get("amount").toString())
-                : walletService.getWallet(storeId).getAvailableBalance();
+                : walletService.getOrCreateWallet(storeId).getAvailableBalance();
         String note = (payload != null && payload.get("note") != null)
                 ? payload.get("note").toString()
                 : "Giai ngan toan bo so du";
@@ -176,6 +176,7 @@ public class WalletController {
                 .storeSlug(storeSlug)
                 .availableBalance(wallet.getAvailableBalance())
                 .frozenBalance(wallet.getFrozenBalance())
+                .reservedBalance(wallet.getReservedBalance())
                 .totalBalance(wallet.getTotalBalance())
                 .lastUpdated(wallet.getLastUpdated())
                 .build();

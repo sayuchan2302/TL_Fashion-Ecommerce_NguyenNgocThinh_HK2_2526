@@ -613,7 +613,6 @@ export const vendorPortalService = {
       bankName: payload.bankInfo.bankName,
       bankAccountNumber: payload.bankInfo.accountNumber,
       bankAccountHolder: payload.bankInfo.accountHolder,
-      bankVerified: payload.bankInfo.verified,
       notifyNewOrder: payload.notifications.newOrder,
       notifyOrderStatusChange: payload.notifications.orderStatusChange,
       notifyLowStock: payload.notifications.lowStock,

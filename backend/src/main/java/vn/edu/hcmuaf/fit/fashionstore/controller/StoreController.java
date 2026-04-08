@@ -151,6 +151,23 @@ public class StoreController {
         return ResponseEntity.ok(storeService.reactivateStore(id, admin.getUserId(), admin.getEmail()));
     }
 
+    @PatchMapping("/{id}/bank-verification")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<StoreResponse> updateBankVerification(
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody BankVerificationRequest request
+    ) {
+        AuthContext.UserContext admin = authContext.requireAdmin(authHeader);
+        return ResponseEntity.ok(storeService.updateBankVerification(
+                id,
+                request.getBankVerified(),
+                admin.getUserId(),
+                admin.getEmail(),
+                request.getNote()
+        ));
+    }
+
     @PutMapping("/my-store")
     public ResponseEntity<StoreResponse> updateStore(
             @RequestHeader("Authorization") String authHeader,
@@ -174,6 +191,27 @@ public class StoreController {
 
         public void setReason(String reason) {
             this.reason = reason;
+        }
+    }
+
+    public static class BankVerificationRequest {
+        private Boolean bankVerified;
+        private String note;
+
+        public Boolean getBankVerified() {
+            return bankVerified;
+        }
+
+        public void setBankVerified(Boolean bankVerified) {
+            this.bankVerified = bankVerified;
+        }
+
+        public String getNote() {
+            return note;
+        }
+
+        public void setNote(String note) {
+            this.note = note;
         }
     }
 }

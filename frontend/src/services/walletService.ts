@@ -7,6 +7,7 @@ export interface VendorWallet {
   storeSlug: string | null;
   availableBalance: number;
   frozenBalance: number;
+  reservedBalance: number;
   totalBalance: number;
   lastUpdated: string;
 }

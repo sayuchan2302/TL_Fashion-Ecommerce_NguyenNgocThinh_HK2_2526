@@ -348,9 +348,12 @@ class EscrowPayoutIntegrationTest {
                     .storeId(storeId)
                     .availableBalance(new BigDecimal("1200000"))
                     .frozenBalance(new BigDecimal("300000"))
+                    .reservedBalance(BigDecimal.ZERO)
                     .build();
 
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+            when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(BigDecimal.ZERO);
+            when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> {
                 PayoutRequest req = inv.getArgument(0);
                 req.setId(UUID.randomUUID());
@@ -365,6 +368,8 @@ class EscrowPayoutIntegrationTest {
             assertEquals("Nguyen Van A", request.getBankAccountName());
             assertEquals("1234567890", request.getBankAccountNumber());
             assertEquals("VCB", request.getBankName());
+            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("700000")));
+            assertEquals(0, wallet.getReservedBalance().compareTo(new BigDecimal("500000")));
 
             verify(payoutRequestRepository).save(any(PayoutRequest.class));
         }
@@ -379,9 +384,11 @@ class EscrowPayoutIntegrationTest {
                     .storeId(storeId)
                     .availableBalance(new BigDecimal("1200000"))
                     .frozenBalance(new BigDecimal("3000000"))
+                    .reservedBalance(BigDecimal.ZERO)
                     .build();
 
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+            when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(BigDecimal.ZERO);
 
             assertThrows(IllegalArgumentException.class,
                     () -> walletService.createPayoutRequest(storeId, amount, "A", "123", "VCB"),
@@ -389,8 +396,8 @@ class EscrowPayoutIntegrationTest {
         }
 
         @Test
-        @DisplayName("Does NOT deduct balance on request creation (only on approval)")
-        void createPayoutRequestDoesNotDeductBalance() {
+        @DisplayName("Moves amount from available to reserved on request creation")
+        void createPayoutRequestReservesBalance() {
             UUID storeId = UUID.randomUUID();
             BigDecimal amount = new BigDecimal("500000");
             BigDecimal initialAvailable = new BigDecimal("1200000");
@@ -399,9 +406,12 @@ class EscrowPayoutIntegrationTest {
                     .storeId(storeId)
                     .availableBalance(initialAvailable)
                     .frozenBalance(new BigDecimal("300000"))
+                    .reservedBalance(BigDecimal.ZERO)
                     .build();
 
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+            when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(BigDecimal.ZERO);
+            when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> {
                 PayoutRequest req = inv.getArgument(0);
                 req.setId(UUID.randomUUID());
@@ -410,9 +420,10 @@ class EscrowPayoutIntegrationTest {
 
             walletService.createPayoutRequest(storeId, amount, "A", "123", "VCB");
 
-            assertEquals(0, wallet.getAvailableBalance().compareTo(initialAvailable),
-                    "Balance should NOT change on request creation");
-            verify(vendorWalletRepository, never()).save(any());
+            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("700000")),
+                    "availableBalance should be reserved during request creation");
+            assertEquals(0, wallet.getReservedBalance().compareTo(new BigDecimal("500000")),
+                    "reservedBalance should increase during request creation");
         }
     }
 
@@ -441,6 +452,7 @@ class EscrowPayoutIntegrationTest {
                     .storeId(storeId)
                     .availableBalance(new BigDecimal("1200000"))
                     .frozenBalance(new BigDecimal("300000"))
+                    .reservedBalance(new BigDecimal("500000"))
                     .build();
 
             when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
@@ -453,10 +465,12 @@ class EscrowPayoutIntegrationTest {
             PayoutRequest result = walletService.approvePayoutRequest(payoutId, adminId);
 
             assertEquals(PayoutRequest.PayoutStatus.APPROVED, result.getStatus());
-            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("700000")),
-                    "availableBalance should be deducted");
+            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("1200000")),
+                    "availableBalance should be unchanged after approval");
             assertEquals(0, wallet.getFrozenBalance().compareTo(new BigDecimal("300000")),
                     "frozenBalance should be unchanged");
+            assertEquals(0, wallet.getReservedBalance().compareTo(BigDecimal.ZERO),
+                    "reservedBalance should be deducted on approval");
 
             verify(walletTransactionRepository).save(argThat(tx ->
                     tx.getType() == WalletTransaction.TransactionType.PAYOUT_DEBIT
@@ -483,8 +497,8 @@ class EscrowPayoutIntegrationTest {
         }
 
         @Test
-        @DisplayName("Cannot approve when availableBalance dropped below payout amount")
-        void approvePayoutFailsOnInsufficientBalanceAtApprovalTime() {
+        @DisplayName("Cannot approve when reservedBalance dropped below payout amount")
+        void approvePayoutFailsOnInsufficientReservedAtApprovalTime() {
             UUID payoutId = UUID.randomUUID();
             UUID storeId = UUID.randomUUID();
             BigDecimal amount = new BigDecimal("500000");
@@ -498,8 +512,9 @@ class EscrowPayoutIntegrationTest {
 
             VendorWallet wallet = VendorWallet.builder()
                     .storeId(storeId)
-                    .availableBalance(new BigDecimal("100000"))
+                    .availableBalance(new BigDecimal("900000"))
                     .frozenBalance(new BigDecimal("0"))
+                    .reservedBalance(new BigDecimal("100000"))
                     .build();
 
             when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
@@ -507,7 +522,7 @@ class EscrowPayoutIntegrationTest {
 
             assertThrows(IllegalArgumentException.class,
                     () -> walletService.approvePayoutRequest(payoutId, UUID.randomUUID()),
-                    "Should fail if balance dropped between request and approval");
+                    "Should fail if reserved balance dropped between request and approval");
         }
     }
 
@@ -518,7 +533,7 @@ class EscrowPayoutIntegrationTest {
     class PayoutRejectionTests {
 
         @Test
-        @DisplayName("Sets status to REJECTED with admin note, no balance change")
+        @DisplayName("Sets status to REJECTED, returns reserved amount back to available")
         void rejectPayoutSetsRejectedStatus() {
             UUID payoutId = UUID.randomUUID();
             UUID storeId = UUID.randomUUID();
@@ -532,8 +547,17 @@ class EscrowPayoutIntegrationTest {
                     .status(PayoutRequest.PayoutStatus.PENDING)
                     .build();
 
+            VendorWallet wallet = VendorWallet.builder()
+                    .storeId(storeId)
+                    .availableBalance(new BigDecimal("700000"))
+                    .frozenBalance(new BigDecimal("300000"))
+                    .reservedBalance(new BigDecimal("500000"))
+                    .build();
+
             when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(request));
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+            when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
 
             PayoutRequest result = walletService.rejectPayoutRequest(payoutId, adminId, "Account verification failed");
 
@@ -541,9 +565,8 @@ class EscrowPayoutIntegrationTest {
             assertEquals("Account verification failed", result.getAdminNote());
             assertEquals(adminId, result.getProcessedBy());
             assertNotNull(result.getProcessedAt());
-
-            verify(vendorWalletRepository, never()).findByStoreIdForUpdate(any());
-            verify(vendorWalletRepository, never()).save(any());
+            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("1200000")));
+            assertEquals(0, wallet.getReservedBalance().compareTo(BigDecimal.ZERO));
         }
     }
 
@@ -554,8 +577,8 @@ class EscrowPayoutIntegrationTest {
     class ConcurrencyTests {
 
         @Test
-        @DisplayName("Multiple payout requests can be created while balance remains unchanged until approval")
-        void multiplePayoutRequestsCanBeCreatedUntilApproval() {
+        @DisplayName("Second payout request is rejected when it exceeds remaining available balance")
+        void secondPayoutRequestIsRejectedWhenOverCommitted() {
             UUID storeId = UUID.randomUUID();
             BigDecimal available = new BigDecimal("1200000");
             BigDecimal requestAmount = new BigDecimal("1000000");
@@ -564,9 +587,12 @@ class EscrowPayoutIntegrationTest {
                     .storeId(storeId)
                     .availableBalance(available)
                     .frozenBalance(new BigDecimal("0"))
+                    .reservedBalance(BigDecimal.ZERO)
                     .build();
 
             when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+            when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(BigDecimal.ZERO, requestAmount);
             when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> {
                 PayoutRequest req = inv.getArgument(0);
                 req.setId(UUID.randomUUID());
@@ -576,11 +602,10 @@ class EscrowPayoutIntegrationTest {
             PayoutRequest first = walletService.createPayoutRequest(storeId, requestAmount, "A", "111", "VCB");
             assertEquals(PayoutRequest.PayoutStatus.PENDING, first.getStatus());
 
-            PayoutRequest second = walletService.createPayoutRequest(storeId, requestAmount, "B", "222", "VCB");
-            assertEquals(PayoutRequest.PayoutStatus.PENDING, second.getStatus());
-
-            assertEquals(0, wallet.getAvailableBalance().compareTo(available),
-                    "availableBalance should not be deducted during request creation");
+            assertThrows(IllegalArgumentException.class,
+                    () -> walletService.createPayoutRequest(storeId, requestAmount, "B", "222", "VCB"));
+            assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("200000")));
+            assertEquals(0, wallet.getReservedBalance().compareTo(requestAmount));
         }
     }
 

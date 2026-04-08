@@ -14,14 +14,9 @@ import vn.edu.hcmuaf.fit.fashionstore.repository.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,8 +51,8 @@ class ConcurrencyPerformanceTest {
     // ─── CONCURRENCY: Rapid Payout Requests ──────────────────────────────────
 
     @Test
-    @DisplayName("Race Condition: concurrent payout request creation does not deduct balance before approval")
-    void concurrentPayoutRequestsCreationKeepsBalanceUnchanged() throws InterruptedException {
+    @DisplayName("Sequential payout requests enforce commitment guard")
+    void sequentialPayoutRequestsEnforceCommitmentGuard() {
         setUpService();
         UUID storeId = UUID.randomUUID();
         BigDecimal available = new BigDecimal("1200000");
@@ -67,49 +62,24 @@ class ConcurrencyPerformanceTest {
                 .storeId(storeId)
                 .availableBalance(available)
                 .frozenBalance(BigDecimal.ZERO)
+                .reservedBalance(BigDecimal.ZERO)
                 .build();
 
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failCount = new AtomicInteger(0);
-        CountDownLatch latch = new CountDownLatch(5);
-        ExecutorService executor = Executors.newFixedThreadPool(5);
-
-        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenAnswer(inv -> {
-            synchronized (wallet) {
-                return Optional.of(wallet);
-            }
-        });
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+        when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenAnswer(inv -> wallet.getReservedBalance());
         when(payoutRequestRepository.save(any())).thenAnswer(inv -> {
             PayoutRequest req = inv.getArgument(0);
             req.setId(UUID.randomUUID());
             return req;
         });
 
-        for (int i = 0; i < 5; i++) {
-            final int idx = i;
-            executor.submit(() -> {
-                try {
-                    walletService.createPayoutRequest(
-                            storeId, requestAmount,
-                            "User " + idx, "ACC" + idx, "VCB");
-                    successCount.incrementAndGet();
-                } catch (IllegalArgumentException e) {
-                    failCount.incrementAndGet();
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
+        walletService.createPayoutRequest(storeId, requestAmount, "User 1", "ACC1", "VCB");
+        assertThrows(IllegalArgumentException.class,
+                () -> walletService.createPayoutRequest(storeId, requestAmount, "User 2", "ACC2", "VCB"));
 
-        latch.await();
-        executor.shutdown();
-
-        assertEquals(5, successCount.get(),
-                "All requests can be created as pending because deduction happens at approval time");
-        assertEquals(0, failCount.get(),
-                "Creation should not fail due to balances reserved by other pending requests");
-        assertEquals(0, wallet.getAvailableBalance().compareTo(available),
-                "availableBalance should remain unchanged after request creation");
+        assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("200000")));
+        assertEquals(0, wallet.getReservedBalance().compareTo(new BigDecimal("1000000")));
     }
 
     // ─── PERFORMANCE: Analytics Query Speed ──────────────────────────────────

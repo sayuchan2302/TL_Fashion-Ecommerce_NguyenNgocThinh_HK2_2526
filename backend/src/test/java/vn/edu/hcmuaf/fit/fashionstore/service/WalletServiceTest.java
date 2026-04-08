@@ -8,6 +8,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import vn.edu.hcmuaf.fit.fashionstore.exception.ResourceNotFoundException;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWallet;
 import vn.edu.hcmuaf.fit.fashionstore.entity.CustomerWalletTransaction;
 import vn.edu.hcmuaf.fit.fashionstore.entity.Order;
@@ -308,6 +309,89 @@ class WalletServiceTest {
                         && orderId.equals(transaction.getOrderId())
                         && transaction.getAmount().compareTo(new BigDecimal("50000")) == 0
         ));
+    }
+
+    @Test
+    void createPayoutRequestRejectsWhenPendingCommitmentExceedsAvailable() {
+        UUID storeId = UUID.randomUUID();
+        VendorWallet wallet = VendorWallet.builder()
+                .storeId(storeId)
+                .availableBalance(new BigDecimal("1000000"))
+                .reservedBalance(BigDecimal.ZERO)
+                .frozenBalance(BigDecimal.ZERO)
+                .build();
+
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+        when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(new BigDecimal("800000"));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> walletService.createPayoutRequest(storeId, new BigDecimal("300000"), "A", "123", "VCB")
+        );
+
+        assertEquals("Insufficient available balance after pending payouts", ex.getMessage());
+        verify(payoutRequestRepository, never()).save(any(PayoutRequest.class));
+    }
+
+    @Test
+    void payoutRejectReleasesReservedAndAllowsRecreate() {
+        UUID storeId = UUID.randomUUID();
+        UUID payoutId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        BigDecimal amount = new BigDecimal("600000");
+
+        VendorWallet wallet = VendorWallet.builder()
+                .storeId(storeId)
+                .availableBalance(new BigDecimal("1000000"))
+                .reservedBalance(BigDecimal.ZERO)
+                .frozenBalance(BigDecimal.ZERO)
+                .build();
+
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.of(wallet));
+        when(payoutRequestRepository.sumPendingAmountByStoreId(storeId)).thenReturn(BigDecimal.ZERO);
+        when(payoutRequestRepository.save(any(PayoutRequest.class))).thenAnswer(inv -> {
+            PayoutRequest request = inv.getArgument(0);
+            if (request.getId() == null) {
+                request.setId(payoutId);
+            }
+            return request;
+        });
+
+        PayoutRequest created = walletService.createPayoutRequest(storeId, amount, "A", "123", "VCB");
+        assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("400000")));
+        assertEquals(0, wallet.getReservedBalance().compareTo(amount));
+
+        when(payoutRequestRepository.findByIdForUpdate(payoutId)).thenReturn(Optional.of(created));
+        walletService.rejectPayoutRequest(payoutId, adminId, "rejected");
+
+        assertEquals(0, wallet.getAvailableBalance().compareTo(new BigDecimal("1000000")));
+        assertEquals(0, wallet.getReservedBalance().compareTo(BigDecimal.ZERO));
+
+        PayoutRequest recreated = walletService.createPayoutRequest(storeId, amount, "A", "123", "VCB");
+        assertEquals(PayoutRequest.PayoutStatus.PENDING, recreated.getStatus());
+    }
+
+    @Test
+    void getWalletReadOnlyDoesNotCreateWallet() {
+        UUID storeId = UUID.randomUUID();
+        when(vendorWalletRepository.findByStoreId(storeId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> walletService.getWallet(storeId));
+        verify(vendorWalletRepository, never()).save(any(VendorWallet.class));
+    }
+
+    @Test
+    void getOrCreateWalletCreatesWalletWhenMissing() {
+        UUID storeId = UUID.randomUUID();
+        when(vendorWalletRepository.findByStoreIdForUpdate(storeId)).thenReturn(Optional.empty());
+        when(vendorWalletRepository.save(any(VendorWallet.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        VendorWallet wallet = walletService.getOrCreateWallet(storeId);
+
+        assertEquals(storeId, wallet.getStoreId());
+        assertEquals(0, wallet.getAvailableBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0, wallet.getReservedBalance().compareTo(BigDecimal.ZERO));
+        verify(vendorWalletRepository).save(any(VendorWallet.class));
     }
 
     private static final class FixedPublicCodeService extends PublicCodeService {

@@ -91,7 +91,7 @@ public class StoreService {
                 .bankName(request.getBankName())
                 .bankAccountNumber(request.getBankAccountNumber())
                 .bankAccountHolder(request.getBankAccountHolder())
-                .bankVerified(defaultIfNull(request.getBankVerified(), false))
+                .bankVerified(false)
                 .notifyNewOrder(defaultIfNull(request.getNotifyNewOrder(), true))
                 .notifyOrderStatusChange(defaultIfNull(request.getNotifyOrderStatusChange(), true))
                 .notifyLowStock(defaultIfNull(request.getNotifyLowStock(), true))
@@ -374,9 +374,6 @@ public class StoreService {
         if (request.getBankAccountHolder() != null) {
             store.setBankAccountHolder(request.getBankAccountHolder());
         }
-        if (request.getBankVerified() != null) {
-            store.setBankVerified(request.getBankVerified());
-        }
         if (request.getNotifyNewOrder() != null) {
             store.setNotifyNewOrder(request.getNotifyNewOrder());
         }
@@ -413,6 +410,48 @@ public class StoreService {
 
         Store saved = storeRepository.save(store);
         return toResponse(saved);
+    }
+
+    @Transactional
+    public StoreResponse updateBankVerification(
+            UUID storeId,
+            Boolean bankVerified,
+            UUID adminId,
+            String adminEmail,
+            String note
+    ) {
+        if (bankVerified == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bankVerified is required");
+        }
+        try {
+            Store store = storeRepository.findById(storeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
+
+            store.setBankVerified(bankVerified);
+            Store saved = storeRepository.save(store);
+
+            writeAdminAuditLog(
+                    adminId,
+                    adminEmail,
+                    "STORE",
+                    "UPDATE_BANK_VERIFICATION",
+                    saved.getId(),
+                    true,
+                    note
+            );
+            return toResponse(saved);
+        } catch (RuntimeException ex) {
+            writeAdminAuditLog(
+                    adminId,
+                    adminEmail,
+                    "STORE",
+                    "UPDATE_BANK_VERIFICATION",
+                    storeId,
+                    false,
+                    ex.getMessage()
+            );
+            throw ex;
+        }
     }
 
     private String generateSlug(String input) {

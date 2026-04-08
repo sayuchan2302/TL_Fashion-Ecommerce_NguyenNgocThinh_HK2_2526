@@ -252,7 +252,7 @@ public class OrderController {
         
         return ResponseEntity.ok(Map.of(
                 "totalOrders", orderService.countByStoreId(effectiveStoreId),
-                "pendingOrders", orderService.countByStoreIdAndStatus(effectiveStoreId, Order.OrderStatus.PENDING),
+                "pendingOrders", orderService.countByStoreIdAndStatus(effectiveStoreId, Order.OrderStatus.WAITING_FOR_VENDOR),
                 "confirmedOrders", orderService.countByStoreIdAndStatus(effectiveStoreId, Order.OrderStatus.CONFIRMED),
                 "processingOrders", orderService.countByStoreIdAndStatus(effectiveStoreId, Order.OrderStatus.PROCESSING),
                 "shippedOrders", orderService.countByStoreIdAndStatus(effectiveStoreId, Order.OrderStatus.SHIPPED),

@@ -26,6 +26,14 @@ public interface PayoutRequestRepository extends JpaRepository<PayoutRequest, UU
     @Query("SELECT COALESCE(SUM(pr.amount), 0) FROM PayoutRequest pr WHERE pr.status = 'PENDING'")
     java.math.BigDecimal sumPendingAmount();
 
+    @Query("""
+            SELECT COALESCE(SUM(pr.amount), 0)
+            FROM PayoutRequest pr
+            WHERE pr.storeId = :storeId
+              AND pr.status = 'PENDING'
+            """)
+    java.math.BigDecimal sumPendingAmountByStoreId(@Param("storeId") UUID storeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT pr FROM PayoutRequest pr WHERE pr.id = :id")
     java.util.Optional<PayoutRequest> findByIdForUpdate(@Param("id") UUID id);

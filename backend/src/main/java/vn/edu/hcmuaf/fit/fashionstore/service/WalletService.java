@@ -310,12 +310,21 @@ public class WalletService {
             throw new IllegalArgumentException("Payout amount must be greater than zero");
         }
 
-        VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(storeId)
-                .orElseGet(() -> createWallet(storeId));
+        VendorWallet wallet = getOrCreateWallet(storeId);
+        BigDecimal pendingAmount = payoutRequestRepository.sumPendingAmountByStoreId(storeId);
+        BigDecimal spendableBase = wallet.getAvailableBalance().add(wallet.getReservedBalance());
 
         if (wallet.getAvailableBalance().compareTo(amount) < 0) {
             throw new IllegalArgumentException("Insufficient available balance. Available: " + wallet.getAvailableBalance());
         }
+        if (pendingAmount.add(amount).compareTo(spendableBase) > 0) {
+            throw new IllegalArgumentException("Insufficient available balance after pending payouts");
+        }
+
+        wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(amount));
+        wallet.setReservedBalance(wallet.getReservedBalance().add(amount));
+        wallet.setLastUpdated(LocalDateTime.now());
+        vendorWalletRepository.save(wallet);
 
         PayoutRequest request = PayoutRequest.builder()
                 .storeId(storeId)
@@ -347,11 +356,11 @@ public class WalletService {
             VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(request.getStoreId())
                     .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
-            if (wallet.getAvailableBalance().compareTo(request.getAmount()) < 0) {
-                throw new IllegalArgumentException("Insufficient available balance for payout approval");
+            if (wallet.getReservedBalance().compareTo(request.getAmount()) < 0) {
+                throw new IllegalArgumentException("Insufficient reserved balance for payout approval");
             }
 
-            wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(request.getAmount()));
+            wallet.setReservedBalance(wallet.getReservedBalance().subtract(request.getAmount()));
             wallet.setLastUpdated(LocalDateTime.now());
             vendorWalletRepository.save(wallet);
 
@@ -408,6 +417,17 @@ public class WalletService {
                 throw new IllegalStateException("Payout request is not pending");
             }
 
+            VendorWallet wallet = vendorWalletRepository.findByStoreIdForUpdate(request.getStoreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+
+            if (wallet.getReservedBalance().compareTo(request.getAmount()) < 0) {
+                throw new IllegalArgumentException("Insufficient reserved balance for payout rejection");
+            }
+            wallet.setReservedBalance(wallet.getReservedBalance().subtract(request.getAmount()));
+            wallet.setAvailableBalance(wallet.getAvailableBalance().add(request.getAmount()));
+            wallet.setLastUpdated(LocalDateTime.now());
+            vendorWalletRepository.save(wallet);
+
             request.setStatus(PayoutRequest.PayoutStatus.REJECTED);
             request.setAdminNote(note);
             request.setProcessedBy(adminId);
@@ -445,6 +465,7 @@ public class WalletService {
                 .storeId(storeId)
                 .availableBalance(BigDecimal.ZERO)
                 .frozenBalance(BigDecimal.ZERO)
+                .reservedBalance(BigDecimal.ZERO)
                 .lastUpdated(LocalDateTime.now())
                 .build());
     }
@@ -452,6 +473,12 @@ public class WalletService {
     @Transactional(readOnly = true)
     public VendorWallet getWallet(UUID storeId) {
         return vendorWalletRepository.findByStoreId(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+    }
+
+    @Transactional
+    public VendorWallet getOrCreateWallet(UUID storeId) {
+        return vendorWalletRepository.findByStoreIdForUpdate(storeId)
                 .orElseGet(() -> createWallet(storeId));
     }
 
@@ -461,9 +488,9 @@ public class WalletService {
                 keyword == null || keyword.isBlank() ? null : keyword.trim(), pageable);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<WalletTransaction> getTransactions(UUID storeId, Pageable pageable) {
-        VendorWallet wallet = getWallet(storeId);
+        VendorWallet wallet = getOrCreateWallet(storeId);
         return walletTransactionRepository.findByWalletId(wallet.getId(), pageable);
     }
 
