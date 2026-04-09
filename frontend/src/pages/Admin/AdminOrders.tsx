@@ -37,6 +37,7 @@ interface AdminOrderRow {
   productMeta: string;
   productExtra: string | null;
   total: string;
+  paymentMethod: string;
   paymentStatus: PaymentStatus;
   fulfillment: FulfillmentStatus;
   date: string;
@@ -62,21 +63,36 @@ const mapOrderRecordToRow = (order: AdminOrderRecord): AdminOrderRow => {
     productMeta: productMeta || 'Chưa có biến thể',
     productExtra: order.items.length > 1 ? `+${order.items.length - 1} sản phẩm khác` : null,
     total: order.total,
+    paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     fulfillment: order.fulfillment,
     date: order.date,
   };
 };
 
+const toTimestamp = (value: string) => {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const displayOrderCode = (code: string) => toDisplayOrderCode(code);
 
-const tone = (status: string) => {
-  const lower = status.toLowerCase();
-  if (lower.includes('thanh toán') || lower.includes('đã giao')) return 'success';
-  if (lower.includes('đang') || lower.includes('chờ')) return 'pending';
-  if (lower.includes('thất bại') || lower.includes('hoàn tiền') || lower.includes('hủy')) return 'error';
-  if (lower.includes('chưa')) return 'neutral';
-  return 'neutral';
+const formatPaymentMethod = (method: string) => {
+  const normalized = (method || '').trim().toUpperCase();
+  switch (normalized) {
+    case 'COD':
+      return 'COD';
+    case 'VNPAY':
+      return 'VNPay';
+    case 'MOMO':
+      return 'MoMo';
+    case 'ZALOPAY':
+      return 'ZaloPay';
+    case 'BANK_TRANSFER':
+      return 'Chuyen khoan';
+    default:
+      return normalized || 'N/A';
+  }
 };
 
 const tabs = [
@@ -104,7 +120,7 @@ const AdminOrders = () => {
 
   const getSearchText = useCallback(
     (row: AdminOrderRow) =>
-      `${displayOrderCode(row.code)} ${row.customer} ${row.email} ${row.phone} ${row.productName} ${row.productMeta} ${paymentLabel(row.paymentStatus)} ${shipLabel(row.fulfillment)}`,
+      `${displayOrderCode(row.code)} ${row.customer} ${row.email} ${row.phone} ${row.productName} ${row.productMeta} ${formatPaymentMethod(row.paymentMethod)} ${paymentLabel(row.paymentStatus)} ${shipLabel(row.fulfillment)}`,
     [],
   );
 
@@ -139,7 +155,10 @@ const AdminOrders = () => {
     setLoadError(null);
     try {
       const records = await listAdminOrders();
-      setRows(records.map(mapOrderRecordToRow));
+      const mapped = records
+        .map(mapOrderRecordToRow)
+        .sort((a, b) => toTimestamp(b.date) - toTimestamp(a.date));
+      setRows(mapped);
     } catch (error: unknown) {
       setRows([]);
       setLoadError(getUiErrorMessage(error, 'Không thể tải danh sách đơn hàng từ backend.'));
@@ -278,12 +297,12 @@ const AdminOrders = () => {
                     onChange={(event) => toggleAll(event.target.checked)}
                   />
                 </div>
-                <div role="columnheader">ORDER CODE</div>
+                <div role="columnheader">Mã đơn</div>
                 <div role="columnheader">Khách hàng</div>
                 <div role="columnheader">Sản phẩm</div>
                 <div role="columnheader" className="orders-col-gmv">GMV</div>
                 <div role="columnheader">Thanh toán</div>
-                <div role="columnheader">Ngày tạo</div>
+                <div role="columnheader">Thời gian</div>
                 <div role="columnheader" className="orders-col-actions">Hành động</div>
               </div>
 
@@ -323,11 +342,14 @@ const AdminOrders = () => {
                   </div>
                   <div role="cell" className="admin-bold order-total">{order.total}</div>
                   <div role="cell">
-                    <span className={`admin-pill ${tone(paymentLabel(order.paymentStatus))}`}>
-                      {paymentLabel(order.paymentStatus)}
+                    <span className="admin-pill neutral">
+                      {formatPaymentMethod(order.paymentMethod)}
                     </span>
                   </div>
-                  <div role="cell" className="admin-muted order-date">{new Date(order.date).toLocaleDateString('vi-VN')}</div>
+                  <div role="cell" className="order-date-cell">
+                    <span className="order-date-time">{new Date(order.date).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="order-date-day">{new Date(order.date).toLocaleDateString('vi-VN')}</span>
+                  </div>
                   <div role="cell" className="admin-actions orders-actions" onClick={(event) => event.stopPropagation()}>
                     <Link
                       to={`/admin/orders/${resolveDetailRouteKey(order.code, order.id)}`}

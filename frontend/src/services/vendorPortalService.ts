@@ -51,6 +51,10 @@ interface BackendVendorOrderSummary {
   trackingNumber?: string;
   shippingCarrier?: string;
   warehouseNote?: string;
+  productName?: string;
+  productMeta?: string;
+  productExtra?: string | null;
+  productImage?: string;
 }
 
 interface BackendVendorOrderDetail extends BackendVendorOrderSummary {
@@ -186,6 +190,10 @@ export interface VendorOrderSummary {
   commissionFee: number;
   vendorPayout: number;
   thumb?: string;
+  productName?: string;
+  productMeta?: string;
+  productExtra?: string | null;
+  productImage?: string;
 }
 
 export type VendorOrderLifecycleStatus =
@@ -346,6 +354,24 @@ const mapBackendStatus = (status?: string): VendorOrderLifecycleStatus => {
   }
 };
 
+const resolveVendorProductName = (order: BackendVendorOrderSummary): string => {
+  const explicitName = (order.productName || '').trim();
+  if (explicitName) return explicitName;
+
+  const meta = (order.productMeta || '').trim();
+  if (meta) {
+    const segments = meta
+      .split('•')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    const candidate = segments.find((segment) => !/^kích thước\b/i.test(segment))
+      || segments[segments.length - 1];
+    if (candidate) return candidate;
+  }
+
+  return 'Chưa có sản phẩm';
+};
+
 const mapOrderSummary = (order: BackendVendorOrderSummary): VendorOrderSummary => {
   const total = Number(order.total || 0);
 
@@ -361,6 +387,10 @@ const mapOrderSummary = (order: BackendVendorOrderSummary): VendorOrderSummary =
     commissionFee: Number(order.commissionFee ?? 0),
     vendorPayout: Number(order.vendorPayout ?? 0),
     thumb: FALLBACK_IMAGE,
+    productName: resolveVendorProductName(order),
+    productMeta: order.productMeta || '',
+    productExtra: order.productExtra || null,
+    productImage: order.productImage || FALLBACK_IMAGE,
   };
 };
 

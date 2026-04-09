@@ -98,6 +98,10 @@ public class VNPayService {
         boolean successTxn = isSuccessTransaction(responseCode, transactionStatus);
         boolean orderPaid = orderExists && order.getPaymentStatus() == Order.PaymentStatus.PAID;
 
+        if (checksumValid && orderExists && amountMatches && successTxn && !orderPaid) {
+            orderPaid = tryConfirmPaidFromVerifiedReturn(order);
+        }
+
         String status = "failed";
         String message = resolveVerifyMessage(checksumValid, orderExists, amountMatches, successTxn, responseCode, orderPaid);
         if (checksumValid && orderExists && amountMatches && successTxn) {
@@ -208,6 +212,24 @@ public class VNPayService {
 
     private boolean isSuccessTransaction(String responseCode, String transactionStatus) {
         return "00".equals(responseCode) && "00".equals(transactionStatus);
+    }
+
+    private boolean tryConfirmPaidFromVerifiedReturn(Order order) {
+        if (order == null) {
+            return false;
+        }
+        if (order.getPaymentStatus() == Order.PaymentStatus.PAID) {
+            return true;
+        }
+        if (order.getStatus() == Order.OrderStatus.CANCELLED || order.getStatus() == Order.OrderStatus.DELIVERED) {
+            return false;
+        }
+        try {
+            orderService.markOrderPaid(order.getId());
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private String resolveVerifyMessage(

@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class OrderService {
@@ -686,6 +688,18 @@ public class OrderService {
     }
 
     private SubOrderSummaryDto toSubOrderSummaryDto(Order subOrder, Map<UUID, String> storeNames) {
+        var items = subOrder.getItems();
+        var firstItem = items != null && !items.isEmpty() ? items.get(0) : null;
+        var primaryProductName = firstItem == null
+                ? null
+                : ((firstItem.getProductName() != null && !firstItem.getProductName().isBlank())
+                    ? firstItem.getProductName()
+                    : (firstItem.getProduct() != null ? firstItem.getProduct().getName() : null));
+        var productMeta = firstItem != null && firstItem.getVariantName() != null && !firstItem.getVariantName().isBlank()
+                ? "Kich thuoc " + firstItem.getVariantName()
+                : null;
+        var productExtra = items != null && items.size() > 1 ? "+" + (items.size() - 1) + " san pham khac" : null;
+
         return SubOrderSummaryDto.builder()
                 .id(subOrder.getId())
                 .code(subOrder.getOrderCode())
@@ -698,7 +712,11 @@ public class OrderService {
                 .total(subOrder.getTotal())
                 .trackingNumber(subOrder.getTrackingNumber())
                 .warehouseNote(subOrder.getWarehouseNote())
-                .itemCount(subOrder.getItems() == null ? 0 : subOrder.getItems().size())
+                .itemCount(items == null ? 0 : items.size())
+                .productName(primaryProductName)
+                .productMeta(productMeta)
+                .productExtra(productExtra)
+                .productImage(firstItem != null ? firstItem.getProductImage() : null)
                 .createdAt(subOrder.getCreatedAt())
                 .updatedAt(subOrder.getUpdatedAt())
                 .customer(SubOrderSummaryDto.Customer.builder()
@@ -1194,6 +1212,18 @@ public class OrderService {
     }
 
     private VendorOrderSummaryResponse toVendorOrderSummaryResponse(Order order) {
+        var items = order.getItems();
+        var firstItem = items != null && !items.isEmpty() ? items.get(0) : null;
+        var productMeta = firstItem != null
+                ? Stream.of(
+                        firstItem.getVariantName() != null ? "Kích thước " + firstItem.getVariantName() : null,
+                        firstItem.getProductName() != null ? null : (firstItem.getProduct() != null ? firstItem.getProduct().getName() : null)
+                    )
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining(" • "))
+                : null;
+        var productExtra = items != null && items.size() > 1 ? "+" + (items.size() - 1) + " sản phẩm khác" : null;
+
         return VendorOrderSummaryResponse.builder()
                 .id(order.getId())
                 .code(order.getOrderCode())
@@ -1203,7 +1233,7 @@ public class OrderService {
                 .total(order.getTotal())
                 .commissionFee(order.getCommissionFee())
                 .vendorPayout(order.getVendorPayout())
-                .itemCount(order.getItems() == null ? 0 : order.getItems().size())
+                .itemCount(items == null ? 0 : items.size())
                 .customer(VendorOrderSummaryResponse.Customer.builder()
                         .name(order.getUser() != null ? order.getUser().getName() : null)
                         .email(order.getUser() != null ? order.getUser().getEmail() : null)
@@ -1212,6 +1242,10 @@ public class OrderService {
                 .trackingNumber(order.getTrackingNumber())
                 .shippingCarrier(order.getShippingCarrier())
                 .warehouseNote(order.getWarehouseNote())
+                .productName(firstItem != null ? firstItem.getProductName() : null)
+                .productMeta(productMeta)
+                .productExtra(productExtra)
+                .productImage(firstItem != null ? firstItem.getProductImage() : null)
                 .build();
     }
 
@@ -1978,3 +2012,4 @@ public class OrderService {
         }
     }
 }
+

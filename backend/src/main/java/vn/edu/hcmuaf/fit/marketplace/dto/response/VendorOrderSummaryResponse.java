@@ -27,6 +27,10 @@ public class VendorOrderSummaryResponse {
     private String trackingNumber;
     private String shippingCarrier;
     private String warehouseNote;
+    private String productName;
+    private String productMeta;
+    private String productExtra;
+    private String productImage;
 
     @Data
     @Builder

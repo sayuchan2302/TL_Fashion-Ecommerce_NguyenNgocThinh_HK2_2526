@@ -218,11 +218,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeFromCart = (cartId: string) => {
-    const existing = items.find(i => i.cartId === cartId);
-    if (existing) {
-      setItems(prev => prev.filter(i => i.cartId !== cartId));
-      addToast('Đã xoá sản phẩm khỏi giỏ', 'remove');
-    }
+    setItems(prev => prev.filter(i => i.cartId !== cartId));
   };
 
   const updateQuantity = (cartId: string, quantity: number) => {

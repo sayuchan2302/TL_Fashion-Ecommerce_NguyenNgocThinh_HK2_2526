@@ -10,7 +10,6 @@ import {
   PanelTabs,
 } from '../../components/Panel/PanelPrimitives';
 import {
-  formatVendorOrderDate,
   getVendorOrderStatusLabel,
   getVendorOrderStatusTone,
 } from './vendorOrderPresentation';
@@ -487,18 +486,16 @@ const VendorOrders = () => {
                   </div>
                   <div>Mã đơn</div>
                   <div>Khách hàng</div>
+                  <div>Sản phẩm</div>
                   <div>Giá trị</div>
                   <div>Trạng thái</div>
-                  <div>Vận hành</div>
-                  <div>Ngày tạo</div>
+                  <div>Thời gian</div>
                   <div>Hành động</div>
                 </div>
 
                 {paginatedOrders.map((order) => {
                   const statusTone = getVendorOrderStatusTone(order.status);
                   const statusLabel = getVendorOrderStatusLabel(order.status);
-                  const payout = formatCurrency(order.vendorPayout);
-                  const commission = formatCurrency(order.commissionFee);
                   const isSelected = selected.has(order.id);
 
                   return (
@@ -522,15 +519,19 @@ const VendorOrders = () => {
                         <div className="admin-bold">{order.customer}</div>
                         <div className="admin-muted small">{order.email}</div>
                       </div>
-                      <div>
-                        <div className="admin-bold">{formatCurrency(order.total)}</div>
-                        <div className="admin-muted small">Payout {payout} · Fee {commission}</div>
+                      <div className="order-product-cell">
+                        <p className="admin-bold order-product-name">{order.productName}</p>
+                        <p className="admin-muted order-product-meta">{order.productMeta}</p>
+                        {order.productExtra ? <p className="order-product-extra">{order.productExtra}</p> : null}
                       </div>
+                      <div className="admin-bold">{formatCurrency(order.total)}</div>
                       <div>
                         <span className={`admin-pill ${statusTone}`}>{statusLabel}</span>
                       </div>
-                      <div className="admin-muted small">{order.items} SP</div>
-                      <div className="admin-muted small">{formatVendorOrderDate(order.date)}</div>
+                      <div className="order-date-cell">
+                        <span className="order-date-time">{new Date(order.date).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="order-date-day">{new Date(order.date).toLocaleDateString('vi-VN')}</span>
+                      </div>
                       <div className="admin-actions vendor-order-actions">
                         <Link to={`/vendor/orders/${resolveDetailRouteKey(order.code, order.id)}`} className="admin-icon-btn subtle" title="Chi tiết đơn hàng">
                           <Eye size={16} />

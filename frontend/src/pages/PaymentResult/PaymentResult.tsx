@@ -101,9 +101,19 @@ const PaymentResult = () => {
   }, [hasVnpQuery, location.search]);
 
   useEffect(() => {
-    if (!verifyResult || verifyResult.status !== 'success' || !verifyResult.orderPaid) {
+    if (!verifyResult) {
       return;
     }
+
+    const gatewaySuccess = verifyResult.responseCode === '00' && verifyResult.transactionStatus === '00';
+    const shouldClearPurchasedItems =
+      (verifyResult.status === 'success' && verifyResult.orderPaid)
+      || (verifyResult.status === 'pending' && gatewaySuccess);
+
+    if (!shouldClearPurchasedItems) {
+      return;
+    }
+
     const pending = getPendingVnpayCheckout();
     if (!pending) {
       return;

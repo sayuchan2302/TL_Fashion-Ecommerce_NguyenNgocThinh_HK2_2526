@@ -27,6 +27,10 @@ public class SubOrderSummaryDto {
     private String trackingNumber;
     private String warehouseNote;
     private Integer itemCount;
+    private String productName;
+    private String productMeta;
+    private String productExtra;
+    private String productImage;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Customer customer;

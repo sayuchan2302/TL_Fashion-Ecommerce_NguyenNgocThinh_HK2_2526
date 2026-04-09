@@ -2331,3 +2331,46 @@
     border-radius: 10px;
   }
 }
+
+.order-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.order-date-time {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.order-date-day {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.order-product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.order-product-name,
+.order-product-meta,
+.order-product-extra {
+  margin: 0;
+}
+
+.order-product-name,
+.order-product-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-product-extra {
+  font-size: 12px;
+  font-weight: 700;
+  color: #16a34a;
+}

@@ -9,6 +9,7 @@ import { CLIENT_TEXT } from '../../utils/texts';
 import { couponService, type Coupon } from '../../services/couponService';
 import { addressService } from '../../services/addressService';
 import { productService } from '../../services/productService';
+import { authService } from '../../services/authService';
 import {
   clearSelectedCartIdsForCheckout,
   getSelectedCartIdsForCheckout,
@@ -96,6 +97,23 @@ const Checkout = () => {
       navigate('/login?redirect=/checkout');
     }
   }, [navigate, addToast]);
+
+  useEffect(() => {
+    const session = authService.getSession() || authService.getAdminSession();
+    const sessionEmail = (session?.user?.email || '').trim();
+    if (!sessionEmail) {
+      return;
+    }
+    setFormValues((prev) => {
+      if (prev.email.trim()) {
+        return prev;
+      }
+      return {
+        ...prev,
+        email: sessionEmail,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const el = couponScrollRef.current;
@@ -1077,4 +1095,5 @@ const Checkout = () => {
 };
 
 export default Checkout;
+
 

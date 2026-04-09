@@ -1739,6 +1739,23 @@ body {
   justify-self: start;
 }
 
+.order-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.order-date-time {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.order-date-day {
+  color: #6b7280;
+  font-size: 12px;
+}
+
 .admin-status-group {
   display: inline-flex;
   flex-direction: row;
