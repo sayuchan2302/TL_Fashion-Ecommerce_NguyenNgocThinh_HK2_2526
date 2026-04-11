@@ -56,7 +56,7 @@
 
 .home-page .hero-slider {
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .home-loading {

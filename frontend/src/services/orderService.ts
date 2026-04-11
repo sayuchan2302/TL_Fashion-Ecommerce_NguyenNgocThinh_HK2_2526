@@ -132,6 +132,23 @@ export interface VnpayReturnVerifyResponse {
   message?: string;
 }
 
+export interface MomoCreatePayUrlResponse {
+  paymentUrl: string;
+  orderCode: string;
+  requestId?: string;
+  deeplink?: string;
+  qrCodeUrl?: string;
+}
+
+export interface MomoReturnVerifyResponse {
+  status: 'success' | 'failed' | 'pending';
+  orderCode?: string;
+  amount?: number;
+  resultCode?: string;
+  orderPaid: boolean;
+  message?: string;
+}
+
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -402,5 +419,25 @@ export const orderService = {
       ? `/api/payments/vnpay/return/verify?${query}`
       : '/api/payments/vnpay/return/verify';
     return apiRequest<VnpayReturnVerifyResponse>(path);
+  },
+
+  async createMomoPayUrl(orderCode: string): Promise<MomoCreatePayUrlResponse> {
+    const normalized = String(orderCode || '').trim();
+    if (!normalized) {
+      throw new Error('Order code is required');
+    }
+    return apiRequest<MomoCreatePayUrlResponse>(
+      `/api/payments/momo/orders/${encodeURIComponent(normalized)}/pay-url`,
+      { method: 'POST' },
+      { auth: true },
+    );
+  },
+
+  async verifyMomoReturn(search: string): Promise<MomoReturnVerifyResponse> {
+    const query = String(search || '').trim().replace(/^\?/, '');
+    const path = query
+      ? `/api/payments/momo/return/verify?${query}`
+      : '/api/payments/momo/return/verify';
+    return apiRequest<MomoReturnVerifyResponse>(path);
   },
 };

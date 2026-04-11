@@ -233,7 +233,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const clearCart = () => setItems([]);
 
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+  // Header badge should reflect number of product rows in cart, not total unit quantity.
+  const totalItems = items.length;
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const groupedByStore = () => groupByStore(items);
 

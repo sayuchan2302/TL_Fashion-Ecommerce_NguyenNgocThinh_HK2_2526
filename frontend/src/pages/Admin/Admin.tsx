@@ -34,12 +34,6 @@ const formatShortDate = (isoDate: string) => {
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 };
 
-const formatLongDate = (isoDate: string) => {
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return isoDate;
-  return date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
-};
-
 const buildSparkFromTrend = (series: number[]) => {
   if (series.length === 0) {
     return [1, 1, 1, 1, 1, 1, 1];
@@ -58,10 +52,159 @@ const resolveCategoryImage = (name: string, image?: string | null) => {
   return getOptimizedImageUrl(normalized, { width: 160, format: 'webp' }) || normalized;
 };
 
+type RevenueRange = 'week' | 'month' | 'year';
+
+type RevenueChartPoint = {
+  ts: number;
+  dateLabel: string;
+  fullDate: string;
+  gmv: number;
+  commission: number;
+};
+
+const toSafeDate = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getWeekStart = (date: Date) => {
+  const clone = new Date(date);
+  const day = (clone.getDay() + 6) % 7;
+  clone.setDate(clone.getDate() - day);
+  clone.setHours(0, 0, 0, 0);
+  return clone;
+};
+
+const ensureRenderableTrendPoints = (points: RevenueChartPoint[], range: RevenueRange): RevenueChartPoint[] => {
+  if (points.length !== 1) return points;
+
+  const current = points[0];
+  const prevDate = new Date(current.ts);
+
+  if (range === 'year') {
+    prevDate.setFullYear(prevDate.getFullYear() - 1);
+  } else if (range === 'month') {
+    prevDate.setMonth(prevDate.getMonth() - 1);
+  } else {
+    prevDate.setDate(prevDate.getDate() - 7);
+  }
+
+  const prevPoint: RevenueChartPoint = {
+    ts: prevDate.getTime(),
+    dateLabel:
+      range === 'year'
+        ? String(prevDate.getFullYear())
+        : `${String(prevDate.getMonth() + 1).padStart(2, '0')}/${prevDate.getFullYear()}`,
+    fullDate:
+      range === 'year'
+        ? `Nam ${prevDate.getFullYear()}`
+        : `Thang ${String(prevDate.getMonth() + 1).padStart(2, '0')}/${prevDate.getFullYear()}`,
+    gmv: 0,
+    commission: 0,
+  };
+
+  return [prevPoint, current].sort((a, b) => a.ts - b.ts);
+};
+
+const buildChartDataByRange = (
+  trend: Array<{ date: string; gmv: number; commission: number }>,
+  range: RevenueRange
+): RevenueChartPoint[] => {
+  if (!trend.length) return [];
+
+  const buckets = new Map<string, {
+    ts: number;
+    gmv: number;
+    commission: number;
+    dateLabel: string;
+    fullDate: string;
+  }>();
+
+  if (range === 'week') {
+    trend.forEach((point) => {
+      const date = toSafeDate(point.date);
+      if (!date) return;
+      const weekStart = getWeekStart(date);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const key = weekStart.toISOString().slice(0, 10);
+      const label = weekStart.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      const rangeLabel = `${weekStart.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${weekEnd.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+      const existing = buckets.get(key) || {
+        ts: weekStart.getTime(),
+        gmv: 0,
+        commission: 0,
+        dateLabel: label,
+        fullDate: `Tuần ${rangeLabel}`,
+      };
+      existing.gmv += Number(point.gmv || 0);
+      existing.commission += Number(point.commission || 0);
+      buckets.set(key, existing);
+    });
+  }
+
+  if (range === 'month') {
+    trend.forEach((point) => {
+      const date = toSafeDate(point.date);
+      if (!date) return;
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      const label = `${String(month).padStart(2, '0')}/${year}`;
+      const existing = buckets.get(key) || {
+        ts: new Date(year, month - 1, 1).getTime(),
+        gmv: 0,
+        commission: 0,
+        dateLabel: label,
+        fullDate: `Thang ${label}`,
+      };
+      existing.gmv += Number(point.gmv || 0);
+      existing.commission += Number(point.commission || 0);
+      buckets.set(key, existing);
+    });
+  }
+
+  if (range === 'year') {
+    trend.forEach((point) => {
+      const date = toSafeDate(point.date);
+      if (!date) return;
+      const year = date.getFullYear();
+      const key = String(year);
+      const existing = buckets.get(key) || {
+        ts: new Date(year, 0, 1).getTime(),
+        gmv: 0,
+        commission: 0,
+        dateLabel: key,
+        fullDate: `Nam ${key}`,
+      };
+      existing.gmv += Number(point.gmv || 0);
+      existing.commission += Number(point.commission || 0);
+      buckets.set(key, existing);
+    });
+  }
+
+  const points = Array.from(buckets.values())
+    .sort((a, b) => a.ts - b.ts)
+    .map((bucket) => ({
+      ts: bucket.ts,
+      dateLabel: bucket.dateLabel,
+      fullDate: bucket.fullDate,
+      gmv: bucket.gmv,
+      commission: bucket.commission,
+    }));
+
+  if (range === 'month' || range === 'year') {
+    return ensureRenderableTrendPoints(points, range);
+  }
+
+  return points;
+};
+
 const Admin = () => {
   const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof adminDashboardService.get>> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [revenueRange, setRevenueRange] = useState<RevenueRange>('week');
 
   const loadDashboard = async () => {
     try {
@@ -93,15 +236,28 @@ const Admin = () => {
   }, [dashboard?.trend]);
 
   const chartData = useMemo(
-    () =>
-      (dashboard?.trend || []).map((point) => ({
-        dateLabel: formatShortDate(point.date),
-        fullDate: formatLongDate(point.date),
-        gmv: Number(point.gmv || 0),
-        commission: Number(point.commission || 0),
-      })),
-    [dashboard?.trend]
+    () => buildChartDataByRange(dashboard?.trend || [], revenueRange),
+    [dashboard?.trend, revenueRange]
   );
+
+  const revenueRangeMeta = useMemo(() => {
+    if (revenueRange === 'week') {
+      return {
+        description: 'GMV va hoa hong theo ngay',
+        summary: 'Che do tuan',
+      };
+    }
+    if (revenueRange === 'month') {
+      return {
+        description: 'GMV va hoa hong theo thang',
+        summary: 'Che do thang',
+      };
+    }
+    return {
+      description: 'GMV va hoa hong theo nam',
+      summary: 'Che do nam',
+    };
+  }, [revenueRange]);
 
   const stats = useMemo(() => {
     const metrics = dashboard?.metrics;
@@ -300,8 +456,37 @@ const Admin = () => {
       <motion.section className="admin-panel">
         <div className="admin-panel-head">
           <h2>Biểu đồ doanh thu</h2>
-          <span className="admin-muted">GMV và hoa hồng trong 7 ngày gần nhất</span>
+          <div className="admin-chart-range-controls" role="tablist" aria-label="Revenue range">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={revenueRange === 'week'}
+              className={`admin-chart-range-btn ${revenueRange === 'week' ? 'active' : ''}`}
+              onClick={() => setRevenueRange('week')}
+            >
+              Tuần
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={revenueRange === 'month'}
+              className={`admin-chart-range-btn ${revenueRange === 'month' ? 'active' : ''}`}
+              onClick={() => setRevenueRange('month')}
+            >
+              Tháng
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={revenueRange === 'year'}
+              className={`admin-chart-range-btn ${revenueRange === 'year' ? 'active' : ''}`}
+              onClick={() => setRevenueRange('year')}
+            >
+              Năm
+            </button>
+          </div>
         </div>
+        <span className="admin-muted">{revenueRangeMeta.description}</span>
         <div className="area-chart-wrap">
           {chartData.length === 0 ? (
             <div className="admin-chart-empty">
@@ -362,8 +547,8 @@ const Admin = () => {
             </ResponsiveContainer>
           )}
           <div className="chart-axes chart-axes-bottom">
-            <span>Dữ liệu 7 ngày</span>
-            <span>{trendSeries.labels.length} mốc thời gian</span>
+            <span>{revenueRangeMeta.summary}</span>
+            <span>{chartData.length} mốc thời gian</span>
           </div>
         </div>
       </motion.section>

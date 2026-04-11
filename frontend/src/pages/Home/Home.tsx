@@ -261,6 +261,7 @@ const Home = () => {
                 title={'Sản phẩm mua nhiều'}
                 products={topSellingProducts}
                 viewAllLink="/search?scope=products"
+                showQuickView={false}
                 useSlider={false}
                 maxItems={10}
                 className="top-selling-section"

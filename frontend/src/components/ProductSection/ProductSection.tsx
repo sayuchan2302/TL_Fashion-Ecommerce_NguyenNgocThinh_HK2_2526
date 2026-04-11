@@ -26,6 +26,7 @@ interface ProductSectionProps {
   products: ProductSectionItem[];
   viewAllLink?: string;
   staticCards?: boolean;
+  showQuickView?: boolean;
   useSlider?: boolean;
   maxItems?: number;
   onQuickAdd?: (item: {
@@ -47,6 +48,7 @@ const ProductSection = ({
   products,
   viewAllLink = '/search?scope=products',
   staticCards = false,
+  showQuickView = false,
   useSlider = true,
   maxItems,
   onQuickAdd,
@@ -83,7 +85,7 @@ const ProductSection = ({
           <div className="product-grid slider-view" ref={sliderRef}>
             {visibleProducts.map((product) => (
               <div key={product.id} className="slider-item">
-                <ProductCard {...product} staticMode={staticCards} onQuickAdd={onQuickAdd} />
+                <ProductCard {...product} staticMode={staticCards} showQuickView={showQuickView} onQuickAdd={onQuickAdd} />
               </div>
             ))}
           </div>
@@ -96,7 +98,7 @@ const ProductSection = ({
         <div className="product-grid product-grid-static">
           {visibleProducts.map((product) => (
             <div key={product.id} className="grid-item">
-              <ProductCard {...product} staticMode={staticCards} onQuickAdd={onQuickAdd} />
+              <ProductCard {...product} staticMode={staticCards} showQuickView={showQuickView} onQuickAdd={onQuickAdd} />
             </div>
           ))}
         </div>

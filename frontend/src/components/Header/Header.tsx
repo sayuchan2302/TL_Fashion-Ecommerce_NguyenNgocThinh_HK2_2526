@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Heart, Menu, X, ChevronDown, Bell, Store, LayoutGrid } from 'lucide-react';
 import SearchDropdown from '../SearchDropdown/SearchDropdown';
 import NotificationDropdown from '../NotificationDropdown/NotificationDropdown';
@@ -132,6 +132,7 @@ const FALLBACK_HEADER_CATEGORY_TREE: MarketplaceHeaderCategoryRoot[] = [
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { totalItems } = useCart();
   const { totalItems: wishlistCount } = useWishlist();
   const { cartIconRef, wishlistIconRef } = useCartAnimation();
@@ -201,6 +202,14 @@ const Header = () => {
       return '/category/all';
     }
     return `/category/${encodeURIComponent(normalized)}`;
+  };
+
+  const handleGoToCart = () => {
+    if (location.pathname === '/cart') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      return;
+    }
+    navigate('/cart');
   };
 
   return (
@@ -369,7 +378,7 @@ const Header = () => {
             ref={cartIconRef}
             className={`icon-btn cart-btn ${isBouncing ? 'icon-bounce' : ''}`}
             aria-label="Giỏ hàng"
-            onClick={() => navigate('/cart')}
+            onClick={handleGoToCart}
           >
             <ShoppingCart size={22} />
             {totalItems > 0 && <span className="icon-badge">{totalItems > 99 ? '99+' : totalItems}</span>}

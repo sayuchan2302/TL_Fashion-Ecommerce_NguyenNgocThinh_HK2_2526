@@ -164,49 +164,51 @@ const HeroSlider = ({ className = '' }: HeroSliderProps) => {
 
   return (
     <section className={`hero-slider ${className}`.trim()}>
-      <div
-        className="hero-track"
-        ref={trackRef}
-        style={{
-          transform: `translateX(calc(-${position * 100}% + ${dragOffsetPercent}%))`,
-          transition: isTransitioning ? 'transform 0.7s ease' : 'none',
-        }}
-        onPointerDown={(e) => handlePointerDown(e.clientX)}
-        onPointerMove={(e) => handlePointerMove(e.clientX)}
-        onPointerUp={(e) => handlePointerUp(e.clientX)}
-        onPointerLeave={handlePointerLeave}
-        onPointerCancel={handlePointerLeave}
-        onTouchStart={(e) => handlePointerDown(e.touches[0].clientX)}
-        onTouchMove={(e) => handlePointerMove(e.touches[0].clientX)}
-        onTouchEnd={(e) => handlePointerUp(e.changedTouches[0].clientX)}
-        onTransitionEnd={handleTransitionEnd}
-      >
-        {loopSlides.map((slide, i) => (
-          <div key={`${slide.title}-${i}`} className="hero-slide">
-            <img
-              src={slide.image}
-              alt={slide.title}
-              className="hero-image"
-              loading={i === position ? 'eager' : 'lazy'}
-            />
-            <div className="hero-overlay" />
-            <div className="hero-content">
-              <h1 className="hero-title">{slide.title}</h1>
-              <p className="hero-subtitle">{slide.subtitle}</p>
-              {slide.icon && <div className="hero-slide-icon">{slide.icon}</div>}
-              <button
-                className="hero-btn"
-                onClick={() => {
-                  if (slide.ctaLink) {
-                    navigate(slide.ctaLink);
-                  }
-                }}
-              >
-                {slide.cta}
-              </button>
+      <div className="hero-viewport">
+        <div
+          className="hero-track"
+          ref={trackRef}
+          style={{
+            transform: `translateX(calc(-${position * 100}% + ${dragOffsetPercent}%))`,
+            transition: isTransitioning ? 'transform 0.7s ease' : 'none',
+          }}
+          onPointerDown={(e) => handlePointerDown(e.clientX)}
+          onPointerMove={(e) => handlePointerMove(e.clientX)}
+          onPointerUp={(e) => handlePointerUp(e.clientX)}
+          onPointerLeave={handlePointerLeave}
+          onPointerCancel={handlePointerLeave}
+          onTouchStart={(e) => handlePointerDown(e.touches[0].clientX)}
+          onTouchMove={(e) => handlePointerMove(e.touches[0].clientX)}
+          onTouchEnd={(e) => handlePointerUp(e.changedTouches[0].clientX)}
+          onTransitionEnd={handleTransitionEnd}
+        >
+          {loopSlides.map((slide, i) => (
+            <div key={`${slide.title}-${i}`} className="hero-slide">
+              <img
+                src={slide.image}
+                alt={slide.title}
+                className="hero-image"
+                loading={i === position ? 'eager' : 'lazy'}
+              />
+              <div className="hero-overlay" />
+              <div className="hero-content">
+                <h1 className="hero-title">{slide.title}</h1>
+                <p className="hero-subtitle">{slide.subtitle}</p>
+                {slide.icon && <div className="hero-slide-icon">{slide.icon}</div>}
+                <button
+                  className="hero-btn"
+                  onClick={() => {
+                    if (slide.ctaLink) {
+                      navigate(slide.ctaLink);
+                    }
+                  }}
+                >
+                  {slide.cta}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <button className="hero-nav prev" onClick={prev} aria-label={'Slide tr\u01b0\u1edbc'}>

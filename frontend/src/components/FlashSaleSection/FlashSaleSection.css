@@ -100,11 +100,11 @@
 }
 
 .flash-slider-nav.prev-btn {
-  left: 8px;
+  left: -20px;
 }
 
 .flash-slider-nav.next-btn {
-  right: 8px;
+  right: -20px;
 }
 
 .flash-sale-track {
@@ -215,10 +215,10 @@
   }
 
   .flash-slider-nav.prev-btn {
-    left: 6px;
+    left: 8px;
   }
 
   .flash-slider-nav.next-btn {
-    right: 6px;
+    right: 8px;
   }
 }

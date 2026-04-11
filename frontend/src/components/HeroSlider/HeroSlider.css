@@ -4,9 +4,16 @@
   height: auto;
   aspect-ratio: 21 / 8;
   max-height: 460px;
-  overflow: hidden;
+  overflow: visible;
   touch-action: pan-y;
   user-select: none;
+}
+
+.hero-viewport {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
 }
 
 .hero-track {
@@ -116,10 +123,12 @@
 }
 
 .hero-nav:hover { background: var(--co-white); transform: translateY(-50%) scale(1.05); }
-.hero-nav.prev { left: 16px; }
-.hero-nav.next { right: 16px; }
+.hero-nav.prev { left: -20px; }
+.hero-nav.next { right: -20px; }
 
 @media (max-width: 768px) {
   .hero-slider { aspect-ratio: 16 / 9; max-height: none; }
   .hero-content { padding: 24px 18px; }
+  .hero-nav.prev { left: 10px; }
+  .hero-nav.next { right: 10px; }
 }

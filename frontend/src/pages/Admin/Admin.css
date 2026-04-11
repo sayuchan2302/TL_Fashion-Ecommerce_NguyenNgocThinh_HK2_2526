@@ -967,6 +967,38 @@ body {
   font-weight: 700;
 }
 
+.admin-chart-range-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--co-gray-200);
+  border-radius: 999px;
+  background: var(--co-admin-bg-alt);
+}
+
+.admin-chart-range-btn {
+  border: none;
+  background: transparent;
+  color: var(--co-admin-text-muted);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.admin-chart-range-btn:hover {
+  color: var(--co-admin-text);
+}
+
+.admin-chart-range-btn.active {
+  background: #ffffff;
+  color: var(--co-admin-blue-700);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+}
+
 .admin-table {
   border: 1px solid var(--co-gray-200);
   border-radius: 12px;

@@ -532,6 +532,25 @@ const Checkout = () => {
         return;
       }
 
+      if (paymentMethod === 'momo') {
+        const orderCode = String(backendOrder.code || '').trim();
+        if (!orderCode) {
+          throw new Error('Khong tao duoc ma don hang de thanh toan MOMO');
+        }
+        const payPayload = await orderService.createMomoPayUrl(orderCode);
+        if (!payPayload.paymentUrl) {
+          throw new Error('Khong tao duoc URL thanh toan MOMO');
+        }
+
+        setPendingVnpayCheckout({
+          orderCode: payPayload.orderCode || orderCode,
+          cartIds: checkoutItems.map((item) => item.cartId),
+          createdAt: Date.now(),
+        });
+        window.location.href = payPayload.paymentUrl;
+        return;
+      }
+
       if (checkoutItems.length === items.length) {
         clearCart();
       } else {
@@ -836,13 +855,6 @@ const Checkout = () => {
                 </div>
                 <div className="payment-return-policy">
                   {t.returnPolicy} <Link to="#">{tCommon.actions.viewDetails}</Link>.
-                </div>
-                <div className="payment-help">
-                  <div>
-                    <p className="payment-help-title">{t.help.title}</p>
-                    <p className="payment-help-desc">{t.help.desc}</p>
-                  </div>
-                  <Link to="/payment-result?status=pending" className="payment-help-link">Xem kết quả</Link>
                 </div>
               </section>
             </div>

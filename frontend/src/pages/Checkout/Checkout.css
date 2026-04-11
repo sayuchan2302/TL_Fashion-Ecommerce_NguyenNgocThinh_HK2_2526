@@ -428,37 +428,6 @@
   margin-top: 16px;
 }
 
-.payment-help {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--co-gray-100);
-  border: 1px solid var(--co-gray-200);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.payment-help-title {
-  margin: 0;
-  font-weight: 700;
-  color: var(--co-black);
-}
-
-.payment-help-desc {
-  margin: 2px 0 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.payment-help-link {
-  color: var(--co-blue);
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
 .payment-return-policy a {
   color: var(--co-blue);
   text-decoration: underline;

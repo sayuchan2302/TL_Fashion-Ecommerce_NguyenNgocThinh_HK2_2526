@@ -71,6 +71,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/vouchers/public").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/ipn").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/payments/vnpay/return/verify").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payments/momo/ipn").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/payments/momo/return/verify").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ChevronRight, Check, ShieldCheck, Truck, ShoppingCart, Store, BadgeCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,6 +47,23 @@ const Cart = () => {
   const [selectedItems, setSelectedItems] = useState<string[]>(items.map(i => i.cartId));
   const [couponCode, setCouponCode] = useState('');
   const [collapsedStores, setCollapsedStores] = useState<Set<string>>(new Set());
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    const scrollRoot = document.scrollingElement as HTMLElement | null;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollRoot?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    const raf = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      scrollRoot?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
 
   const storeGroups: StoreGroup[] = groupedByStore();
   

@@ -32,6 +32,7 @@ interface ProductCardProps {
   storeSlug?: string;
   isOfficialStore?: boolean;
   staticMode?: boolean;
+  showQuickView?: boolean;
   onQuickAdd?: (item: {
     id: string | number;
     backendId?: string;
@@ -57,7 +58,24 @@ const areStringArraysEqual = (left?: string[], right?: string[]) => {
   return true;
 };
 
-const ProductCardInteractive = ({ id, sku, name, price, originalPrice, image, badge, colors, sizes, variants, backendId, storeId, storeName, storeSlug, isOfficialStore }: ProductCardProps) => {
+const ProductCardInteractive = ({
+  id,
+  sku,
+  name,
+  price,
+  originalPrice,
+  image,
+  badge,
+  colors,
+  sizes,
+  variants,
+  backendId,
+  storeId,
+  storeName,
+  storeSlug,
+  isOfficialStore,
+  showQuickView = false,
+}: ProductCardProps) => {
   const discount = originalPrice ? Math.round((1 - price / originalPrice) * 100) : 0;
   const { addToCart } = useCart();
   const { addToast } = useToast();
@@ -194,13 +212,15 @@ const ProductCardInteractive = ({ id, sku, name, price, originalPrice, image, ba
         </Link>
 
         {/* Quick View Button */}
-        <button 
-          className="product-quick-view-btn"
-          onClick={handleQuickView}
-          title="Xem nhanh"
-        >
-          <Eye size={18} /> Xem nhanh
-        </button>
+        {showQuickView ? (
+          <button
+            className="product-quick-view-btn"
+            onClick={handleQuickView}
+            title="Xem nhanh"
+          >
+            <Eye size={18} /> Xem nhanh
+          </button>
+        ) : null}
 
         {/* Hover Quick-Add Panel */}
         <div className="quick-add-overlay">
@@ -271,7 +291,7 @@ const ProductCardInteractive = ({ id, sku, name, price, originalPrice, image, ba
       </div>
 
       {/* Render modal only when opened to reduce per-card render cost */}
-      {isQuickViewOpen ? (
+      {showQuickView && isQuickViewOpen ? (
         <QuickViewModal
           product={{
             id: productRouteKey,
@@ -422,6 +442,7 @@ function arePropsEqual(prev: ProductCardProps, next: ProductCardProps) {
     prev.storeSlug === next.storeSlug &&
     prev.isOfficialStore === next.isOfficialStore &&
     prev.staticMode === next.staticMode &&
+    prev.showQuickView === next.showQuickView &&
     prev.onQuickAdd === next.onQuickAdd
   );
 }

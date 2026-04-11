@@ -5,7 +5,11 @@ import './PaymentResult.css';
 import { formatPrice } from '../../utils/formatters';
 import { useCart } from '../../contexts/CartContext';
 import { clearSelectedCartIdsForCheckout } from '../../services/checkoutSelectionStore';
-import { orderService, type VnpayReturnVerifyResponse } from '../../services/orderService';
+import {
+  orderService,
+  type MomoReturnVerifyResponse,
+  type VnpayReturnVerifyResponse,
+} from '../../services/orderService';
 import { apiRequest, hasBackendJwt } from '../../services/apiClient';
 import {
   clearPendingVnpayCheckout,
@@ -14,6 +18,29 @@ import {
 } from '../../services/vnpayCheckoutStore';
 
 type Status = 'success' | 'failed' | 'pending';
+type Gateway = 'vnpay' | 'momo';
+
+type VerifyResult = (VnpayReturnVerifyResponse | MomoReturnVerifyResponse) & {
+  gateway: Gateway;
+};
+
+const isVnpayResult = (result: VerifyResult): result is VnpayReturnVerifyResponse & { gateway: 'vnpay' } => (
+  result.gateway === 'vnpay'
+);
+
+const isMomoResult = (result: VerifyResult): result is MomoReturnVerifyResponse & { gateway: 'momo' } => (
+  result.gateway === 'momo'
+);
+
+const isGatewayPendingSuccess = (result: VerifyResult): boolean => {
+  if (isVnpayResult(result)) {
+    return result.responseCode === '00' && result.transactionStatus === '00';
+  }
+  if (isMomoResult(result)) {
+    return result.resultCode === '0';
+  }
+  return false;
+};
 
 const getStatusFromQuery = (search: string): Status => {
   const params = new URLSearchParams(search);
@@ -29,7 +56,7 @@ const PaymentResult = () => {
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const { items, clearCart, removeFromCart } = useCart();
 
-  const [verifyResult, setVerifyResult] = useState<VnpayReturnVerifyResponse | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState('');
@@ -44,6 +71,14 @@ const PaymentResult = () => {
     () => Array.from(params.keys()).some((key) => key.startsWith('vnp_')),
     [params],
   );
+
+  const hasMomoQuery = useMemo(() => {
+    const keys = new Set(Array.from(params.keys()));
+    if (!keys.has('orderId')) return false;
+    return keys.has('resultCode') || keys.has('partnerCode') || keys.has('transId');
+  }, [params]);
+
+  const activeGateway: Gateway | null = hasVnpQuery ? 'vnpay' : (hasMomoQuery ? 'momo' : null);
 
   const clearCartByMarker = useCallback((cartIds: string[]) => {
     const normalized = Array.from(new Set(cartIds.map((value) => value.trim()).filter(Boolean)));
@@ -65,7 +100,7 @@ const PaymentResult = () => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!hasVnpQuery) {
+    if (!activeGateway) {
       setVerifyResult(null);
       setIsVerifying(false);
       return () => {
@@ -74,10 +109,14 @@ const PaymentResult = () => {
     }
 
     setIsVerifying(true);
-    orderService.verifyVnpayReturn(location.search)
+    const verifyPromise = activeGateway === 'vnpay'
+      ? orderService.verifyVnpayReturn(location.search)
+      : orderService.verifyMomoReturn(location.search);
+
+    verifyPromise
       .then((result) => {
         if (!cancelled) {
-          setVerifyResult(result);
+          setVerifyResult({ ...result, gateway: activeGateway });
         }
       })
       .catch(() => {
@@ -85,7 +124,10 @@ const PaymentResult = () => {
           setVerifyResult({
             status: 'failed',
             orderPaid: false,
-            message: 'Không thể xác minh kết quả thanh toán VNPAY',
+            message: activeGateway === 'momo'
+              ? 'Không thể xác minh kết quả thanh toán MoMo'
+              : 'Không thể xác minh kết quả thanh toán VNPAY',
+            gateway: activeGateway,
           });
         }
       })
@@ -98,14 +140,14 @@ const PaymentResult = () => {
     return () => {
       cancelled = true;
     };
-  }, [hasVnpQuery, location.search]);
+  }, [activeGateway, location.search]);
 
   useEffect(() => {
     if (!verifyResult) {
       return;
     }
 
-    const gatewaySuccess = verifyResult.responseCode === '00' && verifyResult.transactionStatus === '00';
+    const gatewaySuccess = isGatewayPendingSuccess(verifyResult);
     const shouldClearPurchasedItems =
       (verifyResult.status === 'success' && verifyResult.orderPaid)
       || (verifyResult.status === 'pending' && gatewaySuccess);
@@ -136,7 +178,7 @@ const PaymentResult = () => {
       return;
     }
 
-    const gatewaySuccess = verifyResult.responseCode === '00' && verifyResult.transactionStatus === '00';
+    const gatewaySuccess = isGatewayPendingSuccess(verifyResult);
     const canRedirectToOrderSuccess =
       (verifyResult.status === 'success' && verifyResult.orderPaid) ||
       (verifyResult.status === 'pending' && gatewaySuccess);
@@ -150,7 +192,7 @@ const PaymentResult = () => {
   }, [navigate, verifyResult]);
 
   useEffect(() => {
-    if (!hasVnpQuery || !verifyResult || verifyResult.status !== 'pending' || !hasBackendJwt()) {
+    if (!activeGateway || !verifyResult || verifyResult.status !== 'pending' || !hasBackendJwt()) {
       return;
     }
 
@@ -196,9 +238,9 @@ const PaymentResult = () => {
     return () => {
       cancelled = true;
     };
-  }, [hasVnpQuery, verifyResult]);
+  }, [activeGateway, verifyResult]);
 
-  const status: Status = hasVnpQuery
+  const status: Status = activeGateway
     ? (isVerifying ? 'pending' : (verifyResult?.status || 'failed'))
     : getStatusFromQuery(location.search);
 
@@ -210,8 +252,11 @@ const PaymentResult = () => {
     const fallback = params.get('amount') || params.get('total') || '';
     return fallback || 'Chưa có';
   })();
-  const method = hasVnpQuery ? 'VNPay' : (params.get('method') || 'Cổng thanh toán');
+  const method = activeGateway === 'vnpay'
+    ? 'VNPay'
+    : (activeGateway === 'momo' ? 'MoMo' : (params.get('method') || 'Cổng thanh toán'));
   const missingInfo = !orderCode;
+  const pendingGatewayLabel = activeGateway === 'momo' ? 'MoMo' : (activeGateway === 'vnpay' ? 'VNPay' : 'cổng thanh toán');
 
   const statusMeta: Record<Status, { label: string; desc: string; icon: React.ReactNode; tone: string }> = {
     success: {
@@ -228,7 +273,7 @@ const PaymentResult = () => {
     },
     pending: {
       label: 'Đang chờ xác nhận',
-      desc: 'Hệ thống đang đợi xác nhận thanh toán từ VNPay.',
+      desc: `Hệ thống đang đợi xác nhận thanh toán từ ${pendingGatewayLabel}.`,
       icon: <Clock3 className="pr-icon pending" size={46} />,
       tone: 'pending',
     },
@@ -240,10 +285,13 @@ const PaymentResult = () => {
     if (!orderCode || isRetrying) {
       return;
     }
+    const retryGateway: Gateway = verifyResult?.gateway || activeGateway || 'vnpay';
     setIsRetrying(true);
     setRetryError('');
     try {
-      const payload = await orderService.createVnpayPayUrl(orderCode);
+      const payload = retryGateway === 'momo'
+        ? await orderService.createMomoPayUrl(orderCode)
+        : await orderService.createVnpayPayUrl(orderCode);
       const pending = getPendingVnpayCheckout();
       setPendingVnpayCheckout({
         orderCode: payload.orderCode || orderCode,
@@ -252,7 +300,11 @@ const PaymentResult = () => {
       });
       window.location.href = payload.paymentUrl;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể tạo lại link thanh toán';
+      const message = error instanceof Error
+        ? error.message
+        : (retryGateway === 'momo'
+          ? 'Không thể tạo lại link thanh toán MoMo'
+          : 'Không thể tạo lại link thanh toán');
       setRetryError(message);
     } finally {
       setIsRetrying(false);
