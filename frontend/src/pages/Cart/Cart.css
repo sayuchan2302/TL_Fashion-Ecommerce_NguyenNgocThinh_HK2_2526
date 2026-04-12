@@ -171,7 +171,9 @@
   gap: 10px;
   cursor: pointer;
   font-size: 14px;
+  line-height: 1.2;
   user-select: none;
+  margin: 0;
 }
 
 .custom-checkbox-label input {
@@ -183,6 +185,7 @@
   height: 20px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
+  box-sizing: border-box;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -201,7 +204,7 @@
   content: '';
   position: absolute;
   left: 50%;
-  top: 48%;
+  top: 50%;
   width: 6px;
   height: 11px;
   border: solid white;
@@ -210,7 +213,13 @@
 }
 
 .item-cb {
+  width: 20px;
+  min-width: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
+  margin: 0;
 }
 
 /* ---- Cart Items ---- */
@@ -627,9 +636,18 @@
 }
 
 .store-checkbox .checkbox-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
+}
+
+.store-checkbox {
+  width: 20px;
+  min-width: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
 }
 
 .store-info {
@@ -687,40 +705,6 @@
   color: var(--co-gray-600);
 }
 
-/* Store Summary */
-.store-summary {
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, rgba(99, 102, 241, 0.03) 100%);
-  border-top: 1px solid var(--co-gray-100);
-}
-
-.store-summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 14px;
-  color: var(--co-gray-600);
-}
-
-.store-summary-row.discount {
-  color: var(--co-red-500);
-}
-
-.store-summary-row.store-total {
-  padding-top: 12px;
-  margin-top: 8px;
-  border-top: 1px dashed var(--co-gray-200);
-  font-weight: 600;
-  color: var(--co-gray-900);
-  font-size: 15px;
-}
-
-.store-summary-row .free-shipping {
-  color: var(--co-green-600);
-  font-weight: 500;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
   .store-group-header {
@@ -730,13 +714,5 @@
 
   .store-name {
     font-size: 14px;
-  }
-
-  .store-summary {
-    padding: 12px;
-  }
-
-  .store-summary-row {
-    font-size: 13px;
   }
 }

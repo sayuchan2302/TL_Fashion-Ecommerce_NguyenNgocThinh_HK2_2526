@@ -50,23 +50,28 @@ public class CartService {
         this.storeRepository = storeRepository;
     }
 
+    @Transactional
     public Cart getCartByUserId(UUID userId) {
         return cartRepository.findByUserIdWithItems(userId)
                 .orElseGet(() -> createCartForUser(userId));
     }
 
+    @Transactional
     public CartResponse getCartResponseByUserId(UUID userId) {
         return toResponse(getCartByUserId(userId));
     }
 
+    @Transactional
     public CartResponse addItemResponse(UUID userId, CartItemRequest request) {
         return toResponse(addItem(userId, request));
     }
 
+    @Transactional
     public CartResponse updateItemQuantityResponse(UUID userId, UUID itemId, Integer quantity) {
         return toResponse(updateItemQuantity(userId, itemId, quantity));
     }
 
+    @Transactional
     public CartResponse removeItemResponse(UUID userId, UUID itemId) {
         return toResponse(removeItem(userId, itemId));
     }

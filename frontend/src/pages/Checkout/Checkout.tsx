@@ -907,11 +907,6 @@ const Checkout = () => {
                   )}
                 </div>
 
-                {/* Social Proof */}
-                <div className="social-proof-alert">
-                  {t.socialProof}
-                </div>
-
                 {/* Coupon Tickets */}
                 <div className="coupon-ticket-scroll" ref={couponScrollRef}>
                   {isCouponsFetching && (

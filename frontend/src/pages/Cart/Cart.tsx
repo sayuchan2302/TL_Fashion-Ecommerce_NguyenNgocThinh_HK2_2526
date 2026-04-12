@@ -70,8 +70,8 @@ const Cart = () => {
   const validSelectedItems = selectedItems.filter(id => items.some(i => i.cartId === id));
   const selectedItemsList = items.filter(item => validSelectedItems.includes(item.cartId));
   
-  // Calculate totals per store
-  const calculateStoreTotals = (group: StoreGroup) => {
+  // Calculate selected subtotal/shipping per store for right summary only.
+  const calculateSelectedStoreTotals = (group: StoreGroup) => {
     const groupSelectedItems = group.items.filter(item => validSelectedItems.includes(item.cartId));
     const subtotal = groupSelectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const totalOriginal = groupSelectedItems.reduce((sum, item) => sum + (item.originalPrice ?? item.price) * item.quantity, 0);
@@ -86,7 +86,7 @@ const Cart = () => {
   const globalDiscount = globalTotalOriginal - globalSubtotal;
   
   const totalShipping = storeGroups.reduce((sum, group) => {
-    const { shippingFee } = calculateStoreTotals(group);
+    const { shippingFee } = calculateSelectedStoreTotals(group);
     return sum + shippingFee;
   }, 0);
   
@@ -224,7 +224,6 @@ const Cart = () => {
             {/* Store Groups */}
             <AnimatePresence mode="popLayout">
               {storeGroups.map((group, groupIndex) => {
-                const { subtotal, discount, shippingFee, total } = calculateStoreTotals(group);
                 const isCollapsed = collapsedStores.has(group.storeId);
                 const isStoreSelected = group.items.every(item => validSelectedItems.includes(item.cartId));
 
@@ -324,39 +323,6 @@ const Cart = () => {
                       ))}
                     </AnimatePresence>
 
-                    {/* Store Summary */}
-                    <AnimatePresence>
-                      {!isCollapsed && (
-                        <motion.div 
-                          className="store-summary"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <div className="store-summary-row">
-                            <span>{tMarket.storeSubtotal}</span>
-                            <span>{formatPrice(subtotal)}</span>
-                          </div>
-                          <div className="store-summary-row">
-                            <span>{tMarket.storeShipping}</span>
-                            <span className={shippingFee === 0 ? 'free-shipping' : ''}>
-                              {shippingFee === 0 ? tMarket.freeShipping : formatPrice(shippingFee)}
-                            </span>
-                          </div>
-                          {discount > 0 && (
-                            <div className="store-summary-row discount">
-                              <span>{t.discount}</span>
-                              <span>-{formatPrice(discount)}</span>
-                            </div>
-                          )}
-                          <div className="store-summary-row store-total">
-                            <span>{tMarket.storeTotal}</span>
-                            <span>{formatPrice(total)}</span>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </motion.div>
                 );
               })}

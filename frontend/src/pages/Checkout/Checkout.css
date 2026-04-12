@@ -617,13 +617,6 @@
   font-weight: 500;
 }
 
-/* ---- Social Proof ---- */
-.social-proof-alert {
-  font-size: 13px;
-  color: var(--co-black);
-  padding: 14px 0;
-}
-
 /* ---- Coupon Tickets ---- */
 .coupon-ticket-scroll {
   display: flex;
