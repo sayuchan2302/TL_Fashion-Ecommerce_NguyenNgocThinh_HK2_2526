@@ -3,6 +3,7 @@ package vn.edu.hcmuaf.fit.marketplace.config;
 import com.microsoft.bot.builder.ConversationState;
 import com.microsoft.bot.builder.MemoryStorage;
 import com.microsoft.bot.builder.Storage;
+import com.microsoft.bot.connector.authentication.AppCredentials;
 import com.microsoft.bot.connector.authentication.AuthenticationConfiguration;
 import com.microsoft.bot.connector.authentication.ClaimsValidator;
 import com.microsoft.bot.integration.BotFrameworkHttpAdapter;
@@ -10,6 +11,7 @@ import jakarta.annotation.Nonnull;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import java.util.Properties;
@@ -21,46 +23,39 @@ public class BotConfig {
 
     @Bean
     public com.microsoft.bot.integration.Configuration botSdkConfiguration(AzureBotProperties properties) {
+        Assert.isTrue(
+                "SingleTenant".equalsIgnoreCase(properties.getMicrosoftAppType()),
+                "azure-bot.microsoft-app-type must be SingleTenant"
+        );
+
         Properties data = new Properties();
-        boolean authEnabled = properties.isAuthenticationEnabled();
-        String appId = authEnabled && StringUtils.hasText(properties.getMicrosoftAppId())
-                ? properties.getMicrosoftAppId().trim()
-                : "";
-        String appPassword = authEnabled && StringUtils.hasText(properties.getMicrosoftAppPassword())
-                ? properties.getMicrosoftAppPassword().trim()
-                : "";
+        data.setProperty("MicrosoftAppId", properties.getMicrosoftAppId().trim());
+        data.setProperty("MicrosoftAppPassword", properties.getMicrosoftAppPassword().trim());
+        data.setProperty("MicrosoftAppTenantId", properties.getMicrosoftAppTenantId().trim());
+        data.setProperty("MicrosoftAppType", "SingleTenant");
 
-        data.setProperty("MicrosoftAppId", appId);
-        data.setProperty("MicrosoftAppPassword", appPassword);
-
-        if (authEnabled && StringUtils.hasText(properties.getMicrosoftAppTenantId())) {
-            data.setProperty("MicrosoftAppTenantId", properties.getMicrosoftAppTenantId());
-        }
-        if (authEnabled && StringUtils.hasText(properties.getMicrosoftAppType())) {
-            data.setProperty("MicrosoftAppType", properties.getMicrosoftAppType());
-        }
         return new MapBotConfiguration(data);
     }
 
     @Bean
     public AuthenticationConfiguration botAuthenticationConfiguration(AzureBotProperties properties) {
-        AuthenticationConfiguration configuration = new AuthenticationConfiguration();
+        Assert.isTrue(
+                "SingleTenant".equalsIgnoreCase(properties.getMicrosoftAppType()),
+                "azure-bot.microsoft-app-type must be SingleTenant"
+        );
 
-        boolean singleTenant = properties.isAuthenticationEnabled()
-                && "SingleTenant".equalsIgnoreCase(properties.getMicrosoftAppType());
-        if (singleTenant && StringUtils.hasText(properties.getMicrosoftAppTenantId())) {
-            configuration.setClaimsValidator(new ClaimsValidator() {
-                @Override
-                public CompletableFuture<Void> validateClaims(java.util.Map<String, String> claims) {
-                    String tokenTenant = claims.get("tid");
-                    if (!StringUtils.hasText(tokenTenant)
-                            || !properties.getMicrosoftAppTenantId().equalsIgnoreCase(tokenTenant)) {
-                        return CompletableFuture.failedFuture(new SecurityException("Invalid tenant for bot token"));
-                    }
-                    return CompletableFuture.completedFuture(null);
+        AuthenticationConfiguration configuration = new AuthenticationConfiguration();
+        final String expectedTenantId = properties.getMicrosoftAppTenantId().trim();
+        configuration.setClaimsValidator(new ClaimsValidator() {
+            @Override
+            public CompletableFuture<Void> validateClaims(java.util.Map<String, String> claims) {
+                String tokenTenant = claims.get("tid");
+                if (!StringUtils.hasText(tokenTenant) || !expectedTenantId.equalsIgnoreCase(tokenTenant)) {
+                    return CompletableFuture.failedFuture(new SecurityException("Invalid tenant for bot token"));
                 }
-            });
-        }
+                return CompletableFuture.completedFuture(null);
+            }
+        });
 
         return configuration;
     }
@@ -70,7 +65,18 @@ public class BotConfig {
             com.microsoft.bot.integration.Configuration botSdkConfiguration,
             AuthenticationConfiguration botAuthenticationConfiguration
     ) {
-        return new BotFrameworkHttpAdapter(botSdkConfiguration, botAuthenticationConfiguration);
+        final String channelAuthTenant = botSdkConfiguration.getProperty("MicrosoftAppTenantId");
+        return new BotFrameworkHttpAdapter(botSdkConfiguration, botAuthenticationConfiguration) {
+            @Override
+            protected CompletableFuture<AppCredentials> buildAppCredentials(String appId, String oAuthScope) {
+                return super.buildAppCredentials(appId, oAuthScope)
+                        .thenApply(credentials -> {
+                            // Force outbound token acquisition against configured tenant for SingleTenant bots.
+                            credentials.setChannelAuthTenant(channelAuthTenant);
+                            return credentials;
+                        });
+            }
+        };
     }
 
     @Bean

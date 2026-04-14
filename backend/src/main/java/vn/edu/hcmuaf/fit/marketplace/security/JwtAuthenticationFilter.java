@@ -36,6 +36,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        String path = request.getServletPath();
+        // Bot Framework sends its own RS256 bearer token to this endpoint.
+        // This filter should only handle our marketplace JWT (HS256).
+        return "/api/messages".equals(path);
+    }
+
+    @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
@@ -93,7 +101,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            logger.error("Cannot set user authentication: " + e.getMessage());
+            logger.debug("Cannot set user authentication for path " + request.getServletPath() + ": " + e.getMessage());
         }
 
         filterChain.doFilter(request, response);

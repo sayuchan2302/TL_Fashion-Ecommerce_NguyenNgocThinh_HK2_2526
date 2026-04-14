@@ -31,7 +31,7 @@ public class MarketplaceBot extends ActivityHandler {
     private static final String MENU_PRODUCT = "hoi dap san pham";
 
     private final ConversationState conversationState;
-    private final StatePropertyAccessor<ChatSessionState> sessionAccessor;
+    private final StatePropertyAccessor<Object> sessionAccessor;
     private final CustomerSupportChatService supportChatService;
     private final ChatbotAiFallbackService aiFallbackService;
     private final ChatbotProperties chatbotProperties;
@@ -72,7 +72,19 @@ public class MarketplaceBot extends ActivityHandler {
     protected CompletableFuture<Void> onMessageActivity(TurnContext turnContext) {
         String normalizedInput = normalize(turnContext.getActivity().getText());
         return sessionAccessor.get(turnContext, ChatSessionState::new)
-                .thenCompose(state -> routeMessage(turnContext, state, normalizedInput));
+                .thenCompose(rawState -> {
+                    ChatSessionState state = toChatSessionState(rawState);
+                    return sessionAccessor.set(turnContext, state)
+                            .thenCompose(ignore -> routeMessage(turnContext, state, normalizedInput));
+                });
+    }
+
+    private ChatSessionState toChatSessionState(Object rawState) {
+        if (rawState instanceof ChatSessionState state) {
+            return state;
+        }
+        // Handles devtools restart classloader mismatch (same class name, different loader).
+        return new ChatSessionState();
     }
 
     private CompletableFuture<Void> routeMessage(TurnContext turnContext, ChatSessionState state, String input) {
